@@ -149,4 +149,39 @@ describe('St7789Model', () => {
     const frame = model.takeFrame()!
     expect(frame.pixels[0]).toBe(0x07e0)
   })
+
+  it('powers on in command mode — a first command with no DC edge is not a stray data byte', () => {
+    const model = new St7789Model()
+    const h = harness(model)
+    // No h.signal('DC', ...) at all: the fork's observer swallows an initial
+    // digitalWrite(DC, LOW) over a reset-0 register, so the model must already
+    // be in command mode.
+    h.bus({ bus: 'spi0', kind: 'spi', mosi: Uint8Array.of(0x11) }) // SLPOUT
+    expect(h.snapshot()['poweredOn']).toBe(true)
+    expect(h.diagnostics.some((d) => d.message.includes('no command context'))).toBe(false)
+  })
+
+  it('flush meter spans the whole frame, not the last of ~240 per-row RAMWRs', () => {
+    const model = new St7789Model()
+    const h = harness(model)
+    model.takeFrame() // drain power-on frame
+    const ramwr = (t: number): void => {
+      h.signal('DC', 0)
+      h.bus({ bus: 'spi0', kind: 'spi', mosi: Uint8Array.of(0x2c), t })
+    }
+    const pixel = (t: number): void => {
+      h.signal('DC', 1)
+      h.bus({ bus: 'spi0', kind: 'spi', mosi: Uint8Array.of(0x11, 0x11), t })
+    }
+    // Two per-row RAMWRs (as MeshCore's per-row setAddrWindow does), the first
+    // at 1_000_000 ns, the last pixel at 4_000_000.
+    ramwr(1_000_000)
+    pixel(1_500_000)
+    ramwr(2_500_000)
+    pixel(4_000_000)
+
+    model.takeFrame()
+    // span = 4_000_000 - 1_000_000 ns = 3.00 ms, not the 1.5 ms of the last RAMWR.
+    expect(model.meter('flush')).toBe(3)
+  })
 })

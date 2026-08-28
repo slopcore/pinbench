@@ -28,12 +28,23 @@ export class EmulatorSupervisor extends EventEmitter {
   private pendingLines: SerialLine[] = []
   private partial = ''
   private qemuPath: string | null = null
+  private deviceSocket: string | null = null
   private lastFirmwarePath: string | null = null
   private lastLaunchOptions: EmulatorLaunchOptions = DEFAULT_LAUNCH_OPTIONS
   private pendingRestart: ((status: EmulatorStatus) => void) | null = null
 
   getStatus(): EmulatorStatus {
     return { state: this.state }
+  }
+
+  /**
+   * Path of the PinBench device-host Unix socket. Passed to QEMU in the child
+   * environment as `PINBENCH_DEVICE_SOCKET`; the fork's SPI2/SPI3 controllers
+   * connect to it and round-trip transactions to the TypeScript device models
+   * (M6). Unset means the guest talks to nothing — the pre-M6 behaviour.
+   */
+  setDeviceSocket(path: string | null): void {
+    this.deviceSocket = path
   }
 
   findQemu(): string {
@@ -85,9 +96,13 @@ export class EmulatorSupervisor extends EventEmitter {
       '-no-reboot'
     ]
 
+    const env = this.deviceSocket
+      ? { ...process.env, PINBENCH_DEVICE_SOCKET: this.deviceSocket }
+      : process.env
+
     let child: ChildProcess
     try {
-      child = spawn(qemu, args, { stdio: ['pipe', 'pipe', 'pipe'] })
+      child = spawn(qemu, args, { stdio: ['pipe', 'pipe', 'pipe'], env })
     } catch (error) {
       this.setState('crashed', `Failed to spawn QEMU: ${String(error)}`)
       return

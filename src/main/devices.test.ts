@@ -6,7 +6,13 @@ import type { BoardDefinition } from '../shared/board'
 import { DeviceRegistry } from '../shared/devices/registry'
 import { ledDescriptor } from '../shared/devices/led'
 import { encodeFrame, FrameDecoder, Op, signalHash, type Frame } from '../shared/devices/protocol'
-import { DeviceHost, type DeviceEventMessage, type DeviceSnapshotMessage } from './devices'
+import { st7789Descriptor } from '../shared/devices/st7789'
+import {
+  DeviceHost,
+  type DeviceEventMessage,
+  type DeviceFramebufferMessage,
+  type DeviceSnapshotMessage
+} from './devices'
 import type { Diagnostic } from '../shared/diagnostics'
 
 function board(over: Partial<BoardDefinition> = {}): BoardDefinition {
@@ -268,6 +274,128 @@ describe('DeviceHost — socket transport', () => {
     expect(new TextDecoder().decode(replies[0]!.payload)).toBe('pb1')
     expect(replies[1]).toMatchObject({ op: Op.Xfer, reply: true, seq: 3 })
     expect([...replies[1]!.payload]).toEqual([0xff, 0xff, 0xff, 0xff])
+  })
+})
+
+// --- M6: GPIO-selected SPI routing, contention, framebuffer side channel ----
+
+function displayBoard(): BoardDefinition {
+  const spiPart = (
+    id: string,
+    designator: string,
+    csPin: string
+  ): BoardDefinition['parts'][number] => ({
+    id,
+    designator,
+    name: 'Panel',
+    category: 'display',
+    deviceModel: 'sitronix.st7789',
+    summary: 'demo',
+    buses: ['spi0'],
+    pins: [
+      { signal: 'CS', pin: csPin },
+      { signal: 'DC', pin: 'GPIO15' },
+      { signal: 'RST', pin: 'GPIO14' },
+      { signal: 'BL', pin: 'GPIO17' }
+    ],
+    config: [],
+    layout: { x: 0, y: 0, width: 10, height: 10 }
+  })
+  return board({
+    parts: [
+      { ...board().parts[0]!, buses: [], pins: [{ signal: 'ANODE', pin: 'GPIO2' }] },
+      spiPart('lcd', 'U3', 'GPIO16'),
+      spiPart('sd', 'U4', 'GPIO48')
+    ]
+  })
+}
+
+function registryWithPanels(): DeviceRegistry {
+  const registry = new DeviceRegistry()
+  registry.register(ledDescriptor)
+  registry.register(st7789Descriptor)
+  return registry
+}
+
+/** One `Op.Gpio` frame: pin in `select`, level in the payload. */
+function gpio(pin: number, level: 0 | 1): Frame {
+  return {
+    op: Op.Gpio,
+    reply: false,
+    bus: 0xff,
+    select: pin,
+    seq: 0,
+    t: 1000,
+    payload: Uint8Array.of(level)
+  }
+}
+
+function xfer(bytes: number[]): Frame {
+  return {
+    op: Op.Xfer,
+    reply: false,
+    bus: 0,
+    select: 0xffff,
+    seq: 1,
+    t: 2000,
+    payload: Uint8Array.from(bytes)
+  }
+}
+
+describe('DeviceHost — M6 display routing', () => {
+  it('routes an SPI transaction to whichever GPIO chip-select is low', () => {
+    host = new DeviceHost({ registry: registryWithPanels() })
+    host.load(displayBoard())
+    const snaps: DeviceSnapshotMessage[] = []
+    host.on('snapshot', (m: DeviceSnapshotMessage) => snaps.push(m))
+
+    host.handleFrame(gpio(15, 0)) // DC low
+    host.handleFrame(gpio(16, 0)) // LCD CS low
+    host.handleFrame(xfer([0x11])) // SLPOUT — should reach the LCD only
+    host.handleFrame(gpio(15, 1))
+
+    const lcd = snaps.filter((s) => s.partId === 'lcd').at(-1)
+    const sd = snaps.filter((s) => s.partId === 'sd').at(-1)
+    expect(lcd?.state['poweredOn']).toBe(true)
+    expect(sd?.state['poweredOn']).toBeFalsy()
+  })
+
+  it('raises a named bus-contention diagnostic when two chip-selects are low at once', () => {
+    host = new DeviceHost({ registry: registryWithPanels() })
+    host.load(displayBoard())
+    const diags: Diagnostic[] = []
+    host.on('diagnostic', (d: Diagnostic) => diags.push(d))
+
+    host.handleFrame(gpio(16, 0))
+    host.handleFrame(gpio(48, 0))
+
+    const clash = diags.find((d) => d.id.includes('cs-contention'))
+    expect(clash?.severity).toBe('warn')
+    expect(clash?.message).toContain('U3')
+    expect(clash?.message).toContain('U4')
+  })
+
+  it('emits a framebuffer down its own channel after RAMWR traffic, never in the snapshot', () => {
+    host = new DeviceHost({ registry: registryWithPanels() })
+    host.load(displayBoard())
+    const frames: DeviceFramebufferMessage[] = []
+    const snaps: DeviceSnapshotMessage[] = []
+    host.on('framebuffer', (m: DeviceFramebufferMessage) => frames.push(m))
+    host.on('snapshot', (m: DeviceSnapshotMessage) => snaps.push(m))
+
+    host.handleFrame(gpio(16, 0)) // select the LCD
+    host.handleFrame(gpio(15, 0)) // DC low → command
+    host.handleFrame(xfer([0x2c])) // RAMWR
+    host.handleFrame(gpio(15, 1)) // DC high → pixels
+    host.handleFrame(xfer([0xf8, 0x00, 0xf8, 0x00]))
+
+    // The host samples frames on a timer; drive it directly.
+    ;(host as unknown as { sampleFrames(): void }).sampleFrames()
+
+    expect(frames.length).toBeGreaterThan(0)
+    expect(frames[0]!.partId).toBe('lcd')
+    expect(frames[0]!.pixels.byteLength).toBe(240 * 320 * 2)
+    for (const s of snaps) expect(s.state).not.toHaveProperty('pixels')
   })
 })
 

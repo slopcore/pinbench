@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { DeviceEventMessage, DeviceSnapshotMessage } from '@shared/devices/messages'
+import type {
+  DeviceEventMessage,
+  DeviceFramebufferMessage,
+  DeviceSnapshotMessage
+} from '@shared/devices/messages'
 import type { Diagnostic } from '@shared/diagnostics'
 
 const MAX_EVENTS_PER_PART = 200
@@ -8,6 +12,8 @@ const MAX_DIAGNOSTICS = 100
 export interface PartDeviceView {
   snapshot: DeviceSnapshotMessage | undefined
   events: DeviceEventMessage['event'][]
+  /** Latest display framebuffer for this part (M6, ST7789 only). */
+  framebuffer?: DeviceFramebufferMessage
 }
 
 export interface DevicesHandle {
@@ -22,6 +28,7 @@ export interface DevicesHandle {
 interface DevicesState {
   snapshots: Map<string, DeviceSnapshotMessage>
   events: Map<string, DeviceEventMessage['event'][]>
+  framebuffers: Map<string, DeviceFramebufferMessage>
   diagnostics: Diagnostic[]
 }
 
@@ -35,6 +42,7 @@ export function useDevices(): DevicesHandle {
   const [state, setState] = useState<DevicesState>(() => ({
     snapshots: new Map(),
     events: new Map(),
+    framebuffers: new Map(),
     diagnostics: []
   }))
 
@@ -63,6 +71,16 @@ export function useDevices(): DevicesHandle {
   }, [])
 
   useEffect(() => {
+    return window.pinbench.devices.onFramebuffer((message) => {
+      setState((previous) => {
+        const framebuffers = new Map(previous.framebuffers)
+        framebuffers.set(message.partId, message)
+        return { ...previous, framebuffers }
+      })
+    })
+  }, [])
+
+  useEffect(() => {
     return window.pinbench.devices.onDiagnostic((row) => {
       setState((previous) => {
         const without = previous.diagnostics.filter((d) => d.id !== row.id)
@@ -80,11 +98,18 @@ export function useDevices(): DevicesHandle {
   }, [])
 
   const byPart = new Map<string, PartDeviceView>()
-  for (const [partId, snapshot] of state.snapshots) {
-    byPart.set(partId, { snapshot, events: state.events.get(partId) ?? [] })
-  }
-  for (const [partId, events] of state.events) {
-    if (!byPart.has(partId)) byPart.set(partId, { snapshot: undefined, events })
+  const partIds = new Set([
+    ...state.snapshots.keys(),
+    ...state.events.keys(),
+    ...state.framebuffers.keys()
+  ])
+  for (const partId of partIds) {
+    const framebuffer = state.framebuffers.get(partId)
+    byPart.set(partId, {
+      snapshot: state.snapshots.get(partId),
+      events: state.events.get(partId) ?? [],
+      ...(framebuffer ? { framebuffer } : {})
+    })
   }
 
   return { byPart, diagnostics: state.diagnostics, setSignal }

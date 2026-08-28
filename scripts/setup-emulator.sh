@@ -15,10 +15,11 @@ if [[ "$(uname)" != "Darwin" ]]; then
   exit 1
 fi
 
-# Idempotency: if the binary exists and supports esp32s3, nothing to do.
-if [[ -x "$QEMU_BIN" ]]; then
+# Idempotency: the binary must exist, support esp32s3, AND have been built with
+# PinBench's GP-SPI2/3 additions applied — otherwise fall through and rebuild.
+if [[ -x "$QEMU_BIN" && -f "$QEMU_DIR/.pinbench-applied" ]]; then
   if "$QEMU_BIN" -machine help 2>/dev/null | grep -q esp32s3; then
-    echo "✓ QEMU esp32s3 already built at $QEMU_BIN"
+    echo "✓ QEMU esp32s3 with PinBench additions already built at $QEMU_BIN"
     exit 0
   fi
 fi
@@ -33,6 +34,9 @@ else
   git clone --depth 1 --branch "$QEMU_TAG" \
     https://github.com/espressif/qemu.git "$QEMU_DIR"
 fi
+
+echo "==> Applying PinBench ESP32-S3 additions (GP-SPI2/3, GPIO output, device-host bridge)..."
+bash "$ROOT/qemu/apply.sh" "$QEMU_DIR"
 
 echo "==> Configuring..."
 mkdir -p "$QEMU_DIR/build"

@@ -55,6 +55,9 @@ const session = (): SessionStore => {
   return store
 }
 
+/** Where the QEMU bus controllers (M6, in the fork) connect to reach the TS models. */
+const deviceSocketPath = (): string => join(app.getPath('userData'), 'pinbench-devices.sock')
+
 const deviceHost = (): DeviceHost => {
   if (!devices) {
     devices = new DeviceHost()
@@ -65,6 +68,18 @@ const deviceHost = (): DeviceHost => {
     devices.on('diagnostic', (row) =>
       mainWindow?.webContents.send(IpcChannel.deviceDiagnostic, row)
     )
+    devices.on('framebuffer', (message) =>
+      mainWindow?.webContents.send(IpcChannel.deviceFramebuffer, message)
+    )
+    // Start listening now, before any emulator spawns — the guest's SPI
+    // controller connects during QEMU realize and blocks the vCPU on the reply.
+    devices.listen(deviceSocketPath()).catch((error) => {
+      mainWindow?.webContents.send(IpcChannel.deviceDiagnostic, {
+        id: 'device-listen',
+        severity: 'warn',
+        message: `device host socket unavailable: ${(error as Error).message} — TS device models will not receive guest traffic`
+      })
+    })
   }
   return devices
 }
@@ -208,6 +223,10 @@ function registerIpc(): void {
   ipcMain.on(
     IpcChannel.emulatorStart,
     (_event, firmwarePath: string, options?: EmulatorLaunchOptions) => {
+      // Ensure the device host is listening before QEMU spawns — its SPI
+      // controllers connect during realize and block on the first reply.
+      deviceHost()
+      emu().setDeviceSocket(deviceSocketPath())
       emu().start(firmwarePath, options)
     }
   )

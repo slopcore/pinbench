@@ -435,7 +435,7 @@ subject".
   device diagnostics into the Diagnostics dock. The M9 fixture gains a demo
   `Status LED` part (GPIO45); it is deleted with the fixture at M5.
 
-## M5 · Board definitions, and the M9 as data — `M`
+## M5 · Board definitions, and the M9 as data — `M` ✅ **done**
 
 **Goal.** Nothing about a board is hardcoded. The M9 becomes the first entry in
 a format the Heltec board will later use unchanged.
@@ -464,6 +464,73 @@ changes what the app shows; no board-specific identifier survives anywhere in
 **Watch for.** Over-generalising. One board and one planned second board is not
 enough evidence for a deeply abstract schema. Model what the M9 and the Heltec
 board actually need; leave the rest.
+
+### Outcome
+
+The M9 is now `boards/thinknode-m9-v1.0.board.json`, read with `fs` and
+validated at launch; the M1 fixtures are gone. Verified: `npm run dev` builds
+main + preload + renderer and Electron launches clean; `loadBoard()` discovers
+and validates the shipped file through the same `parseBoard` the app uses
+(`src/main/board.test.ts`), and `boardTotals` on it reads `9 parts · 12 nets ·
+31 GPIO` — the design's footer figure, which `App.test` confirms the StatusBar
+renders. Because `loadBoard` re-reads the file on every `board:load`, an edit is
+picked up on the next launch, the same standard as M2/M3's firmware path. No production file under `src/`
+names a board: `loadBoard()` with no id discovers the sole `*.board.json` on
+disk, `.pinbench`'s `boardId` defaults to `''` ("the workbench default"), and
+the only `thinknode` strings left in `src/` are in `.test.ts` files that load
+the shipped definition — the same way `Canvas.test` and `App.test` have always
+referred to the M9 by name.
+
+- **`parseBoard` in `src/shared/board.ts`** is the schema, and it fails loud
+  (`BoardValidationError` with the offending field path) rather than coercing —
+  the opposite of `normaliseWorkspace`/`normaliseSession`, because a
+  silently-mangled pin map is the "silent zeros cost you days" trap the device
+  milestones warn about. It enforces the four cross-reference checks that were
+  assertions stranded in the M1 fixture's test file: part pins resolve to
+  declared pins, part buses and net buses exist, net `partId:signal` endpoints
+  resolve to a real signal, and there is exactly one `mcu` part. Loading the
+  shipped M9 in a test therefore *is* a consistency check.
+- **Loading moved to the main process.** M4's `device:load` (renderer → main,
+  handing over a board it had `import`ed) is gone; `board:load` runs the other
+  way — `src/main/board.ts` reads and validates the file, hands the parsed
+  definition straight to `DeviceHost`, and returns it to the renderer over IPC.
+  The sandboxed renderer never touches a board file. `boardsDir()` is the repo
+  root in dev and `resourcesPath/boards` when packaged; wiring the packaged
+  copy is an M15 detail. One consequence of the inversion: the host loads
+  models during the `board:load` call, before the renderer's device
+  subscriptions are live, so the one-shot "no model … part is inert"
+  diagnostics for the M9's nine unimplemented ids no longer reach the dock on
+  first load. They re-emit on any later `board:load` (reopening a project), and
+  M6 — which wires `DeviceHost.listen()` and brings real snapshots — is where
+  retained device state starts to matter.
+- **The pin map was reconciled, not transcribed verbatim.** The M1 fixture
+  invented seven signals that clashed with numbers this roadmap states for
+  M7–M11 — `LR_NRESET` (→ GPIO45), I2C1 SDA/SCL (→ 20/21), `KEY_INT` (→ 12),
+  GNSS UART1 (→ 2/3), 1PPS (→ 4), `GPS_EN` (→ 11), `BAT_ADC` (→ 13) — plus
+  three non-stated collisions moved to free pins (LCD `BL` → 10, `USB_DET` → 8,
+  `CHG_STAT` → 17). With the corrected map M7's deliberate `GPIO12` double-bind
+  and M11's "move LCD_CS to GPIO21, collide with the keyboard's SCL" demo both
+  work as written. Provenance — stated vs invented — is recorded in
+  `boards/README.md`, since JSON carries no comments.
+- **Totals now match the design.** `boardTotals` reads **9 parts · 12 nets · 31
+  GPIO assigned**, the design's footer figure and M10's Done-when. The delta
+  from M4's `10 · 12 · 32` is exactly the demo `Status LED` (`pinbench.led` on
+  GPIO45), deleted with the fixture as the roadmap said it would be. That
+  leaves the M9 with **no instantiated device model** — every one of its nine
+  `deviceModel` ids is still a visible no-op — so M4's OUT-panel render path is
+  no longer exercised by the running app (its unit tests still cover it). M6's
+  ST7789 is the first model the M9 actually runs.
+- **`.pinbench` project file** (`src/shared/project.ts`): board id, PlatformIO
+  dir + env, per-part Inspector config, selected part. Save / Save as… are
+  wired (`⌘S` / `⇧⌘S`, enabled in the menu spec), the most recent file is
+  reopened on launch — re-adopting its PlatformIO checkout so the Source tab and
+  Build & flash come back with it — and `File ▸ Open project…` now opens a
+  `.pinbench` rather than a bare directory (the firmware checkout is attached
+  from Build & flash). Recents live in `session.json` next to the window
+  bounds; canvas pan/zoom and panel layout deliberately stay in the workspace
+  store, not the project file — that split is M11/M12's to revisit. `.pinbench`
+  files are tolerant on read (`normaliseProject`), like every other persisted
+  layout file.
 
 ---
 
@@ -810,10 +877,17 @@ the M9, and lands a new device model as a PR — working only from the docs.
   high / low** control drives the line in the meantime. ADR 0001 amended with
   the framing table and a first, favourable macOS socket number (~5 µs vs
   Linux's ~50 µs).
-- **M5 is the next milestone.** Board definitions as data — the M9 becomes a
-  validated definition file, the M1/M4 fixtures (including the demo LED part)
-  are deleted, and nothing board-specific survives in `src/`.
-- **M6 is the demo milestone.** Everything before it is plumbing; it is the first
+- **M5 is done.** The M9 is `boards/thinknode-m9-v1.0.board.json`, read and
+  validated by `parseBoard` at launch; the M1/M4 fixtures (including the demo
+  LED) are deleted and nothing board-specific survives in `src/`. Loading moved
+  from the renderer into the main process (`board:load` replaces `device:load`).
+  The fixture's invented pin map was reconciled against the numbers M7–M11
+  state, so those milestones' demos work as written; the totals now read the
+  design's `9 parts · 12 nets · 31 GPIO`. A tolerant `.pinbench` project file
+  carries board id, PlatformIO dir + env and per-part config, with save,
+  reopen-on-launch and recents. With the LED gone the M9 instantiates no device
+  model until M6's ST7789.
+- **M6 is the next milestone, and the demo milestone.** Everything before it is plumbing; it is the first
   slice that makes the project's premise obvious to someone watching. If you need
   to show PinBench to anyone, show them M6. It has also absorbed four carry-overs
   now spelled out in its Build list and the risk register: the SPI2/SPI3

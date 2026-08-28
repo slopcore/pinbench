@@ -3,13 +3,23 @@ import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
 import { BrowserWindow, Menu, app, dialog, ipcMain, shell } from 'electron'
 import { IpcChannel } from '../shared/ipc'
-import type { AppInfo, BuildRequest, OpenProjectResult, WindowState } from '../shared/ipc'
-import type { BoardDefinition } from '../shared/board'
+import type {
+  AppInfo,
+  BoardLoadResult,
+  BuildRequest,
+  OpenProjectResult,
+  ProjectFileResult,
+  ProjectSaveResult,
+  WindowState
+} from '../shared/ipc'
 import type { EmulatorLaunchOptions } from '../shared/emulator'
 import { normaliseWorkspace } from '../shared/workspace'
+import { normaliseProject } from '../shared/project'
 import { buildApplicationMenu } from './menu'
 import { isBuildRunning } from '../shared/build'
 import { parseEnvNamesFromIni } from '../shared/pio'
+import { loadBoard } from './board'
+import { readProjectFile, writeProjectFile } from './projectFile'
 import { BuildRunner } from './build'
 import { DeviceHost } from './devices'
 import { EmulatorSupervisor } from './emulator'
@@ -214,10 +224,17 @@ function registerIpc(): void {
     emu().writeSerial(text)
   })
 
-  ipcMain.on(IpcChannel.devicesLoad, (_event, board: BoardDefinition) => {
-    // Board definitions still originate in the renderer until M5 moves loading
-    // into the main process; the host just needs the parts and bus order.
-    deviceHost().load(board)
+  ipcMain.handle(IpcChannel.boardLoad, (_event, id?: string): BoardLoadResult => {
+    // The board is read and validated here, in the main process — the sandboxed
+    // renderer has no filesystem, and reading it here lets the device host take
+    // the parsed definition directly rather than trusting a renderer round trip.
+    try {
+      const board = loadBoard(typeof id === 'string' && id ? id : undefined)
+      deviceHost().load(board)
+      return { board }
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
   })
 
   ipcMain.on(
@@ -281,6 +298,48 @@ function registerIpc(): void {
       })
   })
 
+  ipcMain.handle(IpcChannel.projectFileOpen, async (): Promise<ProjectFileResult | null> => {
+    if (!mainWindow) return null
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: 'Open PinBench project',
+      filters: [{ name: 'PinBench project', extensions: ['pinbench'] }],
+      properties: ['openFile']
+    })
+    if (result.canceled || result.filePaths.length === 0) return null
+    return adoptProjectFile(result.filePaths[0]!)
+  })
+
+  ipcMain.handle(
+    IpcChannel.projectFileSave,
+    async (_event, path: string | null, incoming: unknown): Promise<ProjectSaveResult> => {
+      const projectFile = normaliseProject(incoming)
+      let target = typeof path === 'string' && path ? path : null
+      if (!target) {
+        if (!mainWindow) return { canceled: true }
+        const result = await dialog.showSaveDialog(mainWindow, {
+          title: 'Save PinBench project',
+          defaultPath: 'untitled.pinbench',
+          filters: [{ name: 'PinBench project', extensions: ['pinbench'] }]
+        })
+        if (result.canceled || !result.filePath) return { canceled: true }
+        target = result.filePath
+      }
+      writeProjectFile(target, projectFile)
+      session().addRecentProject(target)
+      return { path: target }
+    }
+  )
+
+  ipcMain.handle(IpcChannel.projectFileRecent, async (): Promise<ProjectFileResult | null> => {
+    const last = session().lastProject()
+    if (!last || !existsSync(last)) return null
+    try {
+      return adoptProjectFile(last)
+    } catch {
+      return null
+    }
+  })
+
   ipcMain.on(IpcChannel.buildCancel, () => build?.cancel())
 
   ipcMain.on(IpcChannel.buildClean, (_event, projectDir: string) => {
@@ -321,6 +380,23 @@ function openProject(rawDir: string): OpenProjectResult {
   }
   const envs = readEnvNames(dir)
   return { dir, name: basename(dir), envs }
+}
+
+/**
+ * Read a `.pinbench` file, record it as recent, and re-adopt the PlatformIO
+ * project it names so the Source tab and Build & flash come back with it.
+ */
+function adoptProjectFile(rawPath: string): ProjectFileResult {
+  const path = resolve(rawPath)
+  const projectFile = readProjectFile(path)
+  session().addRecentProject(path)
+
+  let pio: OpenProjectResult | null = null
+  const dir = projectFile.platformioDir
+  if (dir && existsSync(join(dir, 'platformio.ini'))) {
+    pio = openProject(dir)
+  }
+  return { path, project: projectFile, pio }
 }
 
 function readEnvNames(dir: string): string[] {

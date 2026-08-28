@@ -1,6 +1,7 @@
 import type { BuildOutputLine, BuildStatus } from './build'
 import type { CommandId } from './commands'
 import type { BoardDefinition } from './board'
+import type { ProjectFile } from './project'
 import type {
   DeviceCommandMessage,
   DeviceEventMessage,
@@ -34,13 +35,16 @@ export const IpcChannel = {
   projectReadTree: 'project:read-tree',
   projectReadFile: 'project:read-file',
   projectFileChanged: 'project:file-changed',
+  boardLoad: 'board:load',
+  projectFileOpen: 'projectfile:open',
+  projectFileSave: 'projectfile:save',
+  projectFileRecent: 'projectfile:recent',
   buildStart: 'build:start',
   buildCancel: 'build:cancel',
   buildClean: 'build:clean',
   buildState: 'build:state',
   buildOutput: 'build:output',
   buildDiagnostics: 'build:diagnostics',
-  devicesLoad: 'device:load',
   deviceSnapshot: 'device:snapshot',
   deviceEvent: 'device:event',
   deviceDiagnostic: 'device:diagnostic',
@@ -68,6 +72,19 @@ export interface OpenProjectResult {
   envs: string[]
 }
 
+export type BoardLoadResult = { board: BoardDefinition } | { error: string }
+
+/** A `.pinbench` file the main process opened, with its PlatformIO project re-adopted. */
+export interface ProjectFileResult {
+  /** Absolute path of the `.pinbench` file. */
+  path: string
+  project: ProjectFile
+  /** The re-opened PlatformIO project, or null if the file names none / it is gone. */
+  pio: OpenProjectResult | null
+}
+
+export type ProjectSaveResult = { path: string } | { canceled: true }
+
 export interface BuildRequest {
   projectDir: string
   env: string
@@ -80,6 +97,18 @@ export interface PinBenchApi {
   workspace: {
     load(): Promise<WorkspaceState>
     save(state: WorkspaceState): void
+  }
+  board: {
+    /** Load and validate a board definition by id; the host also feeds it to the device host. */
+    load(id?: string): Promise<BoardLoadResult>
+  }
+  projectFile: {
+    /** Prompt for a `.pinbench` file and open it, re-adopting its PlatformIO project. */
+    open(): Promise<ProjectFileResult | null>
+    /** Write `project`; when `path` is null, prompt for one. */
+    save(path: string | null, project: ProjectFile): Promise<ProjectSaveResult>
+    /** The most recently opened `.pinbench` file, for auto-reopen on launch. */
+    recent(): Promise<ProjectFileResult | null>
   }
   window: {
     minimise(): void
@@ -115,8 +144,6 @@ export interface PinBenchApi {
     onDiagnostics(listener: (rows: Diagnostic[]) => void): () => void
   }
   devices: {
-    /** Hand the device host the current board so it can instantiate models. */
-    load(board: BoardDefinition): void
     /** A device model's observable state changed. */
     onSnapshot(listener: (message: DeviceSnapshotMessage) => void): () => void
     /** A device model appended a row to its OUT-panel event log. */

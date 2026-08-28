@@ -97,14 +97,16 @@ export const MENUS: MenuSpec[] = [
     entries: [
       // Everything that touches a project or a firmware image belongs to M2/M3.
       item('file.newProject', 'New project…', { accelerator: 'CmdOrCtrl+N', enabled: false }),
+      // "Open project…" opens a `.pinbench` file from M5; the firmware checkout
+      // is attached from Build & flash.
       item('file.openProject', 'Open project…', { accelerator: 'CmdOrCtrl+O', enabled: true }),
       item('file.openFirmware', 'Open firmware image…', {
         accelerator: 'CmdOrCtrl+Shift+O',
         enabled: true
       }),
       separator,
-      item('file.save', 'Save', { accelerator: 'CmdOrCtrl+S', enabled: false }),
-      item('file.saveAs', 'Save as…', { accelerator: 'CmdOrCtrl+Shift+S', enabled: false }),
+      item('file.save', 'Save', { accelerator: 'CmdOrCtrl+S', enabled: true }),
+      item('file.saveAs', 'Save as…', { accelerator: 'CmdOrCtrl+Shift+S', enabled: true }),
       separator,
       item('file.closeProject', 'Close project', { accelerator: 'CmdOrCtrl+W', enabled: false })
     ]

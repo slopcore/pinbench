@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os'
  */
 export const app = {
   getPath: (): string => tmpdir(),
+  getAppPath: (): string => process.cwd(),
   getVersion: (): string => '0.0.0-test',
   isPackaged: false,
   name: 'PinBench'

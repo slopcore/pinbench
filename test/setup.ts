@@ -22,6 +22,14 @@ export function installBridge(initial: WorkspaceState = DEFAULT_WORKSPACE): Test
         bridge.savedWorkspace = state
       }
     },
+    board: {
+      load: vi.fn(() => Promise.resolve({ error: 'no board in tests' as string }))
+    },
+    projectFile: {
+      open: vi.fn(() => Promise.resolve(null)),
+      save: vi.fn(() => Promise.resolve({ canceled: true as const })),
+      recent: vi.fn(() => Promise.resolve(null))
+    },
     window: {
       minimise: vi.fn(),
       toggleMaximise: vi.fn(),
@@ -55,7 +63,6 @@ export function installBridge(initial: WorkspaceState = DEFAULT_WORKSPACE): Test
       onDiagnostics: () => () => undefined
     },
     devices: {
-      load: vi.fn(),
       onSnapshot: () => () => undefined,
       onEvent: () => () => undefined,
       onDiagnostic: () => () => undefined,

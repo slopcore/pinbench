@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { DEFAULT_WORKSPACE } from '@shared/workspace'
 import type { ViewportState, WorkspaceState } from '@shared/workspace'
 import { Canvas } from './Canvas'
-import { M9_BOARD } from '../fixtures/m9'
+import { M9_BOARD } from '../../../../test/board'
 import '../../../../test/setup'
 
 function renderCanvas(overrides: Partial<WorkspaceState['canvas']> = {}): {

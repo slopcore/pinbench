@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { DEFAULT_WORKSPACE } from '@shared/workspace'
 import type { WorkspaceState } from '@shared/workspace'
 import { App } from './App'
+import { M9_BOARD } from '../../../test/board'
 import { installBridge, type TestBridge } from '../../../test/setup'
 
 const APP_INFO = { version: '0.1.0', platform: 'darwin' as NodeJS.Platform, isDev: true }
@@ -14,7 +15,9 @@ async function renderApp(
 ): Promise<{ bridge: TestBridge; user: ReturnType<typeof userEvent.setup> }> {
   const bridge = installBridge(initial)
   const user = userEvent.setup()
-  render(<App appInfo={APP_INFO} windowState={WINDOW_STATE} />)
+  render(
+    <App appInfo={APP_INFO} windowState={WINDOW_STATE} board={M9_BOARD} initialProject={null} />
+  )
   // The status bar is always present; waiting on it lets the restore land
   // before a test starts clicking.
   await screen.findByText(/GPIO assigned/)
@@ -32,7 +35,7 @@ describe('the shell', () => {
 
   it('shows counts computed from the board definition', async () => {
     await renderApp()
-    expect(screen.getByText('10 parts · 12 nets · 32 GPIO assigned')).toBeInTheDocument()
+    expect(screen.getByText('9 parts · 12 nets · 31 GPIO assigned')).toBeInTheDocument()
   })
 })
 

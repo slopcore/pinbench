@@ -1,7 +1,10 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { boardTotals, findPart } from '@shared/board'
+import type { BoardDefinition } from '@shared/board'
 import type { CommandId } from '@shared/commands'
-import type { AppInfo, WindowState } from '@shared/ipc'
+import type { AppInfo, ProjectFileResult, WindowState } from '@shared/ipc'
+import type { PartConfigValue, ProjectFile } from '@shared/project'
+import { DEFAULT_PROJECT } from '@shared/project'
 import { MAX_ZOOM, MIN_ZOOM, clamp, fitViewport } from '@shared/workspace'
 import type { CanvasTool, GridStyle, WorkspaceState } from '@shared/workspace'
 import { Canvas, ZOOM_STEP } from './components/Canvas'
@@ -12,7 +15,6 @@ import { SourceView } from './components/SourceView'
 import { StatusBar } from './components/StatusBar'
 import { TitleBar } from './components/TitleBar'
 import { Toolbar } from './components/Toolbar'
-import { M9_BOARD } from './fixtures/m9'
 import type { Diagnostic } from '@shared/diagnostics'
 import { isBuildRunning } from '@shared/build'
 import { useMenuCommands } from './state/useCommands'
@@ -26,21 +28,34 @@ import './styles/shell.css'
 interface AppProps {
   appInfo: AppInfo
   windowState: WindowState
+  board: BoardDefinition
+  /** The `.pinbench` file reopened on launch, if any — resolved by `Root`. */
+  initialProject: ProjectFileResult | null
 }
 
-export function App({ appInfo, windowState }: AppProps): React.JSX.Element {
+export function App({ appInfo, windowState, board, initialProject }: AppProps): React.JSX.Element {
   const { workspace, dispatch, restored } = useWorkspace()
-  const board = M9_BOARD
   const emulator = useEmulator(board.emulator)
   const project = useProject()
   const build = useBuild((image) => emulator.start(image))
-  const devices = useDevices(board)
+  const devices = useDevices()
   const totals = useMemo(() => boardTotals(board), [board])
   const selectedPart = workspace.selectedPartId
     ? findPart(board, workspace.selectedPartId)
     : undefined
 
   const [gotoLine, setGotoLine] = useState<number | undefined>(undefined)
+
+  // The `.pinbench` document: board, firmware project, and per-part config.
+  // Seeded from the file `Root` reopened; its PlatformIO project and selection
+  // are applied in the mount effect below.
+  const [projectPath, setProjectPath] = useState<string | null>(initialProject?.path ?? null)
+  const [config, setConfig] = useState<Record<string, PartConfigValue>>(
+    () => initialProject?.project.partConfig ?? {}
+  )
+  const [projectDirty, setProjectDirty] = useState(false)
+  /** Set when an opened `.pinbench` names a board other than the loaded one (M13). */
+  const [otherBoardId, setOtherBoardId] = useState<string | null>(null)
 
   const openInSource = useCallback(
     (file: string, line?: number) => {
@@ -80,6 +95,13 @@ export function App({ appInfo, windowState }: AppProps): React.JSX.Element {
     }
     rows.push(...build.diagnostics)
     rows.push(...devices.diagnostics)
+    if (otherBoardId) {
+      rows.push({
+        id: 'other-board',
+        severity: 'warn',
+        message: `This project targets board "${otherBoardId}" — restart PinBench to load it (board switching is M13)`
+      })
+    }
     if (emulator.state === 'crashed' && emulator.error) {
       rows.push({ id: 'emu-crash', severity: 'error', message: emulator.error })
     }
@@ -87,12 +109,13 @@ export function App({ appInfo, windowState }: AppProps): React.JSX.Element {
       rows.push({
         id: 'no-firmware',
         severity: 'note',
-        message: 'Open a firmware image (⌘⇧O) or a project (⌘O) to begin'
+        message: 'Open a firmware image (⌘⇧O), or attach a project checkout from Build & flash'
       })
     }
     return rows
   }, [
     board.name,
+    otherBoardId,
     board.mcu,
     project.info,
     project.env,
@@ -119,12 +142,69 @@ export function App({ appInfo, windowState }: AppProps): React.JSX.Element {
     })
   }, [board.emulator, build, project])
 
-  const [config, setConfig] = useState<Record<string, string | number | boolean>>({})
-  const onConfigChange = useCallback(
-    (partId: string, fieldId: string, value: string | number | boolean) =>
-      setConfig((previous) => ({ ...previous, [`${partId}.${fieldId}`]: value })),
-    []
+  const onConfigChange = useCallback((partId: string, fieldId: string, value: PartConfigValue) => {
+    setConfig((previous) => ({ ...previous, [`${partId}.${fieldId}`]: value }))
+    setProjectDirty(true)
+  }, [])
+
+  const applyProjectFile = useCallback(
+    (loaded: ProjectFileResult): void => {
+      setProjectPath(loaded.path)
+      setConfig(loaded.project.partConfig)
+      setProjectDirty(false)
+      setOtherBoardId(
+        loaded.project.boardId && loaded.project.boardId !== board.id
+          ? loaded.project.boardId
+          : null
+      )
+      dispatch({ type: 'selectPart', partId: loaded.project.selectedPartId })
+      if (loaded.pio) void project.hydrate(loaded.pio, loaded.project.env)
+    },
+    [board.id, dispatch, project]
   )
+
+  // Apply the launch project's PlatformIO checkout and selection once. Its
+  // path and per-part config are already seeded into state above.
+  const launchApplied = useRef(false)
+  useEffect(() => {
+    if (launchApplied.current || !initialProject) return
+    launchApplied.current = true
+    dispatch({ type: 'selectPart', partId: initialProject.project.selectedPartId })
+    if (initialProject.pio) {
+      void project.hydrate(initialProject.pio, initialProject.project.env)
+    }
+  }, [initialProject, dispatch, project])
+
+  const currentProjectFile = useCallback(
+    (): ProjectFile => ({
+      ...DEFAULT_PROJECT,
+      boardId: board.id,
+      platformioDir: project.info?.dir ?? null,
+      env: project.env,
+      partConfig: config,
+      selectedPartId: workspace.selectedPartId
+    }),
+    [board.id, config, project.env, project.info, workspace.selectedPartId]
+  )
+
+  const saveProject = useCallback(
+    async (forceDialog: boolean): Promise<void> => {
+      const result = await window.pinbench.projectFile.save(
+        forceDialog ? null : projectPath,
+        currentProjectFile()
+      )
+      if ('path' in result) {
+        setProjectPath(result.path)
+        setProjectDirty(false)
+      }
+    },
+    [currentProjectFile, projectPath]
+  )
+
+  const openProjectFile = useCallback(async (): Promise<void> => {
+    const loaded = await window.pinbench.projectFile.open()
+    if (loaded) applyProjectFile(loaded)
+  }, [applyProjectFile])
 
   const canvasSize = useRef({ width: 0, height: 0 })
   const onMeasure = useCallback((size: { width: number; height: number }) => {
@@ -194,7 +274,13 @@ export function App({ appInfo, windowState }: AppProps): React.JSX.Element {
           emulator.openAndStart()
           break
         case 'file.openProject':
-          void project.open()
+          void openProjectFile()
+          break
+        case 'file.save':
+          void saveProject(false)
+          break
+        case 'file.saveAs':
+          void saveProject(true)
           break
         case 'build.buildAndFlash':
           buildAndFlash()
@@ -219,7 +305,18 @@ export function App({ appInfo, windowState }: AppProps): React.JSX.Element {
           break
       }
     },
-    [buildAndFlash, build, dispatch, emulator, fit, project, workspace.workspaceTab, zoomBy]
+    [
+      buildAndFlash,
+      build,
+      dispatch,
+      emulator,
+      fit,
+      openProjectFile,
+      project,
+      saveProject,
+      workspace.workspaceTab,
+      zoomBy
+    ]
   )
 
   useMenuCommands(runCommand)
@@ -252,11 +349,12 @@ export function App({ appInfo, windowState }: AppProps): React.JSX.Element {
     [workspace]
   )
 
-  const subtitle = project.info
-    ? project.info.name
-    : emulator.firmwarePath
-      ? (emulator.firmwarePath.split('/').pop() ?? 'untitled.pinbench')
-      : 'untitled.pinbench'
+  const projectName =
+    projectPath?.split(/[/\\]/).pop() ??
+    project.info?.name ??
+    (emulator.firmwarePath ? emulator.firmwarePath.split(/[/\\]/).pop() : undefined) ??
+    'untitled.pinbench'
+  const subtitle = projectDirty ? `${projectName} •` : projectName
 
   return (
     <div className="shell">

@@ -8,6 +8,8 @@ export interface ProjectHandle {
   env: string | null
   setEnv(env: string): void
   open(): Promise<void>
+  /** Adopt a PlatformIO project the main process already re-opened (from a `.pinbench` file). */
+  hydrate(info: OpenProjectResult, env: string | null): Promise<void>
   /** Root-level nodes; directories are filled in lazily on expand. */
   tree: FileNode[]
   expanded: Set<string>
@@ -44,6 +46,16 @@ export function useProject(): ProjectHandle {
     childrenRef.current.clear()
     setInfo(result)
     setEnvState(result.envs[0] ?? null)
+    setExpanded(new Set())
+    setDirty(new Set())
+    setActiveFile(null)
+    setTree(await window.pinbench.project.readTree())
+  }, [])
+
+  const hydrate = useCallback(async (nextInfo: OpenProjectResult, nextEnv: string | null) => {
+    childrenRef.current.clear()
+    setInfo(nextInfo)
+    setEnvState(nextEnv ?? nextInfo.envs[0] ?? null)
     setExpanded(new Set())
     setDirty(new Set())
     setActiveFile(null)
@@ -90,6 +102,7 @@ export function useProject(): ProjectHandle {
     env,
     setEnv,
     open,
+    hydrate,
     tree,
     expanded,
     toggleDir,

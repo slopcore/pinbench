@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { BoardDefinition } from '@shared/board'
 import type { DeviceEventMessage, DeviceSnapshotMessage } from '@shared/devices/messages'
 import type { Diagnostic } from '@shared/diagnostics'
 
@@ -27,23 +26,17 @@ interface DevicesState {
 }
 
 /**
- * Subscribes to the main-process device host and hands the board over to it on
- * mount so it can instantiate models. Snapshots and events fan out to the OUT
- * panels; device diagnostics reach the Diagnostics dock through the same
- * `onDiagnostic` bridge the build uses.
+ * Subscribes to the main-process device host. The host instantiates models when
+ * it loads the board (`board:load`, from `useBoard`), so this hook only fans
+ * snapshots and events out to the OUT panels and device diagnostics into the
+ * Diagnostics dock, through the same `onDiagnostic` bridge the build uses.
  */
-export function useDevices(board: BoardDefinition): DevicesHandle {
+export function useDevices(): DevicesHandle {
   const [state, setState] = useState<DevicesState>(() => ({
     snapshots: new Map(),
     events: new Map(),
     diagnostics: []
   }))
-
-  // The host makes a repeat `load` of the same board a no-op, so this is safe
-  // under React strict mode's double-invoked effects.
-  useEffect(() => {
-    window.pinbench.devices.load(board)
-  }, [board])
 
   useEffect(() => {
     return window.pinbench.devices.onSnapshot((message) => {

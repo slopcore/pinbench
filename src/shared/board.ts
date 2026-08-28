@@ -160,6 +160,271 @@ export function findPart(board: BoardDefinition, partId: string): PartDefinition
   return board.parts.find((part) => part.id === partId)
 }
 
+/**
+ * Raised when a board definition on disk is malformed. Unlike `normaliseWorkspace`
+ * and `normaliseSession`, which coerce a bad file into the defaults so the app
+ * still launches, a board definition fails loud: a silently-coerced pin map is
+ * exactly the "silent zeros will cost you days" trap the device milestones warn
+ * about. The `path` names the offending field.
+ */
+export class BoardValidationError extends Error {
+  constructor(
+    readonly path: string,
+    detail: string
+  ) {
+    super(`${path}: ${detail}`)
+    this.name = 'BoardValidationError'
+  }
+}
+
+const PIN_CAPABILITIES: readonly PinCapability[] = [
+  'gpio',
+  'adc',
+  'touch',
+  'spi',
+  'i2c',
+  'uart',
+  'usb',
+  'strapping',
+  'psram',
+  'flash'
+]
+const BUS_KINDS: readonly BusKind[] = ['spi', 'i2c', 'uart', 'onewire']
+const PART_CATEGORIES: readonly PartCategory[] = [
+  'mcu',
+  'radio',
+  'display',
+  'storage',
+  'sensor',
+  'input',
+  'power',
+  'interface'
+]
+const CONFIG_KINDS = ['segmented', 'toggle', 'text', 'number'] as const
+
+function fail(path: string, detail: string): never {
+  throw new BoardValidationError(path, detail)
+}
+
+function obj(value: unknown, path: string): Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    fail(path, 'expected an object')
+  }
+  return value as Record<string, unknown>
+}
+
+function arr(value: unknown, path: string): unknown[] {
+  if (!Array.isArray(value)) fail(path, 'expected an array')
+  return value
+}
+
+function str(value: unknown, path: string): string {
+  if (typeof value !== 'string' || value.length === 0) fail(path, 'expected a non-empty string')
+  return value
+}
+
+function num(value: unknown, path: string): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) fail(path, 'expected a finite number')
+  return value
+}
+
+function oneOf<T extends string>(value: unknown, allowed: readonly T[], path: string): T {
+  if (typeof value !== 'string' || !allowed.includes(value as T)) {
+    fail(path, `expected one of ${allowed.join(', ')}`)
+  }
+  return value as T
+}
+
+function unique(ids: string[], path: string): void {
+  const seen = new Set<string>()
+  for (const id of ids) {
+    if (seen.has(id)) fail(path, `duplicate id "${id}"`)
+    seen.add(id)
+  }
+}
+
+/**
+ * Parse and fully validate a board definition read from disk. Throws
+ * `BoardValidationError` on the first problem, naming the field. The
+ * cross-reference checks — part pins resolve to declared pins, buses exist,
+ * net endpoints resolve to a real part signal — were consistency assertions
+ * living in the M1 fixture's test file; they belong here, where every board
+ * that loads is held to them.
+ */
+export function parseBoard(input: unknown): BoardDefinition {
+  const root = obj(input, 'board')
+  if (root['schema'] !== 1) fail('board.schema', 'must be 1')
+
+  const id = str(root['id'], 'board.id')
+  const name = str(root['name'], 'board.name')
+  const mcu = str(root['mcu'], 'board.mcu')
+  const vendor = str(root['vendor'], 'board.vendor')
+
+  const pins: PinDefinition[] = arr(root['pins'], 'board.pins').map((raw, i) => {
+    const p = obj(raw, `board.pins[${i}]`)
+    return {
+      id: str(p['id'], `board.pins[${i}].id`),
+      label: str(p['label'], `board.pins[${i}].label`),
+      capabilities: arr(p['capabilities'], `board.pins[${i}].capabilities`).map((c, j) =>
+        oneOf(c, PIN_CAPABILITIES, `board.pins[${i}].capabilities[${j}]`)
+      )
+    }
+  })
+  unique(
+    pins.map((p) => p.id),
+    'board.pins'
+  )
+  const pinIds = new Set(pins.map((p) => p.id))
+
+  const buses: BusDefinition[] = arr(root['buses'], 'board.buses').map((raw, i) => {
+    const b = obj(raw, `board.buses[${i}]`)
+    const signalsRaw = obj(b['signals'], `board.buses[${i}].signals`)
+    const signals: Record<string, string> = {}
+    for (const [role, target] of Object.entries(signalsRaw)) {
+      const pin = str(target, `board.buses[${i}].signals.${role}`)
+      if (!pinIds.has(pin)) {
+        fail(`board.buses[${i}].signals.${role}`, `"${pin}" is not a declared pin`)
+      }
+      signals[role] = pin
+    }
+    const bus: BusDefinition = {
+      id: str(b['id'], `board.buses[${i}].id`),
+      kind: oneOf(b['kind'], BUS_KINDS, `board.buses[${i}].kind`),
+      label: str(b['label'], `board.buses[${i}].label`),
+      signals
+    }
+    if (b['clockHz'] !== undefined) bus.clockHz = num(b['clockHz'], `board.buses[${i}].clockHz`)
+    return bus
+  })
+  unique(
+    buses.map((b) => b.id),
+    'board.buses'
+  )
+  const busIds = new Set(buses.map((b) => b.id))
+
+  const parts: PartDefinition[] = arr(root['parts'], 'board.parts').map((raw, i) => {
+    const p = obj(raw, `board.parts[${i}]`)
+    const partId = str(p['id'], `board.parts[${i}].id`)
+    const pins = arr(p['pins'], `board.parts[${i}].pins`).map((raw2, j) => {
+      const binding = obj(raw2, `board.parts[${i}].pins[${j}]`)
+      const pin = str(binding['pin'], `board.parts[${i}].pins[${j}].pin`)
+      if (!pinIds.has(pin)) {
+        fail(`board.parts[${i}].pins[${j}].pin`, `"${pin}" is not a declared pin`)
+      }
+      return { signal: str(binding['signal'], `board.parts[${i}].pins[${j}].signal`), pin }
+    })
+    const partBuses = arr(p['buses'], `board.parts[${i}].buses`).map((b, j) => {
+      const busId = str(b, `board.parts[${i}].buses[${j}]`)
+      if (!busIds.has(busId))
+        fail(`board.parts[${i}].buses[${j}]`, `"${busId}" is not a declared bus`)
+      return busId
+    })
+    const config = arr(p['config'], `board.parts[${i}].config`).map((raw2, j) => {
+      const f = obj(raw2, `board.parts[${i}].config[${j}]`)
+      oneOf(f['kind'], CONFIG_KINDS, `board.parts[${i}].config[${j}].kind`)
+      str(f['id'], `board.parts[${i}].config[${j}].id`)
+      str(f['label'], `board.parts[${i}].config[${j}].label`)
+      return f as unknown as PartConfigField
+    })
+    const layoutRaw = obj(p['layout'], `board.parts[${i}].layout`)
+    const part: PartDefinition = {
+      id: partId,
+      designator: str(p['designator'], `board.parts[${i}].designator`),
+      name: str(p['name'], `board.parts[${i}].name`),
+      category: oneOf(p['category'], PART_CATEGORIES, `board.parts[${i}].category`),
+      summary: str(p['summary'], `board.parts[${i}].summary`),
+      buses: partBuses,
+      pins,
+      config,
+      layout: {
+        x: num(layoutRaw['x'], `board.parts[${i}].layout.x`),
+        y: num(layoutRaw['y'], `board.parts[${i}].layout.y`),
+        width: num(layoutRaw['width'], `board.parts[${i}].layout.width`),
+        height: num(layoutRaw['height'], `board.parts[${i}].layout.height`)
+      }
+    }
+    if (p['mpn'] !== undefined) part.mpn = str(p['mpn'], `board.parts[${i}].mpn`)
+    if (p['deviceModel'] !== undefined) {
+      part.deviceModel = str(p['deviceModel'], `board.parts[${i}].deviceModel`)
+    }
+    return part
+  })
+  unique(
+    parts.map((p) => p.id),
+    'board.parts'
+  )
+  const mcuCount = parts.filter((p) => p.category === 'mcu').length
+  if (mcuCount !== 1) fail('board.parts', `expected exactly one "mcu" part, found ${mcuCount}`)
+
+  const partSignals = new Map(parts.map((p) => [p.id, new Set(p.pins.map((b) => b.signal))]))
+
+  const nets: NetDefinition[] = arr(root['nets'], 'board.nets').map((raw, i) => {
+    const n = obj(raw, `board.nets[${i}]`)
+    const net: NetDefinition = {
+      id: str(n['id'], `board.nets[${i}].id`),
+      label: str(n['label'], `board.nets[${i}].label`),
+      nodes: arr(n['nodes'], `board.nets[${i}].nodes`).map((node, j) => {
+        const value = str(node, `board.nets[${i}].nodes[${j}]`)
+        if (value.includes(':')) {
+          const [partId, signal] = value.split(':')
+          const signals = partSignals.get(partId ?? '')
+          if (!signals) fail(`board.nets[${i}].nodes[${j}]`, `no part "${partId}"`)
+          if (!signals.has(signal ?? '')) {
+            fail(`board.nets[${i}].nodes[${j}]`, `part "${partId}" has no signal "${signal}"`)
+          }
+        } else if (!pinIds.has(value)) {
+          fail(`board.nets[${i}].nodes[${j}]`, `"${value}" is neither a pin nor a part signal`)
+        }
+        return value
+      })
+    }
+    if (n['bus'] !== undefined) {
+      const busId = str(n['bus'], `board.nets[${i}].bus`)
+      if (!busIds.has(busId)) fail(`board.nets[${i}].bus`, `"${busId}" is not a declared bus`)
+      net.bus = busId
+    }
+    return net
+  })
+  unique(
+    nets.map((n) => n.id),
+    'board.nets'
+  )
+
+  const emulatorRaw = obj(root['emulator'], 'board.emulator')
+  const emulator: EmulatorTarget = {}
+  if (emulatorRaw['machine'] !== undefined) {
+    emulator.machine = str(emulatorRaw['machine'], 'board.emulator.machine')
+  }
+  if (emulatorRaw['psramSize'] !== undefined) {
+    emulator.psramSize = str(emulatorRaw['psramSize'], 'board.emulator.psramSize')
+  }
+  if (emulatorRaw['psramOctal'] !== undefined) {
+    if (typeof emulatorRaw['psramOctal'] !== 'boolean') {
+      fail('board.emulator.psramOctal', 'expected a boolean')
+    }
+    emulator.psramOctal = emulatorRaw['psramOctal']
+  }
+
+  const canvasRaw = obj(root['canvas'], 'board.canvas')
+
+  return {
+    schema: 1,
+    id,
+    name,
+    mcu,
+    vendor,
+    pins,
+    buses,
+    parts,
+    nets,
+    emulator,
+    canvas: {
+      width: num(canvasRaw['width'], 'board.canvas.width'),
+      height: num(canvasRaw['height'], 'board.canvas.height')
+    }
+  }
+}
+
 export const CATEGORY_LABELS: Record<PartCategory, string> = {
   mcu: 'Processor',
   radio: 'Radio',

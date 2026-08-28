@@ -2,12 +2,16 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { IpcChannel } from '../shared/ipc'
 import type {
   AppInfo,
+  BoardLoadResult,
   BuildRequest,
   EmulatorLaunchOptions,
   OpenProjectResult,
   PinBenchApi,
+  ProjectFileResult,
+  ProjectSaveResult,
   WindowState
 } from '../shared/ipc'
+import type { ProjectFile } from '../shared/project'
 import type { BuildOutputLine, BuildStatus } from '../shared/build'
 import type { CommandId } from '../shared/commands'
 import type {
@@ -34,6 +38,16 @@ const api: PinBenchApi = {
   workspace: {
     load: () => ipcRenderer.invoke(IpcChannel.workspaceLoad) as Promise<WorkspaceState>,
     save: (state: WorkspaceState) => ipcRenderer.send(IpcChannel.workspaceSave, state)
+  },
+  board: {
+    load: (id?: string) => ipcRenderer.invoke(IpcChannel.boardLoad, id) as Promise<BoardLoadResult>
+  },
+  projectFile: {
+    open: () => ipcRenderer.invoke(IpcChannel.projectFileOpen) as Promise<ProjectFileResult | null>,
+    save: (path: string | null, project: ProjectFile) =>
+      ipcRenderer.invoke(IpcChannel.projectFileSave, path, project) as Promise<ProjectSaveResult>,
+    recent: () =>
+      ipcRenderer.invoke(IpcChannel.projectFileRecent) as Promise<ProjectFileResult | null>
   },
   window: {
     minimise: () => ipcRenderer.send(IpcChannel.windowMinimise),
@@ -73,7 +87,6 @@ const api: PinBenchApi = {
     onDiagnostics: (listener) => subscribe<Diagnostic[]>(IpcChannel.buildDiagnostics, listener)
   },
   devices: {
-    load: (board) => ipcRenderer.send(IpcChannel.devicesLoad, board),
     onSnapshot: (listener) => subscribe<DeviceSnapshotMessage>(IpcChannel.deviceSnapshot, listener),
     onEvent: (listener) => subscribe<DeviceEventMessage>(IpcChannel.deviceEvent, listener),
     onDiagnostic: (listener) => subscribe<Diagnostic>(IpcChannel.deviceDiagnostic, listener),

@@ -25,7 +25,11 @@ export interface SessionState {
   version: 1
   window: WindowBounds
   workspace: WorkspaceState
+  /** Absolute paths of recently opened `.pinbench` files, most recent first. */
+  recentProjects: string[]
 }
+
+const MAX_RECENT_PROJECTS = 8
 
 export const DEFAULT_WINDOW: WindowBounds = {
   width: 1360,
@@ -36,7 +40,8 @@ export const DEFAULT_WINDOW: WindowBounds = {
 export const DEFAULT_SESSION: SessionState = {
   version: 1,
   window: DEFAULT_WINDOW,
-  workspace: DEFAULT_WORKSPACE
+  workspace: DEFAULT_WORKSPACE,
+  recentProjects: []
 }
 
 /** Coerce anything on disk into a usable session; never throw at the caller. */
@@ -58,7 +63,12 @@ export function normaliseSession(input: unknown): SessionState {
       height: Math.max(480, num(window.height) ?? DEFAULT_WINDOW.height),
       maximised: window.maximised === true
     },
-    workspace: normaliseWorkspace(raw.workspace)
+    workspace: normaliseWorkspace(raw.workspace),
+    recentProjects: Array.isArray(raw.recentProjects)
+      ? raw.recentProjects
+          .filter((p): p is string => typeof p === 'string')
+          .slice(0, MAX_RECENT_PROJECTS)
+      : []
   }
 }
 
@@ -83,6 +93,21 @@ export class SessionStore {
   setWindow(bounds: WindowBounds): void {
     this.state = { ...this.state, window: bounds }
     this.write()
+  }
+
+  /** Record `path` as the most recently opened project, de-duplicated. */
+  addRecentProject(path: string): void {
+    const recentProjects = [path, ...this.state.recentProjects.filter((p) => p !== path)].slice(
+      0,
+      MAX_RECENT_PROJECTS
+    )
+    this.state = { ...this.state, recentProjects }
+    this.write()
+  }
+
+  /** The most recently opened project path, or null if there is none. */
+  lastProject(): string | null {
+    return this.state.recentProjects[0] ?? null
   }
 
   private read(): SessionState {

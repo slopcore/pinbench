@@ -1002,6 +1002,10 @@ M6.4 stays 🚧 partial and that one clause moves to M8.
   no-change the fork's observer drops, so the model now powers on
   `backlightOn = !backlightActiveHigh` — the panel reads lit, and
   `St7789Screen.tsx`'s dim only kicks in on a real display/backlight-off.
+  *Known softness:* `st7789Options()` reads the keys it knows and ignores the
+  rest, so a mistyped `deviceOptions` key is silently dropped rather than
+  failing loud the way `parseBoard` does (the model has no `ctx` at
+  construction to diagnose through). Revisit when a second board needs options.
 - **Edit → rebuild → changed pixels.** Changed the splash string in
   `examples/companion_radio/main.cpp` to `"PINBENCH M6.4"`, rebuilt through the
   same `pio` + `dio_opi` + 16 M merge path (~25 s), re-captured — the rendered
@@ -1016,8 +1020,14 @@ M6.4 stays 🚧 partial and that one clause moves to M8.
 - **`dc` powers on LOW (command)**, not HIGH — same no-change-observer reason
   as the backlight. Killed the M6.3 `data byte with no command context` info;
   live diagnostics are clean.
-- **Dirty-rect throttling** already worked: the host samples `takeFrame()` on a
-  ~30 fps timer (not per transaction), and live dirty rects are real subregions.
+- **Dirty-rect throttling, both halves.** The host already sampled `takeFrame()`
+  on a ~30 fps timer (the throttle); now `St7789Screen.tsx` also keeps a
+  persistent `ImageData` and `putImageData`s only the changed region — a
+  partial update no longer repaints the whole canvas. The dirty rect is in
+  physical GRAM coords, so `displayDirtyRect` runs it through the same MV
+  transpose as the pixels (`dx = physY` when MV); a dimensions / dim / invert
+  change forces one full repaint. Live dirty rects are real subregions
+  (`6×1 @ 112,135`-shaped), unit-tested.
 
 **Remaining for M6.4 to close — moved to M8:**
 

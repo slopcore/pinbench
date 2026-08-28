@@ -842,7 +842,7 @@ gated on M6.3. USB-CDC was *not* the trap the Watch-for feared —
 `boards/thinknode_m9.json` sets `ARDUINO_USB_CDC_ON_BOOT=0`, so `Serial` is
 UART0 and the log comes out there.
 
-#### M6.3 · The bridge carries real traffic — `M`
+#### M6.3 · The bridge carries real traffic — `M` ✅ **done**
 
 **Goal.** Prove the GP-SPI2 register model and the GPIO observer against a
 running core, not against reasoning from the driver source.
@@ -871,6 +871,60 @@ move to sensible values driven by the guest, and the Diagnostics dock is free of
 separate MMIO writes. If `onBus` sees the wrong `DC` level, the socket is
 reordering or the GPIO observer is batching — it must forward each edge
 synchronously.
+
+### Outcome
+
+The bridge carries real MeshCore traffic and the ST7789 model tracks the
+guest's display init. Booted the M6.2 `companion_radio_usb_` image under the
+patched `.qemu` with the real `DeviceHost` on `PINBENCH_DEVICE_SOCKET`; over
+~300 ms of bring-up before the `radio_init` halt: **1 Hello, ~1,730 `Op.Gpio`,
+~5,560 `Op.Xfer`, zero stray `Op.Reset`.**
+
+- **Register model verified against the compiled headers, then live.**
+  `spi_reg.h` (the M9's own `framework-arduinoespressif32` copy) confirms every
+  offset `pinbench_gpspi.c` uses — `SPI_CMD` 0x0, `SPI_USER` 0x10, `SPI_MS_DLEN`
+  0x1C, `SPI_W0..W15` 0x98–0xD4, `SPI_USR` bit 24, `SPI_UPDATE` bit 23 — and
+  `esp32-hal-spi.c`'s `spiTransferBytesNL` is a pure CPU-FIFO loop in ≤64-byte
+  chunks with **no DMA**, so the FIFO path is the whole story and the bulk hook
+  sees every chunk. Live, the `Op.Xfer` stream decodes as the exact
+  `ST7789Spi::sendInitCommands` sequence — `01 11 3A 55 36 60 2A 00 00 00 F0 2B
+  00 00 00 87 11 13 29 21` — then `2C` (RAMWR) followed by `len 64` bulk
+  transfers. `SPI_CMD.UPDATE` self-clear does not spin the driver.
+- **GPIO observer works and routing is correct.** `Op.Gpio` frames arrive for
+  the `RST` pulse (GPIO14 1→0→1) and the `CS`/`DC` toggling (GPIO16/GPIO15) in
+  the `set_CS(HIGH); dc=LOW; set_CS(LOW); xfer; set_CS(HIGH); dc=HIGH` order
+  `sendCommand` uses. The host routes every transfer to `u3` because GPIO16 is
+  low, and raises **no bus-contention diagnostic**.
+- **Contention bug found and fixed** (`src/main/devices.ts`). `DeviceHost.load`
+  recognised only `signal === 'CS'` as a chip-select; the M9's LR1110 names its
+  select `NSS` (its datasheet name, and what M8 will want), so it fell to the
+  `csPin === null ⇒ csLow: true` "always addressable" default. On the shared
+  `spi0`, that made *every* ST7789 transfer route to two devices and get
+  dropped. Now a `SPI_SELECT_SIGNALS` set (`CS`/`NSS`/`SS`/`CSB`) is the
+  chip-select test; `signalCsLabel` follows. Unit test added for the M9's
+  radio+panel bus layout.
+- **ST7789 state is guest-driven:** `poweredOn: true`, `displayOn: true`,
+  `inverted: true`, `bpp: 16`, `madctl: 0xA0` (`RGB|MV|MY` — correct for the
+  env's `DISPLAY_FLIP_VERTICALLY=1`), CASET/RASET window addressing moving,
+  `resetCount: 1`, and **12 `device:framebuffer` messages** down the side
+  channel. Diagnostics dock: **one** `data byte with no command context` (info),
+  once, at the very first transfer — no `unimplemented command`, no desync
+  storm. Cause is a first-edge assumption: the fork's GPIO observer forwards
+  only *changes*, so the driver's initial `digitalWrite(_dc, LOW)` (writing 0
+  over a reset-0 register) is not forwarded and the model keeps its own `dc`
+  default for one byte. Cosmetic, self-corrects on the next toggle; the model's
+  `dc` power-on default is an M6.4 tidy.
+- **`txnPerFrame` meter reads 7–12** — the bulk hook is batching, so the
+  "count transactions per frame before rewriting anything in C" number is
+  healthy and no C rewrite is indicated. The `flush` meter still reports
+  wall-clock nonsense (needs a guest-clock delta) — an M6.4 fix.
+- **Codified** as `src/main/live-bridge.test.ts`: skipped unless
+  `PINBENCH_LIVE_QEMU=1` and `PINBENCH_M9_IMAGE=<merged image>` are set (needs
+  the built emulator and a firmware artifact, like `spike/`). It waits on the
+  Hello + traffic plateau rather than a fixed sleep; green 3/3 across repeats.
+
+**Not done here:** pixels (M6.4), and the run through the app's Build & flash
+button (still M6.2's owed UI check — the bridge itself is now proven).
 
 #### M6.4 · Real firmware pixels — `M`
 

@@ -802,11 +802,12 @@ project were found and fixed:
   `overrideConfigIni` hardcoded `board_build.arduino.memory_type = dio_qspi`.
   `memory_type` is `<flash>_<psram>`; the M9's ESP32-S3-R8 is octal
   (`boards/thinknode_m9.json` → `qio_opi`), and `dio_qspi` builds a
-  quad-PSRAM sdkconfig that mismatches the QEMU machine's
-  `ssi_psram.is_octal=true`. Now takes `psramOctal` and emits `dio_opi` for
-  octal boards (`tools/sdk/esp32s3/dio_opi/` is a real variant),
-  `dio_qspi` otherwise. `psramOctal` threads board → `BuildRequest` →
-  `overrideConfigIni`.
+  quad-PSRAM sdkconfig. Confirmed by A/B boot: the `dio_qspi` image adds
+  `E (92) psram: PSRAM ID read error: 0x00000000 … wrong PSRAM line mode`
+  against the same `-global ssi_psram.is_octal=true` machine; the `dio_opi`
+  image does not. Now takes `psramOctal` and emits `dio_opi` for octal boards
+  (`tools/sdk/esp32s3/dio_opi/` is a real variant), `dio_qspi` otherwise.
+  `psramOctal` threads board → `BuildRequest` → `overrideConfigIni`.
 - **The merged image was sized off PSRAM, not flash.** `BuildRunner` derived
   `--flash_size` from `emulator.psramSize` (8 M) — but the M9 has 8 M PSRAM
   and **16 M flash**, and `default_16MB.csv` puts `spiffs`/`coredump` at
@@ -819,20 +820,27 @@ project were found and fixed:
 `-machine esp32s3 -m 8M -global ssi_psram.is_octal=true -serial mon:stdio`):
 ROM banner → 2nd-stage bootloader → **Arduino/ESP-IDF runtime is live and
 printing on UART0** → `board.begin()`, `display.begin()` → `radio_init()` fails
-`-707` (RadioLib SPI comms — the LR1110 has no working bus yet) → MeshCore
-`halt()`s. Two guest-side gripes on the way: `[E][esp32-hal-gpio.c:102]
-__pinMode(): Invalid pin selected` and `gpio: gpio_set_level(227): GPIO output
-gpio_num error` (a bogus pin number reaching the GPIO path — investigate in
-M6.3), and QEMU `guest_errors` shows `Invalid read at addr 0x10200C` plus
-benign `m25p80` unknown-command noise. This is one step past M0's "stalls
-before first serial output", exactly as the Watch-for predicted.
+`-707` → MeshCore `halt()`s. This run had `PINBENCH_DEVICE_SOCKET` **unset**, so
+`pinbench_host.c` no-ops the bridge by design and `-707` is *guaranteed and
+says nothing* about whether the GP-SPI2 register model / `SPI_MS_DLEN` / FIFO
+offsets are right — that is exactly what M6.3 exists to find out. Two guest-side
+gripes on the way: `[E][esp32-hal-gpio.c:102] __pinMode(): Invalid pin
+selected` and `gpio: gpio_set_level(227): GPIO output gpio_num error` (a bogus
+pin number reaching the GPIO path — investigate in M6.3), and QEMU
+`guest_errors` shows `Invalid read at addr 0x10200C` plus benign `m25p80`
+unknown-command noise. This is one step past M0's "stalls before first serial
+output", exactly as the Watch-for predicted.
 
 **Still owed for the Done-when:** (1) the same build driven through the app's
-**Build & flash** button, not `pio run` on the command line (config is proven
-identical); (2) MeshCore's actual version/advert banner, which is downstream of
-`radio_init()` and so is really gated on M6.3. USB-CDC was *not* the trap the
-Watch-for feared — `boards/thinknode_m9.json` sets `ARDUINO_USB_CDC_ON_BOOT=0`,
-so `Serial` is UART0 and the log comes out there.
+**Build & flash** button, not `pio run` on the command line — the override
+`overrideConfigIni` generates for this project (all **591** envs pinned, incl.
+`[env:native]` and nRF52/RP2040 targets that have no `memory_type` key) was
+verified to resolve and build the M9 env cleanly, so the config is genuinely
+identical, but the UI wiring itself is unexercised; (2) MeshCore's actual
+version/advert banner, which is downstream of `radio_init()` and so is really
+gated on M6.3. USB-CDC was *not* the trap the Watch-for feared —
+`boards/thinknode_m9.json` sets `ARDUINO_USB_CDC_ON_BOOT=0`, so `Serial` is
+UART0 and the log comes out there.
 
 #### M6.3 · The bridge carries real traffic — `M`
 

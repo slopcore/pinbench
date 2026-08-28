@@ -13,14 +13,17 @@ interface FakeChild extends EventEmitter {
   stderr: PassThrough & { setEncoding: () => void }
   pid: number
   kill: ReturnType<typeof vi.fn>
+  /** argv the runner spawned this child with. */
+  args: string[]
 }
 
-function makeChild(): FakeChild {
+function makeChild(args: string[] = []): FakeChild {
   const child = Object.assign(new EventEmitter(), {
     stdout: Object.assign(new PassThrough(), { setEncoding: (): void => undefined }),
     stderr: Object.assign(new PassThrough(), { setEncoding: (): void => undefined }),
     pid: 4242,
-    kill: vi.fn()
+    kill: vi.fn(),
+    args
   }) as FakeChild
   return child
 }
@@ -39,8 +42,8 @@ const PROJECT_CONFIG = { envs: ['esp32s3'], options: { esp32s3: {} } }
 
 function makeRunner(overrides: Partial<BuildRunnerDeps> = {}) {
   const spawns: FakeChild[] = []
-  const spawn = vi.fn(() => {
-    const child = makeChild()
+  const spawn = vi.fn((_cmd: string, args: string[] = []) => {
+    const child = makeChild(args)
     spawns.push(child)
     return child as unknown as ReturnType<typeof nodeSpawn>
   })
@@ -88,6 +91,26 @@ describe('BuildRunner', () => {
     expect(states.map((s) => s.state)).toEqual(
       expect.arrayContaining(['preparing', 'compiling', 'linking', 'merging', 'done'])
     )
+  })
+
+  it('sizes the merged image from flashSize and keeps PSRAM octal in the override', async () => {
+    const { runner, spawns, writes } = makeRunner()
+    const done = runner.run({
+      projectDir: '/proj',
+      env: 'esp32s3',
+      emulator: { flashSize: '16M', psramSize: '8M', psramOctal: true }
+    })
+
+    await vi.waitFor(() => expect(spawns).toHaveLength(1))
+    expect(Object.values(writes)[0]).toContain('board_build.arduino.memory_type = dio_opi')
+    finish(spawns[0]!, 'Compiling src/main.cpp.o\nLinking firmware.elf\n', 0)
+
+    await vi.waitFor(() => expect(spawns).toHaveLength(2))
+    const mergeArgs = spawns[1]!.args
+    expect(mergeArgs[mergeArgs.indexOf('--flash_size') + 1]).toBe('16MB')
+    expect(mergeArgs[mergeArgs.indexOf('--fill-flash-size') + 1]).toBe('16MB')
+    finish(spawns[1]!, '', 0)
+    await done
   })
 
   it('surfaces compiler errors as diagnostics and fails', async () => {

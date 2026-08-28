@@ -75,6 +75,15 @@ function isFramebufferSource(model: DeviceModel): model is DeviceModel & Framebu
 /** How often the host samples display models for a new frame. ~30 fps. */
 const FRAME_INTERVAL_MS = 33
 
+/**
+ * Signal names that mean "this GPIO is this device's SPI chip-select". The M9's
+ * parts don't agree on a name: the ST7789 and microSD call it `CS`, but the
+ * LR1110 uses its datasheet name `NSS`. Without `NSS` here the radio has no
+ * tracked select, defaults to always-addressable, and every ST7789 transaction
+ * routes to two devices and gets dropped.
+ */
+const SPI_SELECT_SIGNALS = new Set(['CS', 'NSS', 'SS', 'CSB'])
+
 interface LoadedDevice {
   part: PartDefinition
   model: DeviceModel
@@ -180,7 +189,9 @@ export class DeviceHost extends EventEmitter {
         const pinNum = pinNumber(binding.pin)
         if (pinNum !== null) {
           signalsByPin.set(pinNum, binding.signal)
-          if (binding.signal === 'CS' && part.buses.some((b) => spiBusIds.has(b))) csPin = pinNum
+          if (SPI_SELECT_SIGNALS.has(binding.signal) && part.buses.some((b) => spiBusIds.has(b))) {
+            csPin = pinNum
+          }
         }
       }
 
@@ -637,7 +648,8 @@ function pinNumber(pinId: string): number | null {
 
 /** The board net label for a device's chip-select, for a contention message. */
 function signalCsLabel(device: LoadedDevice): string {
-  return device.part.pins.find((b) => b.signal === 'CS')?.pin ?? 'CS'
+  const binding = device.part.pins.find((b) => SPI_SELECT_SIGNALS.has(b.signal))
+  return binding ? `${binding.signal} ${binding.pin}` : 'CS'
 }
 
 function safeMeter(model: DeviceModel, id: string): number | undefined {

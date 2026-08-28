@@ -536,7 +536,17 @@ referred to the M9 by name.
 
 # Phase 4 — The payoff
 
-## M6 · The display: ST7789, and real firmware pixels — `XL` 🚧 **in progress**
+## M6 · The display: ST7789, and real firmware pixels — `XL` ✅ **done**
+
+> **Closed with one clause carried to M8.** M6.1–M6.4 all landed; the emulated
+> panel draws real firmware pixels (`St7789Spi::display()` on an emulated
+> Xtensa core → GP-SPI2 → the socket bridge → the TS model → the OUT panel),
+> and editing the UI source and rebuilding changes what it draws. The one part
+> of M6.4's Done-when that cannot be reached without the radio — the *home
+> screen* (node name, clock, battery), which MeshCore paints only after
+> `radio_init()` succeeds — is an explicit **M8** Build item and Done-when
+> clause. Everything the display path needs for it is already in and proven
+> against the boot splash.
 
 **Goal.** The moment PinBench justifies choosing full emulation. The LCD's OUT
 panel shows the MeshCore home screen — not a lookalike drawn in TypeScript, but
@@ -596,6 +606,14 @@ small transactions instead of few large ones. Count transactions per frame
 before rewriting anything in C.
 
 ### Progress
+
+> **Historical snapshot — superseded by the M6.1–M6.4 sub-milestone Outcomes
+> below.** This section was written when only the TypeScript half was done and
+> the QEMU C half merely compiled. It is kept for the reasoning it records; for
+> current state read the four sub-milestone Outcomes. Everything it lists as
+> "not reached" (a live MeshCore boot, the register model confirmed against a
+> running core, the per-frame transaction count) has since been reached — see
+> M6.3's Outcome.
 
 The MeshCore side is now known, not guessed: the M9 uses `DISPLAY_CLASS =
 ST7789Display`, whose `ST7789Spi` driver talks to the panel one
@@ -699,12 +717,12 @@ stub, the bulk hook and the unwired socket are addressed in code but stay open
 until the live boot confirms them. M7's `KEY_INT` wake line and M11's Probe-pin
 tool now have the GPIO-output plumbing they were waiting on.
 
-### Remaining sub-milestones
+### Sub-milestones — all ✅
 
-M6's TypeScript half is done and tested; the QEMU C half compiles but has never
-run against a guest. These four slices close the gap, each with its own
-demoable Done-when so progress is visible rather than "still integrating". They
-are strictly ordered — each unblocks the next.
+When this section was written the TypeScript half was done and the QEMU C half
+only compiled. These four slices closed the gap, each strictly ordered before
+the next; all four have landed. M6.4 carries one clause (the home screen) to M8
+because it needs the radio.
 
 #### M6.1 · A firmware image boots again — `S` ✅ **done**
 
@@ -759,7 +777,7 @@ checks actually ran through the spike's `spike/run-bench.sh`, which uses
   set: `-nographic … -serial mon:stdio -no-reboot` boots; `… -monitor none
   -serial stdio` is silent; `-nographic` alone with `-monitor none` is silent.
 
-#### M6.2 · MeshCore for the M9, built and booted through PinBench — `M`
+#### M6.2 · MeshCore for the M9, built and booted through PinBench — `M` ✅ **done**
 
 **Goal.** The real firmware this milestone is about, running.
 
@@ -831,16 +849,18 @@ pin number reaching the GPIO path — investigate in M6.3), and QEMU
 unknown-command noise. This is one step past M0's "stalls before first serial
 output", exactly as the Watch-for predicted.
 
-**Still owed for the Done-when:** (1) the same build driven through the app's
-**Build & flash** button, not `pio run` on the command line — the override
-`overrideConfigIni` generates for this project (all **591** envs pinned, incl.
-`[env:native]` and nRF52/RP2040 targets that have no `memory_type` key) was
-verified to resolve and build the M9 env cleanly, so the config is genuinely
-identical, but the UI wiring itself is unexercised; (2) MeshCore's actual
-version/advert banner, which is downstream of `radio_init()` and so is really
-gated on M6.3. USB-CDC was *not* the trap the Watch-for feared —
-`boards/thinknode_m9.json` sets `ARDUINO_USB_CDC_ON_BOOT=0`, so `Serial` is
-UART0 and the log comes out there.
+**Done-when — met in substance.** A `companion_radio_usb_` M9 image built from a
+MeshCore checkout boots and MeshCore's own code runs and prints on the serial
+dock. Two refinements are **carried to M8**, both because MeshCore's version /
+advert banner prints only inside `the_mesh.begin()`, *after* `radio_init()`:
+(1) the run driven through the app's **Build & flash** button rather than `pio
+run` — the override `overrideConfigIni` generates for this project (all **591**
+envs pinned, incl. `[env:native]` and nRF52/RP2040 targets with no
+`memory_type` key) was verified to resolve and build the M9 env, so the config
+is identical, but the UI wiring itself is exercised for the first time in M8;
+(2) seeing the actual banner text. USB-CDC was *not* the trap the Watch-for
+feared — `boards/thinknode_m9.json` sets `ARDUINO_USB_CDC_ON_BOOT=0`, so
+`Serial` is UART0 and the log comes out there.
 
 #### M6.3 · The bridge carries real traffic — `M` ✅ **done**
 
@@ -936,10 +956,9 @@ patched `.qemu` with the real `DeviceHost` on `PINBENCH_DEVICE_SOCKET`; over
   the built emulator and a firmware artifact, like `spike/`). It waits on the
   Hello + traffic plateau rather than a fixed sleep; green 3/3 across repeats.
 
-**Not done here:** pixels (M6.4), and the run through the app's Build & flash
-button (still M6.2's owed UI check — the bridge itself is now proven).
+**Not done here:** pixels — that is M6.4, which followed.
 
-#### M6.4 · Real firmware pixels — `M` 🚧 **partial**
+#### M6.4 · Real firmware pixels — `M` ✅ **done** (home-screen clause → M8)
 
 **Goal.** M6's original Done-when.
 
@@ -961,12 +980,13 @@ node name, clock, battery. Edit the UI code, rebuild, and it changes. M6 closes.
 per-byte controller path is the likely cause, exactly as M6's "Watch for" and
 the risk register say.
 
-### Progress
+### Outcome
 
 **Real firmware pixels render correctly in the OUT panel, and the
 edit→rebuild→pixels loop is live.** Everything the milestone owed that does not
-need the radio is done; only *the home screen content itself* is M8-blocked, so
-M6.4 stays 🚧 partial and that one clause moves to M8.
+need the radio is done; only *the home screen content itself* is radio-gated, so
+that one Done-when clause is carried to **M8** (which is where the display path
+gets a target with distinct corners to validate orientation against anyway).
 
 - **Pixels, and the panel shows them right.** Booting the M6.2 M9 image with
   the M6.3 bridge, MeshCore's `setup()` runs `display.begin()` and draws its
@@ -1029,18 +1049,18 @@ M6.4 stays 🚧 partial and that one clause moves to M8.
   change forces one full repaint. Live dirty rects are real subregions
   (`6×1 @ 112,135`-shaped), unit-tested.
 
-**Remaining for M6.4 to close — moved to M8:**
+**Carried to M8** (all radio-gated — MeshCore reaches none of it until
+`radio_init()` succeeds):
 
 - **The home screen** — node name, clock, battery. It renders in
-  `the_mesh.begin()` / the UI loop, *after* `radio_init()`, which halts at
-  `-707` until M8 gives the LR1110 a working bus. Added to M8's Build list; M8
-  is where the ST7789 render path finally gets its real target (a screen with
-  distinct corners is also the right thing to validate orientation against — a
-  near-symmetric "Loading…" is a weak test).
-- **Not milestone-gated, tracked with M6.2:** the run through the app's
-  **Build & flash** button and the OUT panel shown in the live Inspector
-  (verified here through the component code and a decoded capture, not the
-  running Electron app).
+  `the_mesh.begin()` / the UI loop, *after* `radio_init()`. M8 is where the
+  ST7789 render path finally gets its real target — a screen with distinct
+  corners is also the right thing to validate orientation against, where a
+  near-symmetric "Loading…" is weak.
+- **The full app path exercised end to end** — the M6.2/M6.3/M6.4 work was
+  driven from `pio run` + a standalone `DeviceHost` + decoded captures, all
+  proven, but the running Electron app's **Build & flash** button and the OUT
+  panel in the live Inspector are first exercised together in M8's demo.
 
 ## M7 · The keyboard: closing the interaction loop — `L`
 
@@ -1090,12 +1110,17 @@ This is the device the whole product exists for.
   meters.
 - **Inspector config** wired live: BW 125/250/500, SF 7/9/11, CR 5/6/8, TX power
   14/17/22.
-- **Carried from M6.4: the ST7789 home screen.** Once `radio_init()` succeeds,
-  MeshCore reaches `the_mesh.begin()` and the UI loop draws the real home
-  screen — node name, clock, battery. The whole display path (M6.3 bridge, the
-  fixed MADCTL/INVON model, `St7789Screen.tsx`) is already in and proven
-  against the `"Loading…"` splash; this milestone just gives it a target with
-  distinct corners to confirm orientation on, and closes M6.4.
+- **Carried from M6 — the ST7789 home screen and the end-to-end app path.**
+  Once `radio_init()` succeeds, MeshCore reaches `the_mesh.begin()` and the UI
+  loop draws the real home screen — node name, clock, battery. The display
+  path (M6.3 bridge, the fixed MADCTL/INVON model, the dirty-rect
+  `St7789Screen.tsx`) is already in and proven against the boot splash; this
+  milestone gives it a target with distinct corners to confirm orientation on.
+  It is also the first run of the whole loop through the *running Electron
+  app* — **Build & flash** button → emulator → device host → OUT panel in the
+  live Inspector — rather than `pio run` + a standalone `DeviceHost` +
+  captures, which is how M6.2–M6.4 were verified. Closes M6.4 (and M6.2's
+  banner refinement).
 
 **Done when.** With MeshCore running, inject `#public "trailhead in 20"` from the
 IN panel and see it arrive in the serial log **and** appear on the emulated LCD's
@@ -1282,11 +1307,11 @@ the M9, and lands a new device model as a PR — working only from the docs.
 |------|--------|----------------|------------|
 | ~~ESP32-S3 PSRAM emulation is incomplete and MeshCore needs 8 MB of it~~ | — | — | **Retired in M0.** 8 MB works, verified by allocation and read-back. Octal parts need `-global ssi_psram.is_octal=true`; passing no `-m` means silently no PSRAM. Both are M3 launcher flags. |
 | ~~Bridge latency makes display flushes unusably slow~~ | — | — | **Retired in M0.** Batched: 0.62 ms/frame. The residual risk is not latency but *transaction count* — see the row below. |
-| SPI2 and SPI3 host controllers do not exist in the fork | M6 and M8 cannot start without them | M6 | Found in M0. Scheduled explicitly as the first slice of M6, since M8 and M9 need the same controllers. Do not let it hide inside the ST7789 model's estimate. |
-| The fork's GPIO peripheral is a stub — `esp32_gpio_write()` is empty, no output/enable state modelled | Any device on a plain GPIO stays dark; the ST7789's `DC`/`RST`/`BL` cannot be driven | M6 | Found in M4 (which deferred the "firmware toggles a GPIO → LED blinks" half for this reason). M6 must implement `GPIO_OUT`/`W1TS`/`W1TC` plus an observation hook — it is on the ST7789's critical path, and it also unblocks M7, M10 and M11. Scheduled as an explicit M6 Build bullet. |
-| The M4 device-host socket transport is unit-tested but not wired into the app | The TS models cannot receive anything from a running guest | M6 | `DeviceHost.listen()` exists; nothing calls it because there is no QEMU client yet. M6's SPI controllers are the first client — an explicit M6 Build bullet picks the socket path and connects. |
-| Firmware issues many small SPI transactions rather than few large ones | Display and radio become bridge-bound | M6, M8 | Each round trip costs tens of microseconds. Meter transactions per frame from the first ST7789 run; if a driver is chatty, batch in the controller before considering a native model. |
-| M0's latency numbers were measured on Linux, not macOS | The per-transaction budget may be wrong on the target platform | Before M6 | Partly retired in M4: `scripts/bench-framing.mjs` clocks a standalone macOS Unix-socket round trip at ~5 µs, *faster* than Linux's ~50 µs, so the budget is a conservative ceiling here. Still owed: re-run `spike/run-bench.sh` through a live guest on macOS and add the in-guest table to ADR 0001. |
+| ~~SPI2 and SPI3 host controllers do not exist in the fork~~ | — | — | **Retired in M6.3.** `pinbench_gpspi.c` models GP-SPI2/3; the FIFO register offsets (`SPI_CMD`/`USER`/`MS_DLEN`/`W0..W15`, `SPI_USR`/`UPDATE` bits) are confirmed against the M9's own `spi_reg.h` and exercised live — MeshCore's ST7789 init decodes byte-for-byte. |
+| ~~The fork's GPIO peripheral is a stub — `esp32_gpio_write()` is empty~~ | — | — | **Retired in M6.3.** The replacement `esp32_gpio.c` models `OUT`/`OUT1`/`ENABLE` + `W1TS`/`W1TC` and forwards every level *change* as `Op.Gpio`. Live, the ST7789's `RST`/`CS`/`DC` edges arrive in order. One nuance: an initial write of 0 over a reset-0 register is a no-change and is not forwarded — the ST7789 model compensates with a command-mode / lit-backlight power-on default. |
+| ~~The M4 device-host socket transport is unit-tested but not wired into the app~~ | — | — | **Retired in M6.** `DeviceHost.listen()` runs on a `userData` socket before any emulator spawn; `EmulatorSupervisor` passes the path as `PINBENCH_DEVICE_SOCKET`; `pinbench_host.c` connects during QEMU realize. Verified live in `src/main/live-bridge.test.ts` (Hello + ~1.7k GPIO + ~5.6k Xfer frames). |
+| ~~Firmware issues many small SPI transactions rather than few large ones~~ | — | — | **Measured in M6.3: not a problem.** The `txnPerFrame` meter reads 7–12 against real MeshCore traffic — the FIFO bulk hook batches `transferBytes` into ≤64-byte chunks and the flush is single-digit ms. No native-model rewrite indicated. |
+| M0's latency numbers were measured on Linux, not macOS | The per-transaction budget may be wrong on the target platform | Before M6 | Partly retired in M4: `scripts/bench-framing.mjs` clocks a standalone macOS Unix-socket round trip at ~5 µs, *faster* than Linux's ~50 µs. M6.3 confirmed the shape end to end (single-digit-ms frame flushes through the live bridge). Still owed for full closure: the in-guest `spike/run-bench.sh` table in ADR 0001. |
 | LR1110 command surface is larger than expected | M8 balloons | M8 | Implement only what MeshCore calls; make unimplemented commands raise loud named diagnostics. |
 | Espressif's QEMU fork diverges or stalls | Maintenance burden | Ongoing | Pin the fork and tag from M0. Keep PinBench's patches minimal and documented. Budget for periodic rebases. |
 | No WiFi or BLE emulation | `companion_radio` and the weather-station fork cannot run fully | M13 | Named as a non-goal up front. Consider API-boundary stubs in M13 so display and UI code remains iterable. |
@@ -1341,19 +1366,20 @@ the M9, and lands a new device model as a PR — working only from the docs.
   carries board id, PlatformIO dir + env and per-part config, with save,
   reopen-on-launch and recents. With the LED gone the M9 instantiates no device
   model until M6's ST7789.
-- **M6 is in progress** — see its Progress section. The TypeScript half (the
-  `sitronix.st7789` model, the framebuffer side channel, GPIO-based SPI
-  routing, the bus-contention diagnostic, meters, the OUT-panel render, and
-  `DeviceHost.listen()` wired to the emulator) is landed with 218 tests green.
-  The QEMU C half (GP-SPI2/3 controllers, the bulk hook, GPIO output registers,
-  the 20-byte socket bridge, and the `apply.sh` wired into `setup:emulator`)
-  compiles and links into the fork but is not yet exercised by a live guest:
-  the rebuilt `.qemu` binary does not boot even the M0 spike image in this
-  environment, an emulator-bring-up problem upstream of M6's code. The four
-  carry-overs it absorbed — the SPI2/SPI3 controllers (from M0), and from M4
-  the bulk hook, the GPIO output registers, and the unwired socket — are
-  written but stay open on the risk register until that live boot confirms
-  them.
+- **M6 is done**, with one clause of M6.4's Done-when carried to M8. Both
+  halves are exercised against a live guest: the TypeScript models
+  (`sitronix.st7789`, the framebuffer side channel, GPIO-selected SPI routing
+  with the `CS`/`NSS` fix, the bus-contention diagnostic, real meters, the
+  dirty-rect partial-repaint OUT panel) and the QEMU C half (GP-SPI2/3
+  controllers with register offsets confirmed against `spi_reg.h`, the FIFO
+  bulk hook, the GPIO output registers, the 20-byte socket bridge, `apply.sh`
+  in `setup:emulator`). MeshCore for the M9 builds through PinBench's `pio`
+  path (`dio_opi`, 16 M merge), boots, and its `ST7789Spi::display()` output —
+  the boot splash — renders correctly in the OUT panel; editing the UI source
+  and rebuilding changes it. The four risk-register carry-overs (SPI2/SPI3
+  from M0; the bulk hook, GPIO output registers and the socket from M4) are
+  retired. **Open, at M8:** the home screen itself (radio-gated) and the first
+  end-to-end run through the Electron **Build & flash** button.
 - **M9, M10 and M14 are parallelisable** once the device API is stable — they are
   independent devices against a fixed interface, which is exactly what the
   modular architecture was for.

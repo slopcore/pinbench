@@ -275,3 +275,55 @@ spike/run-bench.sh ./qemu/build bench-flash.bin
 
 `spike/README.md` has the details, including the `mkflash.sh` helper and the
 `PINBENCH_BRIDGE_SOCKET` environment variable that arms the harness.
+
+---
+
+## Amendment — M4 (2026-08-28): the real protocol, and a first macOS number
+
+M4 built the device-model interface, registry and test harness, and the real
+wire protocol between a QEMU bus controller and the Node host
+(`src/shared/devices/protocol.ts`). Two of this ADR's open questions can now be
+answered with measurements from `scripts/bench-framing.mjs`.
+
+**Open question 3 — framing overhead — resolved.** The spike moved raw bytes
+behind a 5-byte header; the real frame header is **20 bytes** fixed (magic, op,
+flags, bus index, select, seq, a 64-bit-range nanosecond timestamp, payload
+length). Measured on the dev Mac (Darwin 25.5.0 arm64, Node 25):
+
+| Payload | Header share of bytes | encode + decode | throughput |
+|---|---|---|---|
+| 1-byte transaction | 95.2% | ~110 ns | — |
+| full 153,600-byte frame | 0.013% | ~4 µs | ~35 GiB/s |
+
+Encoding and decoding a whole display frame costs **~0.004 ms** — under 1% of
+the spike's 0.62 ms/frame bridge figure, and swamped by the socket round trip
+either way. The header does not move the batched conclusion. The per-transaction
+budget is still counted in *frames*: one `Xfer` request plus its reply is two
+frames and 40 header bytes regardless of transfer size.
+
+**Open question 1 — macOS round trip — first data point, favourable.** A
+Unix-domain-socket round trip on the dev Mac measured **~5 µs/transaction**,
+against the spike's 48–64 µs on Linux. This is a standalone socket bench, not a
+re-run of `spike/run-bench.sh` through a live guest, so the risk-register item
+("re-run on macOS before M6") stays open for the full in-guest measurement — but
+the headline is that Darwin's IPC is *faster* here, so the §Consequences
+per-transaction budget (10 transactions/frame ≈ 0.5 ms) is a conservative
+ceiling on this platform, not an optimistic one.
+
+**Open question 4 — blocking-model failure policy — decided.** Models are
+synchronous by contract; the host cannot preempt a genuine infinite loop
+without hanging itself, so the real backstop for a hung guest is the C-side
+socket read timeout the SPI controller gets in M6 (after it, the guest sees
+0xFF and its controller raises a guest diagnostic). On the host side
+(`src/main/devices.ts`): a model that **throws** is quarantined — its bus
+replies become all-`0xFF` (never silent zeros, per M8's rule) and a named
+`error` diagnostic is raised, until the next `Reset`; a call that **runs long**
+(> 50 ms) raises a one-shot `warn` naming the model; a reply of the wrong
+length is padded/truncated to the request length with a diagnostic.
+
+**Open question 2 — transaction-shaped interface — done.** `DeviceModel.onBus`
+takes a whole `BusTransaction` and returns a whole `BusResponse`; there is no
+byte-level entry point. The bulk hook in QEMU's `ssi_transfer()` path remains
+M6's to build — nothing in M4 needed it, because the LED is on a GPIO, not a
+bus, and the fork's GPIO peripheral turned out to be a stub (see the M4 roadmap
+outcome).

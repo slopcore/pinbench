@@ -10,6 +10,11 @@ import type {
 } from '../shared/ipc'
 import type { BuildOutputLine, BuildStatus } from '../shared/build'
 import type { CommandId } from '../shared/commands'
+import type {
+  DeviceCommandMessage,
+  DeviceEventMessage,
+  DeviceSnapshotMessage
+} from '../shared/devices/messages'
 import type { Diagnostic } from '../shared/diagnostics'
 import type { EmulatorStatus } from '../shared/emulator'
 import type { FileNode } from '../shared/files'
@@ -66,6 +71,13 @@ const api: PinBenchApi = {
     onState: (listener) => subscribe<BuildStatus>(IpcChannel.buildState, listener),
     onOutput: (listener) => subscribe<BuildOutputLine>(IpcChannel.buildOutput, listener),
     onDiagnostics: (listener) => subscribe<Diagnostic[]>(IpcChannel.buildDiagnostics, listener)
+  },
+  devices: {
+    load: (board) => ipcRenderer.send(IpcChannel.devicesLoad, board),
+    onSnapshot: (listener) => subscribe<DeviceSnapshotMessage>(IpcChannel.deviceSnapshot, listener),
+    onEvent: (listener) => subscribe<DeviceEventMessage>(IpcChannel.deviceEvent, listener),
+    onDiagnostic: (listener) => subscribe<Diagnostic>(IpcChannel.deviceDiagnostic, listener),
+    command: (message: DeviceCommandMessage) => ipcRenderer.send(IpcChannel.deviceCommand, message)
   }
 }
 

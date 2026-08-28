@@ -1,5 +1,11 @@
 import type { BuildOutputLine, BuildStatus } from './build'
 import type { CommandId } from './commands'
+import type { BoardDefinition } from './board'
+import type {
+  DeviceCommandMessage,
+  DeviceEventMessage,
+  DeviceSnapshotMessage
+} from './devices/messages'
 import type { Diagnostic } from './diagnostics'
 import type { EmulatorLaunchOptions, EmulatorStatus } from './emulator'
 import type { FileNode } from './files'
@@ -33,7 +39,12 @@ export const IpcChannel = {
   buildClean: 'build:clean',
   buildState: 'build:state',
   buildOutput: 'build:output',
-  buildDiagnostics: 'build:diagnostics'
+  buildDiagnostics: 'build:diagnostics',
+  devicesLoad: 'device:load',
+  deviceSnapshot: 'device:snapshot',
+  deviceEvent: 'device:event',
+  deviceDiagnostic: 'device:diagnostic',
+  deviceCommand: 'device:command'
 } as const
 
 export interface AppInfo {
@@ -102,5 +113,17 @@ export interface PinBenchApi {
     onState(listener: (status: BuildStatus) => void): () => void
     onOutput(listener: (line: BuildOutputLine) => void): () => void
     onDiagnostics(listener: (rows: Diagnostic[]) => void): () => void
+  }
+  devices: {
+    /** Hand the device host the current board so it can instantiate models. */
+    load(board: BoardDefinition): void
+    /** A device model's observable state changed. */
+    onSnapshot(listener: (message: DeviceSnapshotMessage) => void): () => void
+    /** A device model appended a row to its OUT-panel event log. */
+    onEvent(listener: (message: DeviceEventMessage) => void): () => void
+    /** A device model raised a diagnostic (unimplemented op, quarantine, …). */
+    onDiagnostic(listener: (row: Diagnostic) => void): () => void
+    /** Send a command from an IN panel to a device model (wired from M7). */
+    command(message: DeviceCommandMessage): void
   }
 }

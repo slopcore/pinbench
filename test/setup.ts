@@ -53,6 +53,13 @@ export function installBridge(initial: WorkspaceState = DEFAULT_WORKSPACE): Test
       onState: () => () => undefined,
       onOutput: () => () => undefined,
       onDiagnostics: () => () => undefined
+    },
+    devices: {
+      load: vi.fn(),
+      onSnapshot: () => () => undefined,
+      onEvent: () => () => undefined,
+      onDiagnostic: () => () => undefined,
+      command: vi.fn()
     }
   }
   Object.defineProperty(window, 'pinbench', { value: bridge, configurable: true, writable: true })

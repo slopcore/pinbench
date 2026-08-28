@@ -392,6 +392,23 @@ export const M9_BOARD: BoardDefinition = {
         { id: 'rail', label: 'VDD_PERIPH', kind: 'toggle', value: true }
       ],
       layout: { x: 60, y: 60, width: 170, height: 100 }
+    },
+    {
+      // M4's first device — an LED on a GPIO — added here so the plugin API has
+      // something to render. The real M9 has no user LED; when M5 deletes this
+      // fixture for a real definition file, this part goes with it. GPIO45 is a
+      // strapping pin, which the M11 verifier will rightly have an opinion
+      // about later.
+      id: 'd1',
+      designator: 'D1',
+      name: 'Status LED',
+      category: 'interface',
+      deviceModel: 'pinbench.led',
+      summary: 'Debug LED on GPIO45, driven high to light.',
+      buses: [],
+      pins: [{ signal: 'ANODE', pin: 'GPIO45' }],
+      config: [{ id: 'activeHigh', label: 'Active high', kind: 'toggle', value: true }],
+      layout: { x: 60, y: 510, width: 120, height: 60 }
     }
   ],
   nets: [

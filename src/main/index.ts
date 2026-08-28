@@ -4,12 +4,14 @@ import { basename, join, resolve } from 'node:path'
 import { BrowserWindow, Menu, app, dialog, ipcMain, shell } from 'electron'
 import { IpcChannel } from '../shared/ipc'
 import type { AppInfo, BuildRequest, OpenProjectResult, WindowState } from '../shared/ipc'
+import type { BoardDefinition } from '../shared/board'
 import type { EmulatorLaunchOptions } from '../shared/emulator'
 import { normaliseWorkspace } from '../shared/workspace'
 import { buildApplicationMenu } from './menu'
 import { isBuildRunning } from '../shared/build'
 import { parseEnvNamesFromIni } from '../shared/pio'
 import { BuildRunner } from './build'
+import { DeviceHost } from './devices'
 import { EmulatorSupervisor } from './emulator'
 import { ProjectFiles } from './fileTree'
 import { SessionStore } from './store'
@@ -20,6 +22,7 @@ let mainWindow: BrowserWindow | null = null
 let store: SessionStore | null = null
 let emulator: EmulatorSupervisor | null = null
 let build: BuildRunner | null = null
+let devices: DeviceHost | null = null
 let project: ProjectFiles | null = null
 let projectWatcher: FSWatcher | null = null
 
@@ -40,6 +43,20 @@ const builder = (): BuildRunner => {
 const session = (): SessionStore => {
   store ??= new SessionStore()
   return store
+}
+
+const deviceHost = (): DeviceHost => {
+  if (!devices) {
+    devices = new DeviceHost()
+    devices.on('snapshot', (message) =>
+      mainWindow?.webContents.send(IpcChannel.deviceSnapshot, message)
+    )
+    devices.on('event', (message) => mainWindow?.webContents.send(IpcChannel.deviceEvent, message))
+    devices.on('diagnostic', (row) =>
+      mainWindow?.webContents.send(IpcChannel.deviceDiagnostic, row)
+    )
+  }
+  return devices
 }
 
 const emu = (): EmulatorSupervisor => {
@@ -197,6 +214,23 @@ function registerIpc(): void {
     emu().writeSerial(text)
   })
 
+  ipcMain.on(IpcChannel.devicesLoad, (_event, board: BoardDefinition) => {
+    // Board definitions still originate in the renderer until M5 moves loading
+    // into the main process; the host just needs the parts and bus order.
+    deviceHost().load(board)
+  })
+
+  ipcMain.on(
+    IpcChannel.deviceCommand,
+    (_event, message: { partId: string; command: string; args?: Record<string, unknown> }) => {
+      if (message.command === 'signal' && typeof message.args?.['level'] === 'number') {
+        const level = message.args['level'] === 0 ? 0 : 1
+        const signal = String(message.args['signal'] ?? 'ANODE')
+        devices?.injectSignal(message.partId, signal, level)
+      }
+    }
+  )
+
   ipcMain.handle(IpcChannel.projectOpen, async (): Promise<OpenProjectResult | null> => {
     if (!mainWindow) return null
     if (build && isBuildRunning(build.getStatus().state)) {
@@ -322,6 +356,7 @@ if (!app.requestSingleInstanceLock()) {
   app.on('before-quit', () => {
     emulator?.dispose()
     build?.dispose()
+    void devices?.dispose()
     projectWatcher?.close()
   })
 

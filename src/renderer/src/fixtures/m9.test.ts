@@ -4,9 +4,10 @@ import { M9_BOARD } from './m9'
 
 describe('boardTotals', () => {
   it('computes the counts the status bar shows', () => {
-    // The design's footer reads "9 parts · 12 nets · 31 GPIO assigned"; these
-    // numbers must come from the definition, never from a string.
-    expect(boardTotals(M9_BOARD)).toEqual({ parts: 9, nets: 12, assignedGpio: 31 })
+    // The design's footer reads "9 parts · 12 nets · 31 GPIO assigned" for the
+    // bare M9; M4 adds the demo LED on GPIO45 (deleted with this fixture at
+    // M5). Either way the numbers come from the definition, never a string.
+    expect(boardTotals(M9_BOARD)).toEqual({ parts: 10, nets: 12, assignedGpio: 32 })
   })
 
   it('counts a pin shared by several parts once', () => {

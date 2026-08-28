@@ -1,5 +1,7 @@
 import { CATEGORY_LABELS } from '@shared/board'
 import type { BoardDefinition, PartConfigField, PartDefinition } from '@shared/board'
+import { OutPanel } from './OutPanel'
+import type { PartDeviceView } from '../state/useDevices'
 import './panels.css'
 
 interface InspectorProps {
@@ -12,6 +14,10 @@ interface InspectorProps {
    */
   values: Record<string, string | number | boolean>
   onConfigChange: (partId: string, fieldId: string, value: string | number | boolean) => void
+  /** The selected part's device-model state, when a model is loaded for it. */
+  device?: PartDeviceView | undefined
+  /** Drive a signal into the selected part's model (LED stand-in until M6). */
+  onSetLevel?: ((signal: string, level: 0 | 1) => void) | undefined
 }
 
 /** UART rates read as baud; a clocked bus reads as a frequency. */
@@ -34,7 +40,9 @@ export function Inspector({
   board,
   part,
   values,
-  onConfigChange
+  onConfigChange,
+  device,
+  onSetLevel
 }: InspectorProps): React.JSX.Element {
   return (
     <aside className="panel panel--inspector" aria-label="Inspector">
@@ -177,6 +185,10 @@ export function Inspector({
                   })}
                 </ul>
               </section>
+            )}
+
+            {part.deviceModel !== undefined && (
+              <OutPanel part={part} view={device} {...(onSetLevel ? { onSetLevel } : {})} />
             )}
           </>
         )}

@@ -310,7 +310,7 @@ available — but the loop is firmware-agnostic.
 
 # Phase 3 — The device architecture
 
-## M4 · Device plugin API and first device — `L`
+## M4 · Device plugin API and first device — `L` ✅ **done**
 
 **Goal.** Turn the M0 decision into the API every future device is written
 against, and prove it with something small enough to eyeball.
@@ -357,6 +357,84 @@ is good enough for someone else to add a second device from it.
 the two devices most likely to expose a missing concept, and finding that here
 costs a day rather than a refactor.
 
+### Outcome
+
+The device plugin API is in and exercised: a `DeviceModel` interface, a
+self-registering registry with no central switch, a QEMU-free test harness, the
+main-process device host with a defined failure policy, the real wire protocol,
+and an LED model with rendering in its OUT panel. What M4 could not do live —
+and why — is spelled out below in the tone of M3's "MeshCore itself was not the
+subject".
+
+- **`DeviceModel` is transaction-shaped from line one.**
+  `src/shared/devices/model.ts`: lifecycle (`attach`/`reset`/`detach`),
+  `onBus(txn) → BusResponse` taking and returning whole buffers, `onSignal` for
+  digital lines, `onCommand` for IN panels (M7), `snapshot()`, and declared
+  `meters`. There is no byte-level entry point to retrofit batching onto — the
+  mistake [ADR 0001](docs/adr/0001-device-model-boundary.md) exists to prevent.
+- **The registry has no switch statement.** A model file exports a
+  `DeviceModelDescriptor`; `src/shared/devices/builtin.ts` lists the files; the
+  board references models by id. An id with no registered model is a *visible
+  no-op* — the host reports it once and leaves the part inert — so the M9's
+  nine `deviceModel` ids load fine with only `pinbench.led` implemented.
+- **The test harness is the path of least resistance.**
+  `src/shared/devices/harness.ts` drives a model with scripted transactions and
+  edges, a virtual clock, and recorded events/diagnostics/driven-lines, with
+  no QEMU and no Electron imported. `led.test.ts` is the worked example the
+  authoring doc points at.
+- **Failure policy (ADR open question 4).** Models are synchronous by contract;
+  the host cannot preempt a real infinite loop without hanging itself, so the
+  backstop for a hung guest is the C-side socket read timeout the SPI
+  controller gets in M6. Host-side: a model that throws is quarantined (bus
+  replies become all-`0xFF`, never silent zeros — M8's rule — plus a named
+  `error` diagnostic) until `Reset`; a call over 50 ms raises a one-shot
+  `warn`; a wrong-length reply is padded/truncated with a diagnostic.
+- **Wire protocol and framing overhead (ADR open question 3).**
+  `src/shared/devices/protocol.ts`: a 20-byte fixed header (magic, op, flags,
+  bus index, select, seq, 64-bit-range ns timestamp, length) then payload,
+  little-endian, with a streaming `FrameDecoder`. `scripts/bench-framing.mjs`
+  measures it: ~4 µs to encode+decode a full 153,600-byte frame (under 1% of
+  the spike's 0.62 ms bridge figure), ~110 ns for a 1-byte transaction. The
+  ADR is amended with the table. `DeviceHost` implements the listening socket
+  and `handleFrame` dispatch, and both are unit-tested over a real Unix socket
+  in `devices.test.ts` — but nothing calls `host.listen()` in the running app
+  yet, because there is no QEMU client to connect until M6 builds the SPI2/SPI3
+  controllers. The seam exists; M6 picks a socket path and connects to it.
+- **A first macOS latency number (ADR open question 1).** The same script
+  clocks a Unix-domain-socket round trip on the dev Mac at **~5 µs**, against
+  the spike's 48–64 µs on Linux. It is a standalone socket bench, not a re-run
+  of `spike/run-bench.sh` through a live guest, so the risk-register row stays
+  open for M6 — but Darwin's IPC is *faster* here, so the per-transaction
+  budget is a conservative ceiling on the target platform, not an optimistic
+  one.
+- **The LED, and the honest gap.** `pinbench.led` is an active-high/-low LED on
+  a GPIO with edge, duty-cycle and event outputs, unit-tested without QEMU, and
+  rendered as a bulb in the Inspector's OUT panel. The roadmap's "firmware
+  toggling a GPIO" half is **not wired**, because the espressif fork's GPIO
+  peripheral is a stub — `esp32_gpio_write()` is empty and output state is not
+  modelled at all, the same "the fork models SPI1 only" class of gap M0 found.
+  Feeding real GPIO edges needs the output/`W1TS`/`W1TC` registers implemented
+  in C plus an observation hook. That is now an explicit **M6 Build bullet**
+  ("GPIO output in the fork") and a risk-register row, because the ST7789's own
+  `DC`/`RST`/`BL` lines need the same code — it is on M6's critical path, not a
+  loose end. Until then the OUT panel's **Drive high / Drive low** control
+  drives the line so the render path is demonstrable end to end; every edge is
+  timestamped so the log stays honest about where it came from.
+- **The bulk hook in `ssi_transfer()`** is likewise M6's — nothing in M4 needed
+  it, since the LED is on a GPIO and the interface contract is what M4 owed. M6
+  now carries it as a named Build bullet next to the SPI controllers, and the
+  M4 socket transport it will feed has an M6 bullet and a risk-register row for
+  the wiring that is still owed.
+- **`docs/devices/authoring.md`** is written, and includes the M4 "watch for":
+  the LR1110 and ST7789 sketched against the interface. Neither needs a concept
+  it lacks — a transaction whose meaning depends on a separate line (`DC`), a
+  bulk-pixel snapshot, an output line with real timing (`BUSY`), and a meter
+  derived from earlier transactions all fit.
+- **Renderer + IPC.** `PinBenchApi.devices` (load, `onSnapshot`, `onEvent`,
+  `onDiagnostic`, `command`); `useDevices` fans snapshots to the OUT panels and
+  device diagnostics into the Diagnostics dock. The M9 fixture gains a demo
+  `Status LED` part (GPIO45); it is deleted with the fixture at M5.
+
 ## M5 · Board definitions, and the M9 as data — `M`
 
 **Goal.** Nothing about a board is hardcoded. The M9 becomes the first entry in
@@ -402,10 +480,30 @@ the output of `ui_home.cpp`'s `draw()` running on an emulated Xtensa core.
 - **SPI2/SPI3 host controllers, in C, in the fork.** The espressif fork models
   SPI1 only — the flash and PSRAM controller. Every peripheral on the M9 sits on
   SPI2 or SPI3, so those controllers do not exist yet and nothing on this board
-  can talk until they do. Register-level models with the bulk hook from M4. This
-  is the largest piece of work in the milestone and it is infrastructure the
+  can talk until they do. Register-level models, feeding the bulk hook below.
+  This is the largest piece of work in the milestone and it is infrastructure the
   radio (M8) and microSD (M9) need too, so treat it as its own slice inside M6
   and land it first.
+- **The bulk hook in `ssi_transfer()`.** ADR 0001's load-bearing consequence: a
+  per-byte SSI API makes a display flush take seconds, so the C side needs a
+  path that hands a device model an entire transaction in one call. M4 froze
+  the transaction-shaped `DeviceModel.onBus` interface and did *not* build this
+  — it is new QEMU code with no upstream equivalent and it lands here, with the
+  SPI controllers, as the thing that makes them useful.
+- **Wire the device host's socket.** `DeviceHost.listen()` and the frame
+  protocol exist from M4 and are unit-tested over a real socket, but nothing in
+  the app calls `listen()` because there was no QEMU client. M6 picks the
+  socket path (under `userData`), passes it to QEMU as a launch arg alongside
+  the PSRAM flags, and the SPI controllers — the first client — connect to it
+  and round-trip transactions to the TypeScript models.
+- **GPIO output in the fork.** `esp32_gpio_write()` is an empty stub — the fork
+  models no GPIO output or enable state at all. The ST7789 cannot be driven
+  without it (its `DC`/`RS`, `RST` and `BL_EN` lines are SoC GPIOs, and `DC`'s
+  level *is* how a transaction is parsed), so the output/`W1TS`/`W1TC` registers
+  plus an observation hook to the device host are on this milestone's critical
+  path. Landing it here also retires M4's deferred "firmware toggling a GPIO
+  blinks the LED" and unblocks M7's `KEY_INT` wake line, M10's `VDD_PERIPH` and
+  buzzer, and M11's Probe-pin tool.
 - **ST7789 device model**: command/parameter state machine, `MADCTL` orientation,
   `CASET`/`RASET` window addressing, `RAMWR` streaming, 16bpp and 18bpp colour,
   the reset and DC/RS lines, and `BL_EN` backlight state.
@@ -664,8 +762,10 @@ the M9, and lands a new device model as a PR — working only from the docs.
 | ~~ESP32-S3 PSRAM emulation is incomplete and MeshCore needs 8 MB of it~~ | — | — | **Retired in M0.** 8 MB works, verified by allocation and read-back. Octal parts need `-global ssi_psram.is_octal=true`; passing no `-m` means silently no PSRAM. Both are M3 launcher flags. |
 | ~~Bridge latency makes display flushes unusably slow~~ | — | — | **Retired in M0.** Batched: 0.62 ms/frame. The residual risk is not latency but *transaction count* — see the row below. |
 | SPI2 and SPI3 host controllers do not exist in the fork | M6 and M8 cannot start without them | M6 | Found in M0. Scheduled explicitly as the first slice of M6, since M8 and M9 need the same controllers. Do not let it hide inside the ST7789 model's estimate. |
+| The fork's GPIO peripheral is a stub — `esp32_gpio_write()` is empty, no output/enable state modelled | Any device on a plain GPIO stays dark; the ST7789's `DC`/`RST`/`BL` cannot be driven | M6 | Found in M4 (which deferred the "firmware toggles a GPIO → LED blinks" half for this reason). M6 must implement `GPIO_OUT`/`W1TS`/`W1TC` plus an observation hook — it is on the ST7789's critical path, and it also unblocks M7, M10 and M11. Scheduled as an explicit M6 Build bullet. |
+| The M4 device-host socket transport is unit-tested but not wired into the app | The TS models cannot receive anything from a running guest | M6 | `DeviceHost.listen()` exists; nothing calls it because there is no QEMU client yet. M6's SPI controllers are the first client — an explicit M6 Build bullet picks the socket path and connects. |
 | Firmware issues many small SPI transactions rather than few large ones | Display and radio become bridge-bound | M6, M8 | Each round trip costs tens of microseconds. Meter transactions per frame from the first ST7789 run; if a driver is chatty, batch in the controller before considering a native model. |
-| M0's latency numbers were measured on Linux, not macOS | The per-transaction budget may be wrong on the target platform | Before M6 | Re-run `spike/run-bench.sh` on macOS and amend ADR 0001. The batching conclusion is platform-independent; the budget is not. |
+| M0's latency numbers were measured on Linux, not macOS | The per-transaction budget may be wrong on the target platform | Before M6 | Partly retired in M4: `scripts/bench-framing.mjs` clocks a standalone macOS Unix-socket round trip at ~5 µs, *faster* than Linux's ~50 µs, so the budget is a conservative ceiling here. Still owed: re-run `spike/run-bench.sh` through a live guest on macOS and add the in-guest table to ADR 0001. |
 | LR1110 command surface is larger than expected | M8 balloons | M8 | Implement only what MeshCore calls; make unimplemented commands raise loud named diagnostics. |
 | Espressif's QEMU fork diverges or stalls | Maintenance burden | Ongoing | Pin the fork and tag from M0. Keep PinBench's patches minimal and documented. Budget for periodic rebases. |
 | No WiFi or BLE emulation | `companion_radio` and the weather-station fork cannot run fully | M13 | Named as a non-goal up front. Consider API-boundary stubs in M13 so display and UI code remains iterable. |
@@ -699,12 +799,27 @@ the M9, and lands a new device model as a PR — working only from the docs.
   parsing with click-through, an in-app `mkflash.sh` port, build caching, a
   real Source tab, and board-derived emulator launch options. The DIO override
   is a PinBench-owned `-c` config, never an edit to the user's file.
-- **M4 is the next milestone.** The device plugin API from the M0 decision,
-  proved with an LED on a GPIO, plus the test harness every later device leans
-  on.
+- **M4 is done.** The `DeviceModel` interface (transaction-shaped, no byte-level
+  entry point), a switch-free registry, the QEMU-free test harness, the
+  main-process device host with a defined throw/slow-call failure policy, the
+  20-byte-header wire protocol with a measured framing overhead, and an LED
+  model rendered in its OUT panel. The "firmware toggling a GPIO" half is
+  deferred with M6: the espressif fork's GPIO peripheral is a stub
+  (`esp32_gpio_write()` is empty), so real edges need the output registers in C
+  plus an observation hook, alongside the SPI2/SPI3 controllers. A **Drive
+  high / low** control drives the line in the meantime. ADR 0001 amended with
+  the framing table and a first, favourable macOS socket number (~5 µs vs
+  Linux's ~50 µs).
+- **M5 is the next milestone.** Board definitions as data — the M9 becomes a
+  validated definition file, the M1/M4 fixtures (including the demo LED part)
+  are deleted, and nothing board-specific survives in `src/`.
 - **M6 is the demo milestone.** Everything before it is plumbing; it is the first
   slice that makes the project's premise obvious to someone watching. If you need
-  to show PinBench to anyone, show them M6.
+  to show PinBench to anyone, show them M6. It has also absorbed four carry-overs
+  now spelled out in its Build list and the risk register: the SPI2/SPI3
+  controllers (from M0), and from M4 the `ssi_transfer()` bulk hook, the GPIO
+  output registers in the fork, and wiring `DeviceHost.listen()` to a socket the
+  guest connects to. None are loose ends — the ST7789 needs all four.
 - **M9, M10 and M14 are parallelisable** once the device API is stable — they are
   independent devices against a fixed interface, which is exactly what the
   modular architecture was for.

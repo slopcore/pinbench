@@ -32,7 +32,7 @@ describe('the shell', () => {
 
   it('shows counts computed from the board definition', async () => {
     await renderApp()
-    expect(screen.getByText('9 parts · 12 nets · 31 GPIO assigned')).toBeInTheDocument()
+    expect(screen.getByText('10 parts · 12 nets · 32 GPIO assigned')).toBeInTheDocument()
   })
 })
 

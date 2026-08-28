@@ -17,6 +17,7 @@ import type { Diagnostic } from '@shared/diagnostics'
 import { isBuildRunning } from '@shared/build'
 import { useMenuCommands } from './state/useCommands'
 import { useBuild } from './state/useBuild'
+import { useDevices } from './state/useDevices'
 import { useEmulator } from './state/useEmulator'
 import { useProject } from './state/useProject'
 import { useWorkspace } from './state/useWorkspace'
@@ -33,6 +34,7 @@ export function App({ appInfo, windowState }: AppProps): React.JSX.Element {
   const emulator = useEmulator(board.emulator)
   const project = useProject()
   const build = useBuild((image) => emulator.start(image))
+  const devices = useDevices(board)
   const totals = useMemo(() => boardTotals(board), [board])
   const selectedPart = workspace.selectedPartId
     ? findPart(board, workspace.selectedPartId)
@@ -77,6 +79,7 @@ export function App({ appInfo, windowState }: AppProps): React.JSX.Element {
       })
     }
     rows.push(...build.diagnostics)
+    rows.push(...devices.diagnostics)
     if (emulator.state === 'crashed' && emulator.error) {
       rows.push({ id: 'emu-crash', severity: 'error', message: emulator.error })
     }
@@ -95,6 +98,7 @@ export function App({ appInfo, windowState }: AppProps): React.JSX.Element {
     project.env,
     build.status,
     build.diagnostics,
+    devices.diagnostics,
     emulator.state,
     emulator.error,
     emulator.firmwarePath
@@ -373,6 +377,13 @@ export function App({ appInfo, windowState }: AppProps): React.JSX.Element {
             part={selectedPart}
             values={config}
             onConfigChange={onConfigChange}
+            device={selectedPart ? devices.byPart.get(selectedPart.id) : undefined}
+            onSetLevel={
+              selectedPart
+                ? (signal: string, level: 0 | 1) =>
+                    devices.setSignal(selectedPart.id, signal, level)
+                : undefined
+            }
           />
         )}
       </div>

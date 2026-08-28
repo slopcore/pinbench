@@ -894,7 +894,14 @@ patched `.qemu` with the real `DeviceHost` on `PINBENCH_DEVICE_SOCKET`; over
   the `RST` pulse (GPIO14 1→0→1) and the `CS`/`DC` toggling (GPIO16/GPIO15) in
   the `set_CS(HIGH); dc=LOW; set_CS(LOW); xfer; set_CS(HIGH); dc=HIGH` order
   `sendCommand` uses. The host routes every transfer to `u3` because GPIO16 is
-  low, and raises **no bus-contention diagnostic**.
+  low, and raises **no bus-contention diagnostic**. The *other* half of the
+  routing contract — asserting the radio's `NSS` instead routes there — the
+  live run could not exercise (MeshCore fails `radio_init` before it toggles
+  GPIO39), so it is covered by unit test instead: `NSS` low + `CS` high sends
+  the transaction to the radio, `CS` low + `NSS` high to the panel, never both.
+  (`Op.Signal` / `deviceOnBus`'s hash-routed path is defined in the protocol
+  but nothing on the C side emits it — GPIO edges all arrive as `Op.Gpio` — so
+  that path stays untested here by design.)
 - **Contention bug found and fixed** (`src/main/devices.ts`). `DeviceHost.load`
   recognised only `signal === 'CS'` as a chip-select; the M9's LR1110 names its
   select `NSS` (its datasheet name, and what M8 will want), so it fell to the
@@ -904,16 +911,22 @@ patched `.qemu` with the real `DeviceHost` on `PINBENCH_DEVICE_SOCKET`; over
   chip-select test; `signalCsLabel` follows. Unit test added for the M9's
   radio+panel bus layout.
 - **ST7789 state is guest-driven:** `poweredOn: true`, `displayOn: true`,
-  `inverted: true`, `bpp: 16`, `madctl: 0xA0` (`RGB|MV|MY` — correct for the
-  env's `DISPLAY_FLIP_VERTICALLY=1`), CASET/RASET window addressing moving,
+  `inverted: true`, `bpp: 16`, CASET/RASET window addressing moving,
   `resetCount: 1`, and **12 `device:framebuffer` messages** down the side
-  channel. Diagnostics dock: **one** `data byte with no command context` (info),
-  once, at the very first transfer — no `unimplemented command`, no desync
-  storm. Cause is a first-edge assumption: the fork's GPIO observer forwards
-  only *changes*, so the driver's initial `digitalWrite(_dc, LOW)` (writing 0
-  over a reset-0 register) is not forwarded and the model keeps its own `dc`
-  default for one byte. Cosmetic, self-corrects on the next toggle; the model's
-  `dc` power-on default is an M6.4 tidy.
+  channel. `madctl` ends at **0xA0**: the model stores the raw parameter byte
+  (no transform — `st7789.ts` `this.madctl = p.params[0]`), and the guest
+  writes MADCTL *twice* — `0x60` (`MV|MX`) in `sendInitCommands`, then `0xA0`
+  (`MV|MY`) from `ST7789Display::begin()`'s `flipScreenVertically()`, which
+  runs because the env sets `DISPLAY_FLIP_VERTICALLY=1`. Both writes are on the
+  wire; 0xA0 is the correct final value.
+- Diagnostics dock: **one** `data byte with no command context` (info), once, at
+  the very first transfer — no `unimplemented command`, no desync storm. Cause
+  confirmed in `qemu/hw/gpio/esp32_gpio.c`: `esp32_gpio_forward` XORs against a
+  `last_out` shadow and returns on `!changed`, so the driver's initial
+  `digitalWrite(_dc, LOW)` — writing 0 over the reset-0 `OUT` register — is
+  never forwarded, and the model keeps its own `dc` power-on default for one
+  byte. Cosmetic, self-corrects on the next toggle; the model's `dc` default is
+  an M6.4 tidy.
 - **`txnPerFrame` meter reads 7–12** — the bulk hook is batching, so the
   "count transactions per frame before rewriting anything in C" number is
   healthy and no C rewrite is indicated. The `flush` meter still reports

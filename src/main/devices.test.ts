@@ -360,56 +360,62 @@ describe('DeviceHost — M6 display routing', () => {
     expect(sd?.state['poweredOn']).toBeFalsy()
   })
 
-  it('treats an NSS-named select as a chip-select so it does not block the bus', () => {
+  it('routes by an NSS-named select as well as CS — either device, never both', () => {
     // The real M9: the LR1110 shares spi0 with the ST7789 but names its select
-    // `NSS`, not `CS`. If NSS is not recognised, the radio is always "selected"
-    // and every ST7789 transaction routes to two devices and is dropped.
-    const withRadio = board({
+    // `NSS`, not `CS`. If NSS is not recognised, the radio is always "selected",
+    // every ST7789 transaction routes to two devices and is dropped, and M8's
+    // radio traffic can never be addressed. Both parts are ST7789 models here
+    // only so the routed transaction has observable state on either end.
+    const spiPanel = (
+      id: string,
+      designator: string,
+      select: { signal: string; pin: string }
+    ): BoardDefinition['parts'][number] => ({
+      id,
+      designator,
+      name: 'Panel',
+      category: 'display',
+      deviceModel: 'sitronix.st7789',
+      summary: 'demo',
+      buses: ['spi0'],
+      pins: [
+        select,
+        { signal: 'DC', pin: 'GPIO15' },
+        { signal: 'RST', pin: id === 'radio' ? 'GPIO45' : 'GPIO14' },
+        { signal: 'BL', pin: 'GPIO17' }
+      ],
+      config: [],
+      layout: { x: 0, y: 0, width: 10, height: 10 }
+    })
+    const twoOnBus = board({
       parts: [
         { ...board().parts[0]!, buses: [], pins: [{ signal: 'ANODE', pin: 'GPIO2' }] },
-        {
-          id: 'radio',
-          designator: 'U2',
-          name: 'Radio',
-          category: 'radio',
-          deviceModel: 'pinbench.led', // stand-in; the LR1110 model lands in M8
-          summary: 'demo',
-          buses: ['spi0'],
-          pins: [{ signal: 'NSS', pin: 'GPIO39' }],
-          config: [],
-          layout: { x: 0, y: 0, width: 10, height: 10 }
-        },
-        {
-          id: 'lcd',
-          designator: 'U3',
-          name: 'Panel',
-          category: 'display',
-          deviceModel: 'sitronix.st7789',
-          summary: 'demo',
-          buses: ['spi0'],
-          pins: [
-            { signal: 'CS', pin: 'GPIO16' },
-            { signal: 'DC', pin: 'GPIO15' },
-            { signal: 'RST', pin: 'GPIO14' },
-            { signal: 'BL', pin: 'GPIO17' }
-          ],
-          config: [],
-          layout: { x: 0, y: 0, width: 10, height: 10 }
-        }
+        spiPanel('radio', 'U2', { signal: 'NSS', pin: 'GPIO39' }),
+        spiPanel('lcd', 'U3', { signal: 'CS', pin: 'GPIO16' })
       ]
     })
     host = new DeviceHost({ registry: registryWithPanels() })
-    host.load(withRadio)
+    host.load(twoOnBus)
     const snaps: DeviceSnapshotMessage[] = []
     const diags: Diagnostic[] = []
     host.on('snapshot', (m: DeviceSnapshotMessage) => snaps.push(m))
     host.on('diagnostic', (d: Diagnostic) => diags.push(d))
+    const poweredOn = (id: string): unknown =>
+      snaps.filter((s) => s.partId === id).at(-1)?.state['poweredOn']
 
-    host.handleFrame(gpio(15, 0)) // DC low
-    host.handleFrame(gpio(16, 0)) // LCD CS low — radio NSS never asserted
-    host.handleFrame(xfer([0x11])) // SLPOUT
+    // CS (GPIO16) low, NSS high → SLPOUT reaches the LCD only.
+    host.handleFrame(gpio(15, 0))
+    host.handleFrame(gpio(16, 0))
+    host.handleFrame(xfer([0x11]))
+    expect(poweredOn('lcd')).toBe(true)
+    expect(poweredOn('radio')).toBeFalsy()
 
-    expect(snaps.filter((s) => s.partId === 'lcd').at(-1)?.state['poweredOn']).toBe(true)
+    // Now NSS (GPIO39) low, CS high → the next transaction reaches the radio.
+    host.handleFrame(gpio(16, 1))
+    host.handleFrame(gpio(39, 0))
+    host.handleFrame(xfer([0x29])) // DISPON — distinct from the LCD's SLPOUT
+    expect(snaps.filter((s) => s.partId === 'radio').at(-1)?.state['displayOn']).toBe(true)
+
     expect(diags.some((d) => d.id.includes('cs-contention'))).toBe(false)
     expect(diags.some((d) => d.id.includes('no-target'))).toBe(false)
   })

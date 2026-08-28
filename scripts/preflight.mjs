@@ -72,15 +72,26 @@ try {
 
 ok(`QEMU esp32s3: ${qemu}`)
 
-// Check for PlatformIO (needed for firmware builds)
+// Check for PlatformIO (needed for M3 firmware builds). Mirror the app's
+// resolution order: PINBENCH_PIO env → repo-local .pio-venv → PATH.
+const REPO_PIO = join(
+  ROOT,
+  '.pio-venv',
+  'bin',
+  process.platform === 'win32' ? 'platformio.exe' : 'pio'
+)
+let pio = 'pio'
+if (process.env.PINBENCH_PIO && existsSync(process.env.PINBENCH_PIO)) pio = process.env.PINBENCH_PIO
+else if (existsSync(REPO_PIO)) pio = REPO_PIO
+
 try {
-  const pioVersion = execFileSync('pio', ['--version'], {
+  const pioVersion = execFileSync(pio, ['--version'], {
     encoding: 'utf8',
     stdio: ['pipe', 'pipe', 'pipe'],
     timeout: 10000
   }).trim()
-  ok(`PlatformIO: ${pioVersion}`)
+  ok(`PlatformIO: ${pioVersion} (${pio})`)
 } catch {
-  warn('PlatformIO (pio) not found — needed for firmware builds')
-  warn('Install: pip3 install platformio')
+  warn('PlatformIO not found — needed for Build & flash (M3)')
+  warn('Install it, or run: python3 -m venv .pio-venv && .pio-venv/bin/pip install platformio')
 }

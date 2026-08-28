@@ -97,7 +97,7 @@ export const MENUS: MenuSpec[] = [
     entries: [
       // Everything that touches a project or a firmware image belongs to M2/M3.
       item('file.newProject', 'New project…', { accelerator: 'CmdOrCtrl+N', enabled: false }),
-      item('file.openProject', 'Open project…', { accelerator: 'CmdOrCtrl+O', enabled: false }),
+      item('file.openProject', 'Open project…', { accelerator: 'CmdOrCtrl+O', enabled: true }),
       item('file.openFirmware', 'Open firmware image…', {
         accelerator: 'CmdOrCtrl+Shift+O',
         enabled: true
@@ -157,14 +157,14 @@ export const MENUS: MenuSpec[] = [
     id: 'build',
     label: 'Build',
     entries: [
-      // The emulator arrives in M2 and PlatformIO in M3; the pin-map rule
-      // engine behind ⌘B is M11.
+      // Build & flash and PlatformIO land in M3; the pin-map rule engine
+      // behind ⌘B is still M11.
       item('build.buildAndFlash', 'Build & flash', {
         accelerator: 'CmdOrCtrl+Shift+B',
-        enabled: false
+        enabled: true
       }),
       item('build.verifyPinMap', 'Verify pin map', { accelerator: 'CmdOrCtrl+B', enabled: false }),
-      item('build.clean', 'Clean build cache', { enabled: false }),
+      item('build.clean', 'Clean build cache', { enabled: true }),
       separator,
       item('build.start', 'Start', { accelerator: 'CmdOrCtrl+R', enabled: true }),
       item('build.stop', 'Stop', { accelerator: 'CmdOrCtrl+.', enabled: true }),

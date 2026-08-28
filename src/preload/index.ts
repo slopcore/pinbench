@@ -1,8 +1,18 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IpcChannel } from '../shared/ipc'
-import type { AppInfo, PinBenchApi, WindowState } from '../shared/ipc'
+import type {
+  AppInfo,
+  BuildRequest,
+  EmulatorLaunchOptions,
+  OpenProjectResult,
+  PinBenchApi,
+  WindowState
+} from '../shared/ipc'
+import type { BuildOutputLine, BuildStatus } from '../shared/build'
 import type { CommandId } from '../shared/commands'
+import type { Diagnostic } from '../shared/diagnostics'
 import type { EmulatorStatus } from '../shared/emulator'
+import type { FileNode } from '../shared/files'
 import type { SerialLine } from '../shared/serial'
 import type { WorkspaceState } from '../shared/workspace'
 
@@ -28,8 +38,10 @@ const api: PinBenchApi = {
   },
   onMenuCommand: (listener) => subscribe<CommandId>(IpcChannel.menuCommand, listener),
   emulator: {
-    openFirmware: () => ipcRenderer.invoke(IpcChannel.emulatorOpenFirmware) as Promise<string | null>,
-    start: (firmwarePath: string) => ipcRenderer.send(IpcChannel.emulatorStart, firmwarePath),
+    openFirmware: () =>
+      ipcRenderer.invoke(IpcChannel.emulatorOpenFirmware) as Promise<string | null>,
+    start: (firmwarePath: string, options?: EmulatorLaunchOptions) =>
+      ipcRenderer.send(IpcChannel.emulatorStart, firmwarePath, options),
     stop: () => ipcRenderer.send(IpcChannel.emulatorStop),
     reset: () => ipcRenderer.send(IpcChannel.emulatorReset),
     onStatus: (listener) => subscribe<EmulatorStatus>(IpcChannel.emulatorStatus, listener)
@@ -37,6 +49,23 @@ const api: PinBenchApi = {
   serial: {
     write: (text: string) => ipcRenderer.send(IpcChannel.serialWrite, text),
     onData: (listener) => subscribe<SerialLine[]>(IpcChannel.serialData, listener)
+  },
+  project: {
+    open: () => ipcRenderer.invoke(IpcChannel.projectOpen) as Promise<OpenProjectResult | null>,
+    readTree: (dir?: string) =>
+      ipcRenderer.invoke(IpcChannel.projectReadTree, dir) as Promise<FileNode[]>,
+    readFile: (path: string) =>
+      ipcRenderer.invoke(IpcChannel.projectReadFile, path) as Promise<string>,
+    onFileChanged: (listener) =>
+      subscribe<{ path: string }>(IpcChannel.projectFileChanged, listener)
+  },
+  build: {
+    start: (request: BuildRequest) => ipcRenderer.send(IpcChannel.buildStart, request),
+    cancel: () => ipcRenderer.send(IpcChannel.buildCancel),
+    clean: (projectDir: string) => ipcRenderer.send(IpcChannel.buildClean, projectDir),
+    onState: (listener) => subscribe<BuildStatus>(IpcChannel.buildState, listener),
+    onOutput: (listener) => subscribe<BuildOutputLine>(IpcChannel.buildOutput, listener),
+    onDiagnostics: (listener) => subscribe<Diagnostic[]>(IpcChannel.buildDiagnostics, listener)
   }
 }
 

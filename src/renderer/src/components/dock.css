@@ -147,6 +147,36 @@
   color: var(--neutral-600);
 }
 
+.dock__body--diagnostics {
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+}
+
+.buildlog {
+  flex: none;
+  max-height: 60%;
+  overflow: auto;
+  margin: 0 0 var(--space-3);
+  padding: var(--space-2) var(--space-5);
+  list-style: none;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-sunken);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.buildlog__line {
+  color: var(--text-secondary);
+}
+
+.buildlog__line[data-stream='stderr'] {
+  color: var(--status-warn);
+}
+
 .diagnostics {
   margin: 0;
   padding: 0;
@@ -154,14 +184,27 @@
 }
 
 .diagnostic {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-5);
-  padding: var(--space-2) var(--space-5);
   font-size: var(--font-size-sm);
 }
 
-.diagnostic:hover {
+.diagnostic__row {
+  display: flex;
+  width: 100%;
+  align-items: baseline;
+  gap: var(--space-5);
+  padding: var(--space-2) var(--space-5);
+  text-align: left;
+  background: none;
+  border: none;
+  font: inherit;
+  color: inherit;
+}
+
+.diagnostic__row[data-clickable] {
+  cursor: pointer;
+}
+
+.diagnostic__row:hover {
   background: var(--surface-hover);
 }
 

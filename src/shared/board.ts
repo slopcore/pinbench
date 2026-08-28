@@ -91,6 +91,22 @@ export interface NetDefinition {
   nodes: string[]
 }
 
+/**
+ * How the emulator should be launched for this board. M2 hardcoded these in
+ * `EmulatorSupervisor`; from M3 they travel with the board definition so the
+ * M9's octal PSRAM and a future board's differing memory are both just data.
+ * Without `psramSize` there is silently no PSRAM — the machine's
+ * `default_ram_size` is 0.
+ */
+export interface EmulatorTarget {
+  /** QEMU `-machine`. Defaults to `esp32s3`. */
+  machine?: string
+  /** QEMU `-m`, e.g. `8M`. Omit for a part with no PSRAM. */
+  psramSize?: string
+  /** Octal PSRAM parts (the M9's ESP32-S3-R8) need `ssi_psram.is_octal=true`. */
+  psramOctal?: boolean
+}
+
 export interface BoardDefinition {
   /** Definition schema version — M5 validates against it. */
   schema: 1
@@ -103,6 +119,7 @@ export interface BoardDefinition {
   buses: BusDefinition[]
   parts: PartDefinition[]
   nets: NetDefinition[]
+  emulator: EmulatorTarget
   canvas: {
     /** Board outline in the same units as `PartDefinition.layout`. */
     width: number

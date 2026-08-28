@@ -223,7 +223,7 @@ at boot. Expect to add crude always-ACK stubs for I2C/SPI here just to get past
 `setup()`. That is acceptable scaffolding; note each stub so M4 onward replaces
 it deliberately rather than by accident.
 
-## M3 · Build the firmware from inside PinBench — `L`
+## M3 · Build the firmware from inside PinBench — `L` ✅ **done**
 
 **Goal.** Close the loop from source to running emulator without leaving the app.
 
@@ -262,6 +262,49 @@ deliberate syntax error and the failure appears as a clickable diagnostic.
 
 **Watch for.** First builds are slow (toolchain download plus a cold framework
 build) and will look like a hang. Show real progress from the first second.
+
+### Outcome
+
+Build & flash runs `pio run` and an in-app port of `mkflash.sh` end to end and
+boots the result. Verified against a real PlatformIO project with the actual
+`pio` 6.1.19 and `esptool` 4.5.1: `preparing → compiling → linking → merging →
+done`, an 8 MB merged image, and the freshly built firmware printing on UART0
+under `-machine esp32s3`. MeshCore itself was not the subject — no checkout was
+available — but the loop is firmware-agnostic.
+
+- **`pio` discovery** mirrors `findQemu`: `PINBENCH_PIO` env → repo `.pio-venv/`
+  → an app-managed venv under `userData` → `PATH`. `scripts/preflight.mjs` now
+  checks the same order instead of only `PATH` (it was warning falsely).
+- **The DIO override never touches the user's `platformio.ini`.** `pio run`
+  6.1.19 has no `--project-option`, so PinBench writes its own `-c` config that
+  pulls the user file in via `extra_configs` and pins
+  `board_build.flash_mode = dio` / `memory_type = dio_qspi` per environment.
+  Round-tripping into their file is the M11 mistake; it does not start here.
+- **Process-group kill.** `pio run` spawns scons children; the build spawns
+  `detached` and cancel sends `SIGTERM` to `-pid` (`taskkill /T` on Windows).
+  The runner is disposed on `before-quit` alongside the emulator.
+- **Carriage-return progress** is handled by a `LineStreamer` that surfaces a
+  bare `\r` as a *replace* segment, so the toolchain-download minutes the
+  milestone warns about render as one updating line, not a dead UI.
+- **Diagnostics** are parsed from the transcript (`file:line:col: severity:
+  message`), resolved to absolute paths in the main process, sorted worst-first,
+  and clickable through to the Source tab at the line. Linker errors and framing
+  noise stay in the raw log rather than being forced into rows.
+- **Caching.** PlatformIO's own incremental build makes an unchanged
+  PinBench→PinBench rebuild ~1 s; on top of that the merge step is skipped when
+  the image is newer than `firmware.bin` and nothing recompiled (`cached:
+  true`). Because the `-c` override changes PlatformIO's project checksum, a
+  user who alternates between their own bare `pio run` and Build & flash gets a
+  full rebuild each way — acceptable, and the price of not editing their file.
+- **Board-derived emulator options.** `EmulatorSupervisor.start` no longer
+  hardcodes `-m 8M`; `BoardDefinition.emulator` (`machine` / `psramSize` /
+  `psramOctal`) travels from the board through the renderer to the launch args.
+- **Source tab** is now real: a lazy file tree read over IPC (confined to the
+  project root, `.pio`/`.git`/`node_modules` pruned), a read-only viewer with a
+  dependency-free C/C++/INI highlighter, and dirty markers from a recursive
+  `fs.watch` (which simply no-ops on Linux).
+- The toolbar's **Build & flash** button and the ▶ ■ ⟳ emulator controls —
+  drawn but inert since M1 — are now wired.
 
 ---
 
@@ -650,9 +693,15 @@ the M9, and lands a new device model as a PR — working only from the docs.
   `.qemu/`, and `npm run dev` runs a fast preflight that verifies esp32s3
   machine support. Verified end-to-end: the M0 spike firmware boots, the boot
   log reaches the serial dock, and the firmware prints on UART0.
-- **M3 is the next milestone.** PlatformIO integration to close the
-  source-to-running-emulator loop — and it must also automate `mkflash.sh` to
-  produce the flash image M2's runner expects.
+- **M3 is done.** PlatformIO integration closes the source-to-running-emulator
+  loop: `pio` discovery, `platformio.ini` parsing and an env picker, a streamed
+  `pio run` with phase transitions and cancellation, compiler-diagnostic
+  parsing with click-through, an in-app `mkflash.sh` port, build caching, a
+  real Source tab, and board-derived emulator launch options. The DIO override
+  is a PinBench-owned `-c` config, never an edit to the user's file.
+- **M4 is the next milestone.** The device plugin API from the M0 decision,
+  proved with an LED on a GPIO, plus the test harness every later device leans
+  on.
 - **M6 is the demo milestone.** Everything before it is plumbing; it is the first
   slice that makes the project's premise obvious to someone watching. If you need
   to show PinBench to anyone, show them M6.

@@ -3,8 +3,8 @@ import { existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { homedir } from 'node:os'
 import { EventEmitter } from 'node:events'
-import { canTransition, transition } from '../shared/emulator'
-import type { EmulatorState, EmulatorStatus } from '../shared/emulator'
+import { canTransition, DEFAULT_LAUNCH_OPTIONS, transition } from '../shared/emulator'
+import type { EmulatorLaunchOptions, EmulatorState, EmulatorStatus } from '../shared/emulator'
 import type { SerialLine } from '../shared/serial'
 import { stripAnsi } from '../shared/serial'
 
@@ -29,6 +29,7 @@ export class EmulatorSupervisor extends EventEmitter {
   private partial = ''
   private qemuPath: string | null = null
   private lastFirmwarePath: string | null = null
+  private lastLaunchOptions: EmulatorLaunchOptions = DEFAULT_LAUNCH_OPTIONS
   private pendingRestart: ((status: EmulatorStatus) => void) | null = null
 
   getStatus(): EmulatorStatus {
@@ -45,7 +46,9 @@ export class EmulatorSupervisor extends EventEmitter {
     }
 
     for (const searchPath of SEARCH_PATHS) {
-      const candidate = searchPath.endsWith(BINARY_NAME) ? searchPath : join(searchPath, BINARY_NAME)
+      const candidate = searchPath.endsWith(BINARY_NAME)
+        ? searchPath
+        : join(searchPath, BINARY_NAME)
       if (existsSync(candidate)) {
         this.qemuPath = candidate
         return candidate
@@ -55,10 +58,12 @@ export class EmulatorSupervisor extends EventEmitter {
     return BINARY_NAME
   }
 
-  start(firmwarePath: string): void {
+  start(firmwarePath: string, options?: EmulatorLaunchOptions): void {
     if (!canTransition(this.state, 'starting')) return
     this.setState('starting')
     this.lastFirmwarePath = firmwarePath
+    if (options) this.lastLaunchOptions = options
+    const launch = this.lastLaunchOptions
 
     const qemu = this.findQemu()
     this.startTime = Date.now()
@@ -67,12 +72,16 @@ export class EmulatorSupervisor extends EventEmitter {
 
     const args = [
       '-nographic',
-      '-machine', 'esp32s3',
-      '-m', '8M',
-      '-global', 'ssi_psram.is_octal=true',
-      '-drive', `file=${firmwarePath},if=mtd,format=raw`,
-      '-monitor', 'none',
-      '-serial', 'stdio',
+      '-machine',
+      launch.machine ?? 'esp32s3',
+      ...(launch.psramSize ? ['-m', launch.psramSize] : []),
+      ...(launch.psramOctal ? ['-global', 'ssi_psram.is_octal=true'] : []),
+      '-drive',
+      `file=${firmwarePath},if=mtd,format=raw`,
+      '-monitor',
+      'none',
+      '-serial',
+      'stdio',
       '-no-reboot'
     ]
 

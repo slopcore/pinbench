@@ -423,5 +423,6 @@ export const M9_BOARD: BoardDefinition = {
     },
     { id: 'net-vdd-periph', label: 'VDD_PERIPH', nodes: ['GPIO18', 'u9:VDD_PERIPH'] }
   ],
+  emulator: { machine: 'esp32s3', psramSize: '8M', psramOctal: true },
   canvas: { width: 840, height: 590 }
 }

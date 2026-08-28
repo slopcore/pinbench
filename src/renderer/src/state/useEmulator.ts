@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { EmulatorState, EmulatorStatus } from '@shared/emulator'
+import type { EmulatorLaunchOptions, EmulatorState, EmulatorStatus } from '@shared/emulator'
 import type { SerialLine } from '@shared/serial'
 
 const MAX_SERIAL_LINES = 10_000
@@ -16,7 +16,8 @@ export interface EmulatorHandle {
   firmwarePath: string | null
 }
 
-export function useEmulator(): EmulatorHandle {
+/** `launch` is the board's emulator target — machine and PSRAM options. */
+export function useEmulator(launch: EmulatorLaunchOptions): EmulatorHandle {
   const [state, setState] = useState<EmulatorState>('idle')
   const [error, setError] = useState<string | undefined>()
   const [serial, setSerial] = useState<SerialLine[]>([])
@@ -44,9 +45,14 @@ export function useEmulator(): EmulatorHandle {
     })
   }, [])
 
+  const launchRef = useRef(launch)
+  useEffect(() => {
+    launchRef.current = launch
+  }, [launch])
+
   const start = useCallback((path: string) => {
     setFirmwarePath(path)
-    window.pinbench.emulator.start(path)
+    window.pinbench.emulator.start(path, launchRef.current)
   }, [])
 
   const openAndStart = useCallback(async () => {

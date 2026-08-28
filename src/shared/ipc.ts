@@ -1,7 +1,12 @@
+import type { BuildOutputLine, BuildStatus } from './build'
 import type { CommandId } from './commands'
-import type { EmulatorStatus } from './emulator'
+import type { Diagnostic } from './diagnostics'
+import type { EmulatorLaunchOptions, EmulatorStatus } from './emulator'
+import type { FileNode } from './files'
 import type { SerialLine } from './serial'
 import type { WorkspaceState } from './workspace'
+
+export type { EmulatorLaunchOptions }
 
 export const IpcChannel = {
   workspaceLoad: 'workspace:load',
@@ -18,7 +23,17 @@ export const IpcChannel = {
   emulatorReset: 'emulator:reset',
   emulatorStatus: 'emulator:status',
   serialData: 'serial:data',
-  serialWrite: 'serial:write'
+  serialWrite: 'serial:write',
+  projectOpen: 'project:open',
+  projectReadTree: 'project:read-tree',
+  projectReadFile: 'project:read-file',
+  projectFileChanged: 'project:file-changed',
+  buildStart: 'build:start',
+  buildCancel: 'build:cancel',
+  buildClean: 'build:clean',
+  buildState: 'build:state',
+  buildOutput: 'build:output',
+  buildDiagnostics: 'build:diagnostics'
 } as const
 
 export interface AppInfo {
@@ -31,6 +46,22 @@ export interface WindowState {
   maximised: boolean
   fullScreen: boolean
   focused: boolean
+}
+
+export interface OpenProjectResult {
+  /** Absolute project directory. */
+  dir: string
+  /** Display name — the directory's basename. */
+  name: string
+  /** Environments from `platformio.ini`, in file order. */
+  envs: string[]
+}
+
+export interface BuildRequest {
+  projectDir: string
+  env: string
+  /** Emulator launch options for the board, forwarded to the merge/boot step. */
+  emulator: EmulatorLaunchOptions
 }
 
 export interface PinBenchApi {
@@ -48,7 +79,7 @@ export interface PinBenchApi {
   onMenuCommand(listener: (command: CommandId) => void): () => void
   emulator: {
     openFirmware(): Promise<string | null>
-    start(firmwarePath: string): void
+    start(firmwarePath: string, options?: EmulatorLaunchOptions): void
     stop(): void
     reset(): void
     onStatus(listener: (status: EmulatorStatus) => void): () => void
@@ -56,5 +87,20 @@ export interface PinBenchApi {
   serial: {
     write(text: string): void
     onData(listener: (lines: SerialLine[]) => void): () => void
+  }
+  project: {
+    open(): Promise<OpenProjectResult | null>
+    /** Immediate children of `dir`, or of the project root when omitted. */
+    readTree(dir?: string): Promise<FileNode[]>
+    readFile(path: string): Promise<string>
+    onFileChanged(listener: (payload: { path: string }) => void): () => void
+  }
+  build: {
+    start(request: BuildRequest): void
+    cancel(): void
+    clean(projectDir: string): void
+    onState(listener: (status: BuildStatus) => void): () => void
+    onOutput(listener: (line: BuildOutputLine) => void): () => void
+    onDiagnostics(listener: (rows: Diagnostic[]) => void): () => void
   }
 }

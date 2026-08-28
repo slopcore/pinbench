@@ -1,3 +1,6 @@
+import type { BuildState } from '@shared/build'
+import { buildButtonLabel, isBuildRunning } from '@shared/build'
+import type { EmulatorState } from '@shared/emulator'
 import type { CanvasTool, GridStyle, WorkspaceState } from '@shared/workspace'
 import './toolbar.css'
 
@@ -25,6 +28,15 @@ const GRIDS: { id: GridStyle; label: string }[] = [
 
 interface ToolbarProps {
   workspace: WorkspaceState
+  buildState: BuildState
+  canBuild: boolean
+  emulatorState: EmulatorState
+  hasFirmware: boolean
+  onBuildAndFlash: () => void
+  onCancelBuild: () => void
+  onEmulatorStart: () => void
+  onEmulatorStop: () => void
+  onEmulatorReset: () => void
   onSelectTool: (tool: CanvasTool) => void
   onSelectGrid: (grid: GridStyle) => void
   onZoomIn: () => void
@@ -35,6 +47,15 @@ interface ToolbarProps {
 
 export function Toolbar({
   workspace,
+  buildState,
+  canBuild,
+  emulatorState,
+  hasFirmware,
+  onBuildAndFlash,
+  onCancelBuild,
+  onEmulatorStart,
+  onEmulatorStop,
+  onEmulatorReset,
   onSelectTool,
   onSelectGrid,
   onZoomIn,
@@ -43,22 +64,48 @@ export function Toolbar({
   onTogglePanel
 }: ToolbarProps): React.JSX.Element {
   const zoomPercent = Math.round(workspace.canvas.viewport.zoom * 100)
+  const building = isBuildRunning(buildState)
+  const emulatorBusy = emulatorState === 'starting' || emulatorState === 'stopping'
+  const canStop = emulatorState === 'running' || emulatorState === 'starting'
 
   return (
     <div className="toolbar" role="toolbar" aria-label="Workbench">
-      {/* Building and running arrive in M2/M3; the controls are drawn now so the
-          shell matches the design, and disabled so they cannot lie. */}
-      <button type="button" className="toolbar__primary" disabled>
-        Build &amp; flash
+      <button
+        type="button"
+        className="toolbar__primary"
+        data-building={building || undefined}
+        disabled={!canBuild && !building}
+        onClick={building ? onCancelBuild : onBuildAndFlash}
+        title={building ? 'Cancel build' : 'Build the firmware and boot it'}
+      >
+        {building ? `${buildButtonLabel(buildState)} — cancel` : buildButtonLabel(buildState)}
       </button>
       <div className="toolbar__group" role="group" aria-label="Emulator">
-        <button type="button" className="toolbar__button" disabled title="Start">
+        <button
+          type="button"
+          className="toolbar__button"
+          disabled={!hasFirmware || emulatorState === 'running' || emulatorBusy}
+          title="Start"
+          onClick={onEmulatorStart}
+        >
           ▶
         </button>
-        <button type="button" className="toolbar__button" disabled title="Stop">
+        <button
+          type="button"
+          className="toolbar__button"
+          disabled={!canStop}
+          title="Stop"
+          onClick={onEmulatorStop}
+        >
           ■
         </button>
-        <button type="button" className="toolbar__button" disabled title="Reset">
+        <button
+          type="button"
+          className="toolbar__button"
+          disabled={!hasFirmware || emulatorBusy}
+          title="Reset"
+          onClick={onEmulatorReset}
+        >
           ⟳
         </button>
       </div>

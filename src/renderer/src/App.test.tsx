@@ -101,7 +101,8 @@ describe('the menu bar', () => {
   it('leaves unimplemented commands disabled rather than lying', async () => {
     const { user } = await renderApp()
     await user.click(screen.getByRole('menuitem', { name: 'Build' }))
-    expect(screen.getByRole('menuitem', { name: /Build & flash/ })).toBeDisabled()
+    // Verify pin map is the M11 rule engine — still inert.
+    expect(screen.getByRole('menuitem', { name: /Verify pin map/ })).toBeDisabled()
   })
 })
 

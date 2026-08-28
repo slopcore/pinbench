@@ -18,7 +18,8 @@ export const dialog = {
   showOpenDialog: async (): Promise<{ canceled: boolean; filePaths: string[] }> => ({
     canceled: true,
     filePaths: []
-  })
+  }),
+  showMessageBox: async (): Promise<{ response: number }> => ({ response: 0 })
 }
 export const Menu = {
   buildFromTemplate: (template: unknown) => template,

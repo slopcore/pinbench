@@ -39,6 +39,20 @@ export function installBridge(initial: WorkspaceState = DEFAULT_WORKSPACE): Test
     serial: {
       write: vi.fn(),
       onData: () => () => undefined
+    },
+    project: {
+      open: vi.fn(() => Promise.resolve(null)),
+      readTree: vi.fn(() => Promise.resolve([])),
+      readFile: vi.fn(() => Promise.resolve('')),
+      onFileChanged: () => () => undefined
+    },
+    build: {
+      start: vi.fn(),
+      cancel: vi.fn(),
+      clean: vi.fn(),
+      onState: () => () => undefined,
+      onOutput: () => () => undefined,
+      onDiagnostics: () => () => undefined
     }
   }
   Object.defineProperty(window, 'pinbench', { value: bridge, configurable: true, writable: true })

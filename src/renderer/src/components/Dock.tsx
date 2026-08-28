@@ -1,32 +1,29 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { SerialLine } from '@shared/serial'
 import type { EmulatorState } from '@shared/emulator'
+import type { BuildOutputLine, BuildStatus } from '@shared/build'
+import { isBuildRunning } from '@shared/build'
+import type { Diagnostic, DiagnosticSeverity } from '@shared/diagnostics'
 import { MAX_DOCK_HEIGHT, MIN_DOCK_HEIGHT } from '@shared/workspace'
 import type { DockTab } from '@shared/workspace'
 import './dock.css'
 
 export type { SerialLine }
-
-export type DiagnosticSeverity = 'error' | 'warn' | 'info' | 'note' | 'ok'
-
-export interface Diagnostic {
-  id: string
-  severity: DiagnosticSeverity
-  message: string
-  file?: string
-  line?: number
-}
+export type { Diagnostic, DiagnosticSeverity }
 
 interface DockProps {
   tab: DockTab
   height: number
   serial: SerialLine[]
   diagnostics: Diagnostic[]
+  buildLog: BuildOutputLine[]
+  buildStatus: BuildStatus
   emulatorState: EmulatorState
   onSelectTab: (tab: DockTab) => void
   onResize: (height: number) => void
   onClose: () => void
   onSerialSubmit: (text: string) => void
+  onOpenSource: (file: string, line?: number) => void
 }
 
 const stamp = (milliseconds: number): string => {
@@ -37,19 +34,28 @@ const stamp = (milliseconds: number): string => {
   ).padStart(3, '0')}`
 }
 
+const shortPath = (path: string): string => {
+  const parts = path.split(/[/\\]/)
+  return parts.length <= 3 ? path : `…/${parts.slice(-3).join('/')}`
+}
+
 export function Dock({
   tab,
   height,
   serial,
   diagnostics,
+  buildLog,
+  buildStatus,
   emulatorState,
   onSelectTab,
   onResize,
   onClose,
-  onSerialSubmit
+  onSerialSubmit,
+  onOpenSource
 }: DockProps): React.JSX.Element {
   const dragRef = useRef<{ pointerId: number; startY: number; startHeight: number } | null>(null)
   const serialEndRef = useRef<HTMLLIElement>(null)
+  const buildEndRef = useRef<HTMLLIElement>(null)
   const scrollLocked = useRef(false)
   const listRef = useRef<HTMLOListElement>(null)
   const [inputValue, setInputValue] = useState('')
@@ -60,6 +66,10 @@ export function Dock({
       serialEndRef.current?.scrollIntoView?.({ block: 'end' })
     }
   }, [serial])
+
+  useEffect(() => {
+    buildEndRef.current?.scrollIntoView?.({ block: 'end' })
+  }, [buildLog])
 
   const onScroll = useCallback(() => {
     const list = listRef.current
@@ -106,6 +116,7 @@ export function Dock({
   }
 
   const isRunning = emulatorState === 'running'
+  const showBuildLog = buildLog.length > 0 || isBuildRunning(buildStatus.state)
 
   return (
     <section className="dock" style={{ height }} aria-label="Dock">
@@ -176,22 +187,47 @@ export function Dock({
           </form>
         </div>
       ) : (
-        <div className="dock__body" role="tabpanel" aria-label="Diagnostics">
+        <div
+          className="dock__body dock__body--diagnostics"
+          role="tabpanel"
+          aria-label="Diagnostics"
+        >
+          {showBuildLog && (
+            <ol className="buildlog" aria-label="Build output">
+              {buildLog.map((line, index) => (
+                <li className="buildlog__line" data-stream={line.stream} key={index}>
+                  {line.text || ' '}
+                </li>
+              ))}
+              <li ref={buildEndRef} className="serial__anchor" aria-hidden="true" />
+            </ol>
+          )}
           <ul className="diagnostics">
-            {diagnostics.map((row) => (
-              <li className="diagnostic" key={row.id}>
-                <span className="diagnostic__severity" data-severity={row.severity}>
-                  {row.severity}
-                </span>
-                <span className="diagnostic__message">{row.message}</span>
-                {row.file !== undefined && (
-                  <span className="diagnostic__source">
-                    {row.file}
-                    {row.line !== undefined && `:${row.line}`}
-                  </span>
-                )}
-              </li>
-            ))}
+            {diagnostics.map((row) => {
+              const clickable = row.file !== undefined
+              const Row = clickable ? 'button' : 'div'
+              return (
+                <li className="diagnostic" key={row.id}>
+                  <Row
+                    type={clickable ? 'button' : undefined}
+                    className="diagnostic__row"
+                    data-clickable={clickable || undefined}
+                    onClick={clickable ? () => onOpenSource(row.file!, row.line) : undefined}
+                  >
+                    <span className="diagnostic__severity" data-severity={row.severity}>
+                      {row.severity}
+                    </span>
+                    <span className="diagnostic__message">{row.message}</span>
+                    {row.file !== undefined && (
+                      <span className="diagnostic__source">
+                        {shortPath(row.file)}
+                        {row.line !== undefined && `:${row.line}`}
+                      </span>
+                    )}
+                  </Row>
+                </li>
+              )
+            })}
           </ul>
         </div>
       )}

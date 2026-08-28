@@ -43,6 +43,11 @@
   color: var(--neutral-600);
 }
 
+.toolbar__primary[data-building] {
+  background: var(--accent-800);
+  color: var(--accent-200);
+}
+
 .toolbar__button {
   min-width: 22px;
   height: 22px;

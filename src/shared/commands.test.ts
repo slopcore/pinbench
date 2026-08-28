@@ -40,17 +40,20 @@ describe('menu spec', () => {
 
   it('leaves commands whose milestone has not landed disabled', () => {
     const disabled = allMenuItems().filter((item) => !item.enabled)
-    expect(disabled.map((item) => item.command)).toContain('build.buildAndFlash')
+    expect(disabled.map((item) => item.command)).toContain('build.verifyPinMap')
     expect(disabled.map((item) => item.command)).toContain('file.newProject')
   })
 
-  it('enables the M2 emulator commands', () => {
+  it('enables the M2 emulator and M3 build commands', () => {
     const enabled = allMenuItems().filter((item) => item.enabled)
     const commands = enabled.map((item) => item.command)
     expect(commands).toContain('file.openFirmware')
     expect(commands).toContain('build.start')
     expect(commands).toContain('build.stop')
     expect(commands).toContain('build.reset')
+    expect(commands).toContain('file.openProject')
+    expect(commands).toContain('build.buildAndFlash')
+    expect(commands).toContain('build.clean')
   })
 })
 

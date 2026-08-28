@@ -105,6 +105,13 @@ export interface EmulatorTarget {
   psramSize?: string
   /** Octal PSRAM parts (the M9's ESP32-S3-R8) need `ssi_psram.is_octal=true`. */
   psramOctal?: boolean
+  /**
+   * Total flash-image size, e.g. `16M`. This is the *flash* size, unrelated to
+   * PSRAM: the M9 has 8 MB PSRAM but 16 MB flash and a `default_16MB.csv`
+   * partition table whose entries run past 8 MB. Omit to fall back to the
+   * spike's 8 MB. Used only to size the merged image Build & flash produces.
+   */
+  flashSize?: string
 }
 
 export interface BoardDefinition {
@@ -403,6 +410,9 @@ export function parseBoard(input: unknown): BoardDefinition {
       fail('board.emulator.psramOctal', 'expected a boolean')
     }
     emulator.psramOctal = emulatorRaw['psramOctal']
+  }
+  if (emulatorRaw['flashSize'] !== undefined) {
+    emulator.flashSize = str(emulatorRaw['flashSize'], 'board.emulator.flashSize')
   }
 
   const canvasRaw = obj(root['canvas'], 'board.canvas')

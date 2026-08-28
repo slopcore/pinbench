@@ -18,8 +18,8 @@ import { LineStreamer } from '../shared/stream'
 export interface BuildRunOptions {
   projectDir: string
   env: string
-  /** Emulator target; only the flash-image size is used here. */
-  emulator: { psramSize?: string }
+  /** Emulator target: flash-image size, plus PSRAM width for the DIO override. */
+  emulator: { flashSize?: string; psramSize?: string; psramOctal?: boolean }
 }
 
 export interface BuildRunnerDeps {
@@ -108,7 +108,11 @@ export class BuildRunner extends EventEmitter {
       await this.deps.mkdir(this.deps.cacheDir)
       await this.deps.writeFile(
         overridePath,
-        overrideConfigIni({ userConfigPath, envs: projectConfig.envs })
+        overrideConfigIni({
+          userConfigPath,
+          envs: projectConfig.envs,
+          psramOctal: options.emulator.psramOctal
+        })
       )
     } catch (error) {
       return this.fail(`Could not write the emulator build config: ${String(error)}`)
@@ -155,9 +159,14 @@ export class BuildRunner extends EventEmitter {
       this.deps.cacheDir,
       `${sanitise(basename(options.projectDir))}-${sanitise(options.env)}.bin`
     )
-    const sizeBytes = options.emulator.psramSize
-      ? Math.max(DEFAULT_FLASH_BYTES, parseSize(options.emulator.psramSize))
-      : DEFAULT_FLASH_BYTES
+    // The merged image must span the whole flash the partition table addresses,
+    // not the PSRAM. `flashSize` is the real input; `psramSize` is only a
+    // back-compat fallback for the M0 bench, where flash and PSRAM were both 8M.
+    const sizeBytes = options.emulator.flashSize
+      ? parseSize(options.emulator.flashSize)
+      : options.emulator.psramSize
+        ? Math.max(DEFAULT_FLASH_BYTES, parseSize(options.emulator.psramSize))
+        : DEFAULT_FLASH_BYTES
 
     // Skip the merge when the image is already current and nothing recompiled.
     if (

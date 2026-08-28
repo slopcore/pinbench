@@ -860,7 +860,8 @@
   "emulator": {
     "machine": "esp32s3",
     "psramSize": "8M",
-    "psramOctal": true
+    "psramOctal": true,
+    "flashSize": "16M"
   },
   "canvas": {
     "width": 840,

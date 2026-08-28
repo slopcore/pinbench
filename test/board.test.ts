@@ -59,6 +59,11 @@ describe('the M9 board definition', () => {
   })
 
   it('exposes the octal-PSRAM emulator target', () => {
-    expect(M9_BOARD.emulator).toEqual({ machine: 'esp32s3', psramSize: '8M', psramOctal: true })
+    expect(M9_BOARD.emulator).toEqual({
+      machine: 'esp32s3',
+      psramSize: '8M',
+      psramOctal: true,
+      flashSize: '16M'
+    })
   })
 })

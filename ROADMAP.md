@@ -680,11 +680,11 @@ into the fork; not yet exercised by a live guest):**
 **Not reached this session, and why:**
 
 - **A live MeshCore boot drawing the home screen** — the milestone's Done-when.
-  The rebuilt `.qemu` binary produces no UART output booting even the
-  pre-existing M0 `bench-flash.bin` (no ROM banner, drive or no drive), so the
-  blocker is emulator bring-up in this environment, upstream of anything M6
-  added — the M6 C code compiles and links, and the pristine fork behaves
-  identically. Resolving that, then building the `companion_radio_usb` image
+  At the time of this write-up the rebuilt `.qemu` binary appeared to produce no
+  UART output; **M6.1 traced that to the app's launch arguments** (`-nographic`
+  + `-monitor none -serial stdio` silently disconnects the UART — see M6.1's
+  Outcome), not emulator bring-up. With `-serial mon:stdio` the M0 image boots
+  and prints. Building the `companion_radio_usb` image
   through PinBench's `pio` path (16 MB partitions, the DIO `-c` override) and
   booting it, is M6's remaining work. Until then the GP-SPI register model,
   the `SPI_MS_DLEN`/`W0` FIFO assumptions, and the `DC`-ordering-over-one-socket
@@ -706,7 +706,7 @@ run against a guest. These four slices close the gap, each with its own
 demoable Done-when so progress is visible rather than "still integrating". They
 are strictly ordered — each unblocks the next.
 
-#### M6.1 · A firmware image boots again — `S`
+#### M6.1 · A firmware image boots again — `S` ✅ **done**
 
 **Goal.** Get *any* image printing on UART0 under the current `.qemu` build,
 because right now none does.
@@ -736,6 +736,29 @@ exactly as M2's Done-when promised.
 usually means the image is not being mapped, not that the firmware hung. Bisect
 with `-d in_asm,int` before assuming a firmware problem.
 
+### Outcome
+
+Not a regression in the checkout, the ROM blob, the image, or M6's C — the
+`.qemu` binary boots `bench-flash.bin` fine. It was the **launch arguments**:
+`EmulatorSupervisor` passed `-nographic -monitor none -serial stdio`.
+`-nographic` already binds stdio to the default serial+monitor mux, so the
+extra `-serial stdio` is rejected — `cannot use stdio by multiple character
+devices` — and `-monitor none` swallows that error, leaving the UART connected
+to nothing and the dock silent. It only ever "passed" because M2/M3's live
+checks actually ran through the spike's `spike/run-bench.sh`, which uses
+`-serial file:`, not the app's path.
+
+- **Fix** (`src/main/emulator.ts`): drop `-monitor none` + `-serial stdio`,
+  use the canonical headless form `-serial mon:stdio` (UART0 and monitor
+  multiplexed on the one stdio chardev). Verified: the ROM banner, bootloader
+  `load:`/`entry` lines and the firmware's own output now reach stdout with the
+  exact arg list the app builds.
+- No change needed to `setup-emulator.sh`, the ROM path, or `mkflash.sh` — none
+  were implicated once the boot was tested with corrected args.
+- Confirmed against a `-serial file:` control run (boots) and bisected the arg
+  set: `-nographic … -serial mon:stdio -no-reboot` boots; `… -monitor none
+  -serial stdio` is silent; `-nographic` alone with `-monitor none` is silent.
+
 #### M6.2 · MeshCore for the M9, built and booted through PinBench — `M`
 
 **Goal.** The real firmware this milestone is about, running.
@@ -760,6 +783,64 @@ checkout and see MeshCore's own boot banner in the serial dock.
 **Watch for.** `companion_radio_usb` brings up the USB CDC interface
 (`-D ENABLE_USB_INTERFACE`); the console may land on the USB-serial device, not
 UART0. Check which serial the banner comes out on before concluding it hung.
+
+### Progress
+
+The build path is proven and the image boots to MeshCore's own code; the
+version banner is not reached because it prints *after* `radio_init()`, which
+halts pending M6.3's bridge. Three build-path defects M3 never hit on a real
+project were found and fixed:
+
+- **The env name in this section is wrong.** It is
+  `ThinkNode_M9_companion_radio_usb_` — trailing underscore — not
+  `…_usb`. `pio project config` on `upstream/dev` lists six M9 envs; the
+  companion-USB one has the `_`. (MeshCore's other M9 envs: `_repeater_`,
+  `_room_server_`, `_companion_radio_ble_`, `_companion_radio_wifi_`,
+  `_kiss_modem`.) `readProjectConfig` resolves `extra_configs =
+  variants/*/platformio.ini`, so enumeration itself was fine.
+- **The DIO override forced quad PSRAM onto an octal part.**
+  `overrideConfigIni` hardcoded `board_build.arduino.memory_type = dio_qspi`.
+  `memory_type` is `<flash>_<psram>`; the M9's ESP32-S3-R8 is octal
+  (`boards/thinknode_m9.json` → `qio_opi`), and `dio_qspi` builds a
+  quad-PSRAM sdkconfig. Confirmed by A/B boot: the `dio_qspi` image adds
+  `E (92) psram: PSRAM ID read error: 0x00000000 … wrong PSRAM line mode`
+  against the same `-global ssi_psram.is_octal=true` machine; the `dio_opi`
+  image does not. Now takes `psramOctal` and emits `dio_opi` for octal boards
+  (`tools/sdk/esp32s3/dio_opi/` is a real variant), `dio_qspi` otherwise.
+  `psramOctal` threads board → `BuildRequest` → `overrideConfigIni`.
+- **The merged image was sized off PSRAM, not flash.** `BuildRunner` derived
+  `--flash_size` from `emulator.psramSize` (8 M) — but the M9 has 8 M PSRAM
+  and **16 M flash**, and `default_16MB.csv` puts `spiffs`/`coredump` at
+  `0xC90000`–`0xFF0000`. An 8 M merge fails or truncates. New
+  `EmulatorTarget.flashSize` (`"16M"` for the M9); `psramSize` stays as the
+  pre-M6 fallback. Verified: `esptool merge_bin … --flash_size 16MB` writes a
+  16,777,216-byte image.
+
+**How far it gets** (`companion_radio_usb_`, DIO/`dio_opi` override, 16 M image,
+`-machine esp32s3 -m 8M -global ssi_psram.is_octal=true -serial mon:stdio`):
+ROM banner → 2nd-stage bootloader → **Arduino/ESP-IDF runtime is live and
+printing on UART0** → `board.begin()`, `display.begin()` → `radio_init()` fails
+`-707` → MeshCore `halt()`s. This run had `PINBENCH_DEVICE_SOCKET` **unset**, so
+`pinbench_host.c` no-ops the bridge by design and `-707` is *guaranteed and
+says nothing* about whether the GP-SPI2 register model / `SPI_MS_DLEN` / FIFO
+offsets are right — that is exactly what M6.3 exists to find out. Two guest-side
+gripes on the way: `[E][esp32-hal-gpio.c:102] __pinMode(): Invalid pin
+selected` and `gpio: gpio_set_level(227): GPIO output gpio_num error` (a bogus
+pin number reaching the GPIO path — investigate in M6.3), and QEMU
+`guest_errors` shows `Invalid read at addr 0x10200C` plus benign `m25p80`
+unknown-command noise. This is one step past M0's "stalls before first serial
+output", exactly as the Watch-for predicted.
+
+**Still owed for the Done-when:** (1) the same build driven through the app's
+**Build & flash** button, not `pio run` on the command line — the override
+`overrideConfigIni` generates for this project (all **591** envs pinned, incl.
+`[env:native]` and nRF52/RP2040 targets that have no `memory_type` key) was
+verified to resolve and build the M9 env cleanly, so the config is genuinely
+identical, but the UI wiring itself is unexercised; (2) MeshCore's actual
+version/advert banner, which is downstream of `radio_init()` and so is really
+gated on M6.3. USB-CDC was *not* the trap the Watch-for feared —
+`boards/thinknode_m9.json` sets `ARDUINO_USB_CDC_ON_BOOT=0`, so `Serial` is
+UART0 and the log comes out there.
 
 #### M6.3 · The bridge carries real traffic — `M`
 

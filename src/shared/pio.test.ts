@@ -48,4 +48,14 @@ describe('overrideConfigIni', () => {
     expect(ini.match(/board_build\.flash_mode = dio/g)).toHaveLength(2)
     expect(ini).toContain('board_build.arduino.memory_type = dio_qspi')
   })
+
+  it('keeps the PSRAM half octal for octal parts', () => {
+    const ini = overrideConfigIni({
+      userConfigPath: '/proj/platformio.ini',
+      envs: ['ThinkNode_M9_companion_radio_usb_'],
+      psramOctal: true
+    })
+    expect(ini).toContain('board_build.arduino.memory_type = dio_opi')
+    expect(ini).not.toContain('dio_qspi')
+  })
 })

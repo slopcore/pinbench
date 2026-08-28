@@ -1,0 +1,26 @@
+.source {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  background: var(--ground);
+}
+
+.source__empty {
+  max-width: 380px;
+  text-align: center;
+  padding: var(--space-7);
+}
+
+.source__title {
+  margin: 0 0 var(--space-4);
+  font-size: var(--font-size-lg);
+  font-weight: var(--weight-medium);
+  color: var(--text-secondary);
+}
+
+.source__body {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+}

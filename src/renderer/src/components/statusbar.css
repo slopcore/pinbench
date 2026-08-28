@@ -1,0 +1,66 @@
+.statusbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  height: var(--statusbar-height);
+  padding: 0 var(--space-5);
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+  white-space: nowrap;
+}
+
+.statusbar__board {
+  color: var(--text-secondary);
+  font-weight: var(--weight-medium);
+}
+
+.statusbar__mcu {
+  font-family: var(--font-mono);
+}
+
+.statusbar__spacer {
+  flex: 1;
+}
+
+.statusbar__totals {
+  font-family: var(--font-mono);
+}
+
+.statusbar__divider {
+  width: 1px;
+  height: 11px;
+  background: var(--border-strong);
+}
+
+.statusbar__emulator {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.statusbar__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--status-idle);
+}
+
+.statusbar__emulator[data-state='running'] .statusbar__dot {
+  background: var(--status-ok);
+}
+
+.statusbar__emulator[data-state='starting'] .statusbar__dot,
+.statusbar__emulator[data-state='stopping'] .statusbar__dot {
+  background: var(--status-warn);
+}
+
+.statusbar__emulator[data-state='crashed'] .statusbar__dot {
+  background: var(--status-danger);
+}
+
+.statusbar__version {
+  font-family: var(--font-mono);
+  color: var(--neutral-600);
+}

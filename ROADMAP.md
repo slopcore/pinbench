@@ -149,7 +149,7 @@ Four findings that change later milestones:
 
 # Phase 1 — Something you can look at
 
-## M1 · Application shell and the Nocturne design system — `L`
+## M1 · Application shell and the Nocturne design system — `L` ✅ **done**
 
 **Goal.** The window from the design, rendered, navigable, and running in CI —
 driven by fixture data, with no emulator behind it.
@@ -635,7 +635,12 @@ the M9, and lands a new device model as a PR — working only from the docs.
   PSRAM works, and the firmware stalls only where peripherals are missing.
   Decision #2 stands. The cost that moved is M6, which now carries the SPI2/SPI3
   controllers.
-- **M1 is the next milestone**, and has no dependency on anything M0 produced.
+- **M1 is done.** The shell, the Nocturne tokens, the panels, the menus and the
+  canvas are in, driven by an M9 fixture that already implements the
+  `BoardDefinition` types M5 will load from disk. CI runs typecheck, lint,
+  format, tests and a build on macOS, Linux and Windows for every PR.
+- **M2 is the next milestone.** It needs nothing from M1 beyond the dock and the
+  supervised-process seam the main process already has.
 - **M6 is the demo milestone.** Everything before it is plumbing; it is the first
   slice that makes the project's premise obvious to someone watching. If you need
   to show PinBench to anyone, show them M6.

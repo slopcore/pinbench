@@ -9,3 +9,10 @@
 *.bin
 
 node_modules/
+
+# Build output
+out/
+dist/
+
+# TypeScript project-reference build info
+*.tsbuildinfo

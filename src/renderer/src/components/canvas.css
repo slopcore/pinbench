@@ -1,0 +1,71 @@
+.canvas {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--ground);
+}
+
+.canvas[data-tool='pan'] {
+  cursor: grab;
+}
+
+.canvas[data-tool='pan']:active {
+  cursor: grabbing;
+}
+
+.canvas__surface {
+  display: block;
+}
+
+.canvas__outline {
+  fill: var(--surface-sunken);
+  stroke: var(--border-strong);
+  stroke-width: 1;
+}
+
+.canvas__net {
+  fill: none;
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  opacity: 0.55;
+}
+
+.canvas__part {
+  cursor: pointer;
+}
+
+.canvas__part-body {
+  fill: var(--surface-raised);
+  stroke: var(--border-strong);
+  stroke-width: 1;
+}
+
+.canvas__part:hover .canvas__part-body {
+  stroke: var(--accent-600);
+}
+
+.canvas__part[data-selected] .canvas__part-body {
+  stroke: var(--accent-400);
+  stroke-width: 2;
+  fill: var(--surface-active);
+}
+
+.canvas__part-designator {
+  fill: var(--accent-300);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: var(--weight-medium);
+}
+
+.canvas__part-name {
+  fill: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 12px;
+}
+
+.canvas__part-meta {
+  fill: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}

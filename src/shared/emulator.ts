@@ -16,6 +16,8 @@ export interface EmulatorLaunchOptions {
   machine?: string
   psramSize?: string
   psramOctal?: boolean
+  /** Total flash-image size (e.g. `16M`); sizes the merged Build & flash image. */
+  flashSize?: string
 }
 
 export const DEFAULT_LAUNCH_OPTIONS: EmulatorLaunchOptions = {

@@ -89,10 +89,15 @@ export class EmulatorSupervisor extends EventEmitter {
       ...(launch.psramOctal ? ['-global', 'ssi_psram.is_octal=true'] : []),
       '-drive',
       `file=${firmwarePath},if=mtd,format=raw`,
-      '-monitor',
-      'none',
+      // `-nographic` already claims stdio for the default serial+monitor mux,
+      // so a second `-serial stdio` is rejected ("cannot use stdio by multiple
+      // character devices") and — with `-monitor none` swallowing the error —
+      // the UART silently never connects and no boot log appears. `mon:stdio`
+      // is the canonical headless form: UART0 and the monitor multiplexed on
+      // the one stdio chardev. (M2's `-monitor none -serial stdio` only ever
+      // ran green through the spike's `-serial file:` path.)
       '-serial',
-      'stdio',
+      'mon:stdio',
       '-no-reboot'
     ]
 

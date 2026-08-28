@@ -680,11 +680,11 @@ into the fork; not yet exercised by a live guest):**
 **Not reached this session, and why:**
 
 - **A live MeshCore boot drawing the home screen** — the milestone's Done-when.
-  The rebuilt `.qemu` binary produces no UART output booting even the
-  pre-existing M0 `bench-flash.bin` (no ROM banner, drive or no drive), so the
-  blocker is emulator bring-up in this environment, upstream of anything M6
-  added — the M6 C code compiles and links, and the pristine fork behaves
-  identically. Resolving that, then building the `companion_radio_usb` image
+  At the time of this write-up the rebuilt `.qemu` binary appeared to produce no
+  UART output; **M6.1 traced that to the app's launch arguments** (`-nographic`
+  + `-monitor none -serial stdio` silently disconnects the UART — see M6.1's
+  Outcome), not emulator bring-up. With `-serial mon:stdio` the M0 image boots
+  and prints. Building the `companion_radio_usb` image
   through PinBench's `pio` path (16 MB partitions, the DIO `-c` override) and
   booting it, is M6's remaining work. Until then the GP-SPI register model,
   the `SPI_MS_DLEN`/`W0` FIFO assumptions, and the `DC`-ordering-over-one-socket
@@ -706,7 +706,7 @@ run against a guest. These four slices close the gap, each with its own
 demoable Done-when so progress is visible rather than "still integrating". They
 are strictly ordered — each unblocks the next.
 
-#### M6.1 · A firmware image boots again — `S`
+#### M6.1 · A firmware image boots again — `S` ✅ **done**
 
 **Goal.** Get *any* image printing on UART0 under the current `.qemu` build,
 because right now none does.
@@ -735,6 +735,29 @@ exactly as M2's Done-when promised.
 **Watch for.** The espressif fork prints ROM messages by default; total silence
 usually means the image is not being mapped, not that the firmware hung. Bisect
 with `-d in_asm,int` before assuming a firmware problem.
+
+### Outcome
+
+Not a regression in the checkout, the ROM blob, the image, or M6's C — the
+`.qemu` binary boots `bench-flash.bin` fine. It was the **launch arguments**:
+`EmulatorSupervisor` passed `-nographic -monitor none -serial stdio`.
+`-nographic` already binds stdio to the default serial+monitor mux, so the
+extra `-serial stdio` is rejected — `cannot use stdio by multiple character
+devices` — and `-monitor none` swallows that error, leaving the UART connected
+to nothing and the dock silent. It only ever "passed" because M2/M3's live
+checks actually ran through the spike's `spike/run-bench.sh`, which uses
+`-serial file:`, not the app's path.
+
+- **Fix** (`src/main/emulator.ts`): drop `-monitor none` + `-serial stdio`,
+  use the canonical headless form `-serial mon:stdio` (UART0 and monitor
+  multiplexed on the one stdio chardev). Verified: the ROM banner, bootloader
+  `load:`/`entry` lines and the firmware's own output now reach stdout with the
+  exact arg list the app builds.
+- No change needed to `setup-emulator.sh`, the ROM path, or `mkflash.sh` — none
+  were implicated once the boot was tested with corrected args.
+- Confirmed against a `-serial file:` control run (boots) and bisected the arg
+  set: `-nographic … -serial mon:stdio -no-reboot` boots; `… -monitor none
+  -serial stdio` is silent; `-nographic` alone with `-monitor none` is silent.
 
 #### M6.2 · MeshCore for the M9, built and booted through PinBench — `M`
 

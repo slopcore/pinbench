@@ -20,7 +20,7 @@ These were settled before the roadmap was written. Everything below follows from
 | 2 | Simulation fidelity | **Full ESP32-S3 emulation** | The binary PinBench runs is the binary the board would run. Peripheral models are register-level, not behavioural mocks. |
 | 3 | Where the binary comes from | **PinBench drives PlatformIO** | The app detects/bootstraps `pio`, generates the pin-map header from the canvas, builds the firmware, and boots the result. Canvas edits really do change what executes. |
 | 4 | Board scope | **General workbench, modular devices** | Every board and every device is a self-contained module loaded from data. M9 ships first, Heltec Wireless Paper second — as data plus device models, not as a fork. |
-| 5 | Device-model boundary | **Decided by spike (M0)** | Whether device models are TypeScript-over-a-bridge, native C in the QEMU fork, or a hybrid, is chosen from measured numbers rather than guessed. |
+| 5 | Device-model boundary | **TypeScript over a batching bridge** — settled by M0 | Device models are TypeScript; native C is reserved for bus controllers and the bulk transfer hook they need. The measurements are in [ADR 0001](docs/adr/0001-device-model-boundary.md): the axis that matters turned out to be per-byte vs batched, not C vs TypeScript. |
 | 6 | Desktop stack | **Electron + TypeScript** | PinBench supervises long-running child processes (QEMU, PlatformIO) and may host device models in-process. That is Node's home turf; Tauri would push models into Rust or a sidecar. |
 | 7 | Platforms | **macOS first, portable code** | Develop and package for macOS. Keep every path, binary lookup and device-naming assumption platform-agnostic. Windows and Linux are a discrete later milestone, not an afterthought bolted on. |
 | 8 | Posture | **Serious OSS project** | Device models get a test harness and a documented plugin API from the moment the API exists. CI from M1. Contributor docs are a deliverable, not a nice-to-have. |
@@ -56,7 +56,7 @@ Sizes are rough relative effort (S / M / L / XL), not calendar estimates.
 
 # Phase 0 — De-risk
 
-## M0 · Spike: measure the emulation bridge — `XL`
+## M0 · Spike: measure the emulation bridge — `XL` ✅ **done**
 
 **Goal.** Answer the one question the entire architecture rests on — where device
 models live — with numbers instead of an opinion.
@@ -107,6 +107,44 @@ PSRAM emulation in particular is limited, and the M9 has 8 MB of it. Find out in
 this milestone whether MeshCore needs PSRAM to boot, because if it does, that is
 a blocker to solve here and not a surprise in M6.
 
+### Outcome
+
+Full write-up in [ADR 0001](docs/adr/0001-device-model-boundary.md); the code
+that produced it is in [`spike/`](spike/). The headline numbers, per
+153,600-byte frame:
+
+| Device model | ms per frame |
+|---|---|
+| TypeScript, whole frame in one round trip | **0.62** |
+| Native C, one byte at a time through `ssi_transfer()` | **3.91** |
+| TypeScript, one byte at a time | **7,712** |
+
+**The decision: device models are TypeScript, including the display.** The
+expected answer — display in C because it is hot — is wrong by a factor of six.
+Batching is worth ~12,000×; rewriting in C is worth ~6×, and only once batching
+exists. So the boundary moved from *device* to *bus*: bus controllers are C in
+the fork, they hand device models whole buffers, and everything else is
+TypeScript.
+
+Four findings that change later milestones:
+
+- **SPI2 and SPI3 do not exist in the fork.** Only SPI1 (flash/PSRAM) is
+  modelled. Every M9 peripheral — LR1110, ST7789, microSD — is on SPI2/SPI3, so
+  writing those controllers is a prerequisite for M6 and M8, not a detail
+  inside them. This is the single largest piece of unplanned work the spike
+  found.
+- **PSRAM is not a blocker.** 8 MB works, verified by allocation and read-back.
+  Octal parts like the M9's ESP32-S3-R8 need `-global ssi_psram.is_octal=true`,
+  and `-m` must be passed at all or there is silently no PSRAM. Risk retired.
+- **Firmware must be built DIO, not QIO.** QEMU's flash model has no QPI
+  commands; a QIO build boot-loops with an assert in
+  `esp_vfs_console_register()` that points nowhere near the cause. M3 must set
+  this and explain it.
+- **MeshCore boots the SoC and stalls in peripheral bring-up**, blocked (not
+  spinning) before its first serial output, waiting on the SPI peripherals that
+  do not yet exist. Exactly the expected failure, and it un-blocks as M6 and M8
+  land.
+
 ---
 
 # Phase 1 — Something you can look at
@@ -149,6 +187,11 @@ later provide, or M5 becomes a rewrite.
 # Phase 2 — Real firmware, really running
 
 ## M2 · Boot a binary and see its serial output — `L`
+
+> M0 already proved this path end to end from the command line: Arduino
+> firmware for `esp32-s3-devkitc-1` boots under `-machine esp32s3` and prints
+> on UART0. M2 is about putting a supervised process and a UI around it, not
+> about discovering whether it works.
 
 **Goal.** The first honest end-to-end slice: open a firmware image, and watch
 MeshCore's actual boot log scroll in the dock.
@@ -202,6 +245,15 @@ it deliberately rather than by accident.
   tab at that line.
 - **Source tab**: file tree over the real project, syntax-highlighted read-only
   viewer, dirty indicators from filesystem watching.
+- **Force DIO flash mode for emulator builds**, and say so in the UI. QEMU's
+  flash model implements no QPI commands, so a stock QIO build boot-loops with
+  an assert inside `esp_vfs_console_register()` — an error that points nowhere
+  near the cause. Override `board_build.flash_mode` and
+  `board_build.arduino.memory_type` for the emulator target, and surface the
+  override rather than hiding it. (M0 lost an hour to this.)
+- **Pass PSRAM options through from the board definition**: `-m <size>`, plus
+  `-global ssi_psram.is_octal=true` for octal parts such as the M9's
+  ESP32-S3-R8. Without `-m` there is silently no PSRAM at all.
 - Cache builds; make an unchanged rebuild near-instant.
 
 **Done when.** Open a MeshCore checkout, hit **Build & flash**, watch it compile,
@@ -222,10 +274,25 @@ against, and prove it with something small enough to eyeball.
 
 **Build**
 
-- **`DeviceModel` interface**, whatever shape M0 chose. It needs: lifecycle
+- **`DeviceModel` interface**, in TypeScript, as M0 decided. It needs: lifecycle
   (`attach`/`reset`/`detach`), bus transaction handlers for the buses the device
   sits on, a serialisable state snapshot, an event stream out (for OUT panels),
   a command surface in (for IN panels), and declared metering values.
+- **The interface is transaction-shaped, never byte-shaped.** A handler receives
+  a whole buffer and returns a whole buffer. This is the load-bearing
+  consequence of [ADR 0001](docs/adr/0001-device-model-boundary.md): a socket
+  round trip costs tens of microseconds, so a per-byte interface makes a display
+  flush take 7.7 seconds. Retrofitting batching later is the mistake this rule
+  exists to prevent. Budget by *transaction count*, not byte count.
+- **The bulk hook in QEMU.** `ssi_transfer()` is per-byte by construction, so
+  the C side needs a bulk path alongside it that hands a device model an entire
+  transaction in one call. It is new code with no upstream equivalent and it is
+  on M6's critical path.
+- **Measure the real protocol's framing overhead** once it exists and amend the
+  ADR. M0's numbers moved raw bytes behind a five-byte header; they are a floor,
+  not a promise.
+- **Decide the blocking-model failure policy.** A model that hangs hangs the
+  vCPU. Pick a timeout, and pick what the guest and the UI see when it trips.
 - **Device registry**: models are discovered and instantiated by id from a board
   definition. Adding a device means adding a module and referencing it — never
   editing a central switch statement.
@@ -289,6 +356,13 @@ the output of `ui_home.cpp`'s `draw()` running on an emulated Xtensa core.
 
 **Build**
 
+- **SPI2/SPI3 host controllers, in C, in the fork.** The espressif fork models
+  SPI1 only — the flash and PSRAM controller. Every peripheral on the M9 sits on
+  SPI2 or SPI3, so those controllers do not exist yet and nothing on this board
+  can talk until they do. Register-level models with the bulk hook from M4. This
+  is the largest piece of work in the milestone and it is infrastructure the
+  radio (M8) and microSD (M9) need too, so treat it as its own slice inside M6
+  and land it first.
 - **ST7789 device model**: command/parameter state machine, `MADCTL` orientation,
   `CASET`/`RASET` window addressing, `RAMWR` streaming, 16bpp and 18bpp colour,
   the reset and DC/RS lines, and `BL_EN` backlight state.
@@ -306,9 +380,12 @@ the output of `ui_home.cpp`'s `draw()` running on an emulated Xtensa core.
 screen — node name, clock, battery, channel list. Change `ui_home.cpp`, rebuild,
 and the rendered screen changes.
 
-**Watch for.** This is where M0's bridge measurement gets tested for real. If
-full-frame flushes are visibly slow, the display is the device that moves to a
-native fast path. Budget for that possibility rather than being ambushed by it.
+**Watch for.** M0 measured a TypeScript display model at 0.62 ms per full frame
+*provided the controller hands it whole buffers*. If flushes are visibly slow
+here, the first suspect is not the model's language — it is a controller that is
+still round-tripping per byte, or a firmware access pattern that produces many
+small transactions instead of few large ones. Count transactions per frame
+before rewriting anything in C.
 
 ## M7 · The keyboard: closing the interaction loop — `L`
 
@@ -541,8 +618,11 @@ the M9, and lands a new device model as a PR — working only from the docs.
 
 | Risk | Impact | Where it bites | Mitigation |
 |------|--------|----------------|------------|
-| ESP32-S3 PSRAM emulation is incomplete and MeshCore needs 8 MB of it | Blocks everything | M0 | Find out in the spike. If it blocks, options are a PSRAM-free MeshCore build config, contributing PSRAM support upstream, or reconsidering fidelity. Do not discover this in M6. |
-| Bridge latency makes display flushes unusably slow | Forces native device models, hurting modularity | M0, bites in M6 | M0 measures a real 153,600-byte flush specifically. Hybrid boundary is the planned answer. |
+| ~~ESP32-S3 PSRAM emulation is incomplete and MeshCore needs 8 MB of it~~ | — | — | **Retired in M0.** 8 MB works, verified by allocation and read-back. Octal parts need `-global ssi_psram.is_octal=true`; passing no `-m` means silently no PSRAM. Both are M3 launcher flags. |
+| ~~Bridge latency makes display flushes unusably slow~~ | — | — | **Retired in M0.** Batched: 0.62 ms/frame. The residual risk is not latency but *transaction count* — see the row below. |
+| SPI2 and SPI3 host controllers do not exist in the fork | M6 and M8 cannot start without them | M6 | Found in M0. Scheduled explicitly as the first slice of M6, since M8 and M9 need the same controllers. Do not let it hide inside the ST7789 model's estimate. |
+| Firmware issues many small SPI transactions rather than few large ones | Display and radio become bridge-bound | M6, M8 | Each round trip costs tens of microseconds. Meter transactions per frame from the first ST7789 run; if a driver is chatty, batch in the controller before considering a native model. |
+| M0's latency numbers were measured on Linux, not macOS | The per-transaction budget may be wrong on the target platform | Before M6 | Re-run `spike/run-bench.sh` on macOS and amend ADR 0001. The batching conclusion is platform-independent; the budget is not. |
 | LR1110 command surface is larger than expected | M8 balloons | M8 | Implement only what MeshCore calls; make unimplemented commands raise loud named diagnostics. |
 | Espressif's QEMU fork diverges or stalls | Maintenance burden | Ongoing | Pin the fork and tag from M0. Keep PinBench's patches minimal and documented. Budget for periodic rebases. |
 | No WiFi or BLE emulation | `companion_radio` and the weather-station fork cannot run fully | M13 | Named as a non-goal up front. Consider API-boundary stubs in M13 so display and UI code remains iterable. |
@@ -551,11 +631,11 @@ the M9, and lands a new device model as a PR — working only from the docs.
 
 ## Sequencing notes
 
-- **M0 gates everything.** If the spike says full ESP32-S3 emulation of MeshCore
-  is not viable on acceptable terms, that is a finding worth having in week one,
-  and the decision to revisit is decision #2, not the roadmap.
-- **M1 can proceed in parallel with M0** — the shell has no dependency on the
-  emulator, and having somewhere to put M2's output helps.
+- **M0 is done.** Full ESP32-S3 emulation of MeshCore is viable: the SoC boots,
+  PSRAM works, and the firmware stalls only where peripherals are missing.
+  Decision #2 stands. The cost that moved is M6, which now carries the SPI2/SPI3
+  controllers.
+- **M1 is the next milestone**, and has no dependency on anything M0 produced.
 - **M6 is the demo milestone.** Everything before it is plumbing; it is the first
   slice that makes the project's premise obvious to someone watching. If you need
   to show PinBench to anyone, show them M6.

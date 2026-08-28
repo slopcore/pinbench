@@ -1,0 +1,11 @@
+# PlatformIO build output
+.pio/
+
+# A QEMU checkout at the repo root, for the M0 spike. The spike's own sources
+# live in spike/qemu/ and are tracked; only a cloned tree is ignored.
+/qemu/
+
+# Merged flash images
+*.bin
+
+node_modules/

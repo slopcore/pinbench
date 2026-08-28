@@ -161,6 +161,38 @@ describe('St7789Model', () => {
     expect(h.diagnostics.some((d) => d.message.includes('no command context'))).toBe(false)
   })
 
+  it('MV widens the CASET range to 320 and maps a landscape row down a GRAM column', () => {
+    const model = new St7789Model()
+    const h = harness(model)
+    model.takeFrame()
+    cmd(h, 0x36)
+    data(h, 0x20) // MV
+    // A MeshCore-style per-row window: full 0..319 columns, one row.
+    cmd(h, 0x2a)
+    data(h, 0x00, 0x00, 0x01, 0x3f) // CASET 0..319 — must NOT clamp to 239
+    cmd(h, 0x2b)
+    data(h, 0x00, 0x05, 0x00, 0x05) // RASET row 5..5
+    cmd(h, 0x2c)
+    data(h, 0xab, 0xcd, 0x12, 0x34) // two pixels at landscape x=0 and x=1
+    const f = model.takeFrame()!
+    // With MV the landscape column address is GRAM's y-axis, the row address its
+    // x-axis: pixel 0 -> (physX=5, physY=0), pixel 1 -> (physX=5, physY=1).
+    expect(f.pixels[0 * GRAM_W + 5]).toBe(0xabcd)
+    expect(f.pixels[1 * GRAM_W + 5]).toBe(0x1234)
+  })
+
+  it('stores raw GRAM under INVON and reports inverted for the renderer', () => {
+    const model = new St7789Model()
+    const h = harness(model)
+    model.takeFrame()
+    cmd(h, 0x21) // INVON
+    cmd(h, 0x2c)
+    data(h, 0x00, 0x00) // a black pixel
+    const f = model.takeFrame()!
+    expect(f.inverted).toBe(true)
+    expect(f.pixels[0]).toBe(0x0000) // NOT inverted in GRAM — the renderer does it
+  })
+
   it('flush meter spans the whole frame, not the last of ~240 per-row RAMWRs', () => {
     const model = new St7789Model()
     const h = harness(model)

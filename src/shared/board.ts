@@ -74,6 +74,13 @@ export interface PartDefinition {
   category: PartCategory
   /** Device-model id resolved by the plugin registry from M4 onward. */
   deviceModel?: string
+  /**
+   * Fixed construction options for the device model — board-hardware facts, not
+   * user settings (which live in `config`). E.g. the M9's ST7789 backlight is
+   * wired active-low, so `u3` sets `{ backlightActiveHigh: false }`. Passed
+   * verbatim to the model factory; the model validates its own shape.
+   */
+  deviceOptions?: Record<string, unknown>
   summary: string
   buses: string[]
   pins: PartPinBinding[]
@@ -353,6 +360,9 @@ export function parseBoard(input: unknown): BoardDefinition {
     if (p['mpn'] !== undefined) part.mpn = str(p['mpn'], `board.parts[${i}].mpn`)
     if (p['deviceModel'] !== undefined) {
       part.deviceModel = str(p['deviceModel'], `board.parts[${i}].deviceModel`)
+    }
+    if (p['deviceOptions'] !== undefined) {
+      part.deviceOptions = obj(p['deviceOptions'], `board.parts[${i}].deviceOptions`)
     }
     return part
   })

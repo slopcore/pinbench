@@ -411,6 +411,7 @@
       "mpn": "ST7789V",
       "category": "display",
       "deviceModel": "sitronix.st7789",
+      "deviceOptions": { "backlightActiveHigh": false },
       "summary": "320×240 IPS panel on SPI0, chip select GPIO16.",
       "buses": ["spi0"],
       "pins": [

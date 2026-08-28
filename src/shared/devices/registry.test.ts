@@ -33,6 +33,21 @@ describe('DeviceRegistry', () => {
     registry.register(stub)
     expect(registry.create('test.stub')).not.toBe(registry.create('test.stub'))
   })
+
+  it('passes board-hardware options through to the factory', () => {
+    const registry = new DeviceRegistry()
+    let seen: Record<string, unknown> | undefined
+    registry.register({
+      id: 'test.opts',
+      summary: 'records its options',
+      create: (options) => {
+        seen = options
+        return new LedModel()
+      }
+    })
+    registry.create('test.opts', { backlightActiveHigh: false })
+    expect(seen).toEqual({ backlightActiveHigh: false })
+  })
 })
 
 describe('the process registry', () => {

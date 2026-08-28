@@ -63,6 +63,7 @@ interface FramebufferSource {
     madctl: number
     displayOn: boolean
     backlightOn: boolean
+    inverted: boolean
     dirty: { x: number; y: number; w: number; h: number }
     pixels: Uint16Array
   } | null
@@ -162,7 +163,7 @@ export class DeviceHost extends EventEmitter {
     for (const part of board.parts) {
       const id = part.deviceModel
       if (!id) continue
-      const model = this.registry.create(id)
+      const model = this.registry.create(id, part.deviceOptions)
       if (!model) {
         this.diagnose(
           'info',
@@ -249,6 +250,7 @@ export class DeviceHost extends EventEmitter {
         madctl: frame.madctl,
         displayOn: frame.displayOn,
         backlightOn: frame.backlightOn,
+        inverted: frame.inverted,
         dirty: frame.dirty,
         // `takeFrame` already hands back a standalone copy, exactly sized.
         pixels: frame.pixels.buffer as ArrayBuffer

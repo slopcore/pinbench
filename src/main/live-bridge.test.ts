@@ -106,6 +106,10 @@ describe.skipIf(!LIVE || !IMAGE || !existsSync(IMAGE) || !existsSync(QEMU))(
       expect(snap['poweredOn']).toBe(true)
       expect(snap['displayOn']).toBe(true)
       expect(snap['bpp']).toBe(16)
+      expect(snap['inverted']).toBe(true) // MeshCore runs the panel inverted
+      // The M9's backlight is active-low; the board's deviceOptions say so, so
+      // the panel reads as lit even though the guest never toggles GPIO17.
+      expect(snap['backlightOn']).toBe(true)
       expect((snap['window'] as { w: number }).w).toBeGreaterThan(0)
       expect(framebufferMessages).toBeGreaterThan(0)
       // The flush meter is a whole-frame span now, not the tail of ~240 per-row

@@ -150,8 +150,12 @@ export interface DeviceModel {
   meter(id: string): number | undefined
 }
 
-/** A model constructor, as held by the registry. */
-export type DeviceModelFactory = () => DeviceModel
+/**
+ * A model constructor, as held by the registry. `options` are the fixed
+ * board-hardware options from `PartDefinition.deviceOptions` (or `undefined`);
+ * each model validates the shape it cares about.
+ */
+export type DeviceModelFactory = (options?: Record<string, unknown>) => DeviceModel
 
 /** A built-in model's registry entry. */
 export interface DeviceModelDescriptor {

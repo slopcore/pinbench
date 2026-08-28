@@ -44,6 +44,10 @@ describe('the M9 board definition', () => {
     expect(pinFor('u9', 'BUZZER')).toBe('GPIO9')
   })
 
+  it('carries the LCD backlight polarity as a device option (M9 is active-low)', () => {
+    expect(findPart(M9_BOARD, 'u3')?.deviceOptions).toEqual({ backlightActiveHigh: false })
+  })
+
   it('puts the keyboard SCL on the pin M11 moves the LCD CS onto', () => {
     // M11's Done-when: moving LCD_CS to GPIO21 collides with the keyboard's SCL.
     const kbdScl = findPart(M9_BOARD, 'u8')?.pins.find((b) => b.signal === 'SCL')?.pin

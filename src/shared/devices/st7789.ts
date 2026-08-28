@@ -125,10 +125,23 @@ const IGNORED_WITH_PARAMS = new Set<number>([
 ])
 
 export interface St7789Options {
-  /** `BL` line polarity. MeshCore's ESP build lights the panel with `BL` high. */
+  /**
+   * `BL` line polarity. Default `true` (panel lit when `BL` high). The M9 wires
+   * it active-low (`variant.h`'s `TFT_BACKLIGHT_ON LOW`), so its `u3` sets this
+   * `false` via `PartDefinition.deviceOptions`.
+   */
   backlightActiveHigh?: boolean
   /** `RST` line polarity — reset asserted when the line is low (datasheet). */
   resetActiveLow?: boolean
+}
+
+function st7789Options(raw?: Record<string, unknown>): St7789Options {
+  const o: St7789Options = {}
+  if (typeof raw?.['backlightActiveHigh'] === 'boolean') {
+    o.backlightActiveHigh = raw['backlightActiveHigh']
+  }
+  if (typeof raw?.['resetActiveLow'] === 'boolean') o.resetActiveLow = raw['resetActiveLow']
+  return o
 }
 
 /** A pending multi-byte command whose parameters have not all arrived yet. */
@@ -170,6 +183,12 @@ export class St7789Model implements DeviceModel {
   private dc: 0 | 1 = 0
   private csLow = false
   private rstAsserted = false
+  /**
+   * Set in the constructor from the polarity. `BL` idles low at power-on, and
+   * the fork's GPIO observer forwards only *changes* — so an active-low panel
+   * whose driver writes `BL` low anyway (the M9) would never get an edge and
+   * must already read as lit.
+   */
   private backlightOn = false
 
   // Controller state.
@@ -214,6 +233,7 @@ export class St7789Model implements DeviceModel {
   constructor(options: St7789Options = {}) {
     this.backlightActiveHigh = options.backlightActiveHigh ?? true
     this.resetActiveLow = options.resetActiveLow ?? true
+    this.backlightOn = !this.backlightActiveHigh
   }
 
   attach(ctx: DeviceContext): void {
@@ -235,7 +255,8 @@ export class St7789Model implements DeviceModel {
     this.dc = 0
     this.csLow = false
     this.rstAsserted = false
-    this.backlightOn = false
+    // BL idles low; lit at power-on iff the panel is active-low.
+    this.backlightOn = !this.backlightActiveHigh
     this.sleepOut = false
     this.displayOn = false
     this.inverted = false
@@ -425,13 +446,18 @@ export class St7789Model implements DeviceModel {
       case CMD.CASET: {
         const xs = (p.params[0]! << 8) | p.params[1]!
         const xe = (p.params[2]! << 8) | p.params[3]!
-        this.caset = { xs: clamp(xs, 0, GRAM_W - 1), xe: clamp(xe, 0, GRAM_W - 1) }
+        // With MV the column-address axis is the 320-long one (landscape): a
+        // driver addressing 0..319 here — as MeshCore's per-row setAddrWindow
+        // does — is in range, not something to clamp down to 239.
+        const max = this.madctl & MADCTL_MV ? GRAM_H - 1 : GRAM_W - 1
+        this.caset = { xs: clamp(xs, 0, max), xe: clamp(xe, 0, max) }
         break
       }
       case CMD.RASET: {
         const ys = (p.params[0]! << 8) | p.params[1]!
         const ye = (p.params[2]! << 8) | p.params[3]!
-        this.raset = { ys: clamp(ys, 0, GRAM_H - 1), ye: clamp(ye, 0, GRAM_H - 1) }
+        const max = this.madctl & MADCTL_MV ? GRAM_W - 1 : GRAM_H - 1
+        this.raset = { ys: clamp(ys, 0, max), ye: clamp(ye, 0, max) }
         break
       }
       case CMD.MADCTL:
@@ -473,7 +499,7 @@ export class St7789Model implements DeviceModel {
       }
       const rgb565 = ((this.pixelHi << 8) | byte) & 0xffff
       this.pixelHi = -1
-      this.putPixel(this.applyInvert(rgb565))
+      this.putPixel(rgb565)
     } else {
       this.rgb18.push(byte)
       if (this.rgb18.length < 3) return
@@ -481,48 +507,38 @@ export class St7789Model implements DeviceModel {
       const g = this.rgb18[1]! >> 2
       const b = this.rgb18[2]! >> 3
       this.rgb18 = []
-      this.putPixel(this.applyInvert(((r << 11) | (g << 5) | b) & 0xffff))
+      this.putPixel(((r << 11) | (g << 5) | b) & 0xffff)
     }
     this.lastPixelT = t
   }
 
-  private applyInvert(rgb565: number): number {
-    return this.inverted ? rgb565 ^ 0xffff : rgb565
-  }
-
   /**
-   * Write one pixel at the RAMWR cursor and advance it, honouring the CASET /
-   * RASET window and the MADCTL scan direction (MX flips column order, MY row
-   * order, MV swaps the advance axis).
+   * Write one pixel at the RAMWR cursor and advance it. The ST7789's address
+   * counter always advances the column address first, wrapping to the next row
+   * address at the end of the CASET window — MV does **not** change that. What
+   * MV changes is the *physical* cell: with MV the column address walks GRAM's
+   * 320-long axis and the row address its 240-long axis (the panel is
+   * transposed). MX / MY mirror each address within its window.
    */
   private putPixel(rgb565: number): void {
     const mv = !!(this.madctl & MADCTL_MV)
     const mx = !!(this.madctl & MADCTL_MX)
     const my = !!(this.madctl & MADCTL_MY)
 
-    const gx = mx ? this.caset.xe - (this.col - this.caset.xs) : this.col
-    const gy = my ? this.raset.ye - (this.row - this.raset.ys) : this.row
-    if (gx >= 0 && gx < GRAM_W && gy >= 0 && gy < GRAM_H) {
-      this.gram[gy * GRAM_W + gx] = rgb565
-      this.growDirty(gx, gy)
+    const ca = mx ? this.caset.xe - (this.col - this.caset.xs) : this.col
+    const ra = my ? this.raset.ye - (this.row - this.raset.ys) : this.row
+    const physX = mv ? ra : ca
+    const physY = mv ? ca : ra
+    if (physX >= 0 && physX < GRAM_W && physY >= 0 && physY < GRAM_H) {
+      this.gram[physY * GRAM_W + physX] = rgb565
+      this.growDirty(physX, physY)
     }
 
-    // Advance the cursor. Without MV the panel fills a row then wraps to the
-    // next; with MV set the fast axis is the row.
-    if (!mv) {
-      this.col += 1
-      if (this.col > this.caset.xe) {
-        this.col = this.caset.xs
-        this.row += 1
-        if (this.row > this.raset.ye) this.row = this.raset.ys
-      }
-    } else {
+    this.col += 1
+    if (this.col > this.caset.xe) {
+      this.col = this.caset.xs
       this.row += 1
-      if (this.row > this.raset.ye) {
-        this.row = this.raset.ys
-        this.col += 1
-        if (this.col > this.caset.xe) this.col = this.caset.xs
-      }
+      if (this.row > this.raset.ye) this.row = this.raset.ys
     }
   }
 
@@ -564,6 +580,8 @@ export class St7789Model implements DeviceModel {
     madctl: number
     displayOn: boolean
     backlightOn: boolean
+    /** INVON is applied at scan-out on real hardware — the renderer inverts. */
+    inverted: boolean
     dirty: { x: number; y: number; w: number; h: number }
     pixels: Uint16Array
   } | null {
@@ -575,6 +593,7 @@ export class St7789Model implements DeviceModel {
       madctl: this.madctl,
       displayOn: this.displayOn && this.sleepOut,
       backlightOn: this.backlightOn,
+      inverted: this.inverted,
       dirty: { x: d.x0, y: d.y0, w: d.x1 - d.x0 + 1, h: d.y1 - d.y0 + 1 },
       pixels: this.gram.slice()
     }
@@ -644,5 +663,5 @@ export const st7789Descriptor: DeviceModelDescriptor = {
   id: 'sitronix.st7789',
   summary:
     'ST7789 320×240 SPI panel. Command state machine, CASET/RASET/RAMWR, MADCTL scan order, 16/18bpp, DC/RST/BL lines; framebuffer to the OUT panel.',
-  create: () => new St7789Model()
+  create: (options) => new St7789Model(st7789Options(options))
 }

@@ -137,5 +137,5 @@ export class LedModel implements DeviceModel {
 export const ledDescriptor: DeviceModelDescriptor = {
   id: 'pinbench.led',
   summary: 'An LED on a GPIO. Active-high by default; tracks edges and duty cycle.',
-  create: () => new LedModel()
+  create: () => new LedModel() // no board-hardware options
 }

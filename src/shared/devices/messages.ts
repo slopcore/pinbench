@@ -62,6 +62,8 @@ export interface DeviceFramebufferMessage {
   madctl: number
   displayOn: boolean
   backlightOn: boolean
+  /** INVON state — the renderer inverts at scan-out, as real hardware does. */
+  inverted: boolean
   /** The region that changed since the previous message, in GRAM coordinates. */
   dirty: { x: number; y: number; w: number; h: number }
   /** RGB565, `width * height` entries, row major. Sent as a transferable buffer. */

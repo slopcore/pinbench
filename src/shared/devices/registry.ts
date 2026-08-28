@@ -38,9 +38,9 @@ export class DeviceRegistry {
   }
 
   /** Instantiate a model, or `undefined` when no factory is registered. */
-  create(id: string): DeviceModel | undefined {
+  create(id: string, options?: Record<string, unknown>): DeviceModel | undefined {
     const factory = this.factories.get(id)
-    return factory ? factory() : undefined
+    return factory ? factory(options) : undefined
   }
 
   summaryOf(id: string): string | undefined {

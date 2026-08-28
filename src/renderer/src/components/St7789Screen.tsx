@@ -26,8 +26,9 @@ export function St7789Screen({ framebuffer, zoom }: St7789ScreenProps): React.JS
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    const { width, height, madctl, pixels, displayOn, backlightOn } = framebuffer
+    const { width, height, madctl, pixels, displayOn, backlightOn, inverted } = framebuffer
     const mv = (madctl & MADCTL_MV) !== 0
+    const inv = inverted ? 0xffff : 0x0000
     const dispW = mv ? height : width
     const dispH = mv ? width : height
     if (canvas.width !== dispW) canvas.width = dispW
@@ -42,7 +43,7 @@ export function St7789Screen({ framebuffer, zoom }: St7789ScreenProps): React.JS
       for (let dx = 0; dx < dispW; dx++) {
         const gramCol = mv ? dy : dx
         const gramRow = mv ? dx : dy
-        const rgb565 = gram[gramRow * width + gramCol] ?? 0
+        const rgb565 = (gram[gramRow * width + gramCol] ?? 0) ^ inv
         const r = ((rgb565 >> 11) & 0x1f) * 8.225
         const g = ((rgb565 >> 5) & 0x3f) * 4.047
         const b = (rgb565 & 0x1f) * 8.225

@@ -963,72 +963,74 @@ the risk register say.
 
 ### Progress
 
-**Real firmware pixels render, and the edit→rebuild→pixels loop is live** — but
-the *home screen specifically* is M8-blocked, so M6.4 is partial like M6.
+**Real firmware pixels render correctly in the OUT panel, and the
+edit→rebuild→pixels loop is live.** Everything the milestone owed that does not
+need the radio is done; only *the home screen content itself* is M8-blocked, so
+M6.4 stays 🚧 partial and that one clause moves to M8.
 
-- **Pixels.** Booting the M6.2 M9 image with the M6.3 bridge, MeshCore's
-  `setup()` runs `display.begin()` and draws its `"Loading…"` splash — via
-  `ST7789Spi::display()`'s per-row `setAddrWindow`+`transferBytes` — *before*
-  `radio_init()` (which then halts at `-707` in a tight `while(1)`; one boot,
-  no retry loop, confirmed against a full serial capture). Decoding the
-  `device:framebuffer` RGB565 buffer **straight from the message** (no render
-  transform) to a PPM shows **"Loading…" legibly centred** — genuine emulated
-  Xtensa output, INVON handled (the model inverts on write, so the black UI
-  background stores as white and the glyph strokes as black). **But the OUT
-  panel component does *not* yet show this correctly** — see the orientation
-  bug below; the milestone's "the panel shows what `display()` pushes" bullet
-  is not met until that is fixed.
-- **Edit → rebuild → changed pixels.** Changed the `drawTextCentered(…,
-  "Loading...")` string in `examples/companion_radio/main.cpp` to
-  `"PINBENCH M6.4"`, rebuilt through the same `pio` + `dio_opi` + 16 M merge
-  path (~25 s), re-captured — the rendered text changed. This is the half of
-  M6.4's Done-when that does **not** need the radio, and it proves the whole
-  source→emulator→pixels loop rather than a one-off capture.
+- **Pixels, and the panel shows them right.** Booting the M6.2 M9 image with
+  the M6.3 bridge, MeshCore's `setup()` runs `display.begin()` and draws its
+  `"Loading…"` splash via `ST7789Spi::display()`'s per-row
+  `setAddrWindow`+`transferBytes`, *before* `radio_init()` (which then halts at
+  `-707` in a tight `while(1)` — one boot, no retry loop, confirmed against a
+  full serial capture). The `device:framebuffer` buffer, run through the real
+  `St7789Screen.tsx` pipeline, shows **"Loading…" upright and centred on a
+  320×240 landscape, full-brightness, correct background** — genuine emulated
+  Xtensa output. Getting there took three model fixes:
+  - **MADCTL MV was clipping the frame.** `CASET`/`RASET` clamped to
+    `GRAM_W-1`/`GRAM_H-1` always, but with MV set the column-address axis is
+    the 320-long one — MeshCore's per-row `setAddrWindow` addresses `0..319`
+    there and was being clamped to 239, losing the right ~25 % of every row
+    (and leaving an 80 px unaddressed band). Clamp bounds now swap with MV.
+  - **The MV physical mapping was missing.** `putPixel` wrote
+    `gram[row*W + col]` regardless of MV, and MV only nudged the cursor-advance
+    axis — a half-measure. Now MV maps the column address to GRAM's Y and the
+    row address to its X (`physX = mv ? ra : ca`, `physY = mv ? ca : ra`), and
+    the cursor always advances column-first (the ST7789's real RAMWR order).
+    With this, the component's existing `MADCTL.MV` transpose is exactly the
+    one net rotation needed — no code change there.
+  - **INVON moved to scan-out.** The model stored pre-inverted RGB565 in GRAM;
+    now it keeps raw pixels and `takeFrame`/`DeviceFramebufferMessage` carry an
+    `inverted` flag the renderer XORs. Matches real hardware and survives a
+    mid-frame INVON toggle.
+- **Backlight polarity, via a board→model path.** New
+  `PartDefinition.deviceOptions` — fixed board-hardware options, distinct from
+  the user-facing `config` — passed verbatim through `registry.create(id,
+  options)` to the model factory. The M9's `u3` sets
+  `{ backlightActiveHigh: false }` (its `variant.h` has `TFT_BACKLIGHT_ON
+  LOW`). `BL` idles low and MeshCore's `digitalWrite(LEDA_CTL, LOW)` is a
+  no-change the fork's observer drops, so the model now powers on
+  `backlightOn = !backlightActiveHigh` — the panel reads lit, and
+  `St7789Screen.tsx`'s dim only kicks in on a real display/backlight-off.
+- **Edit → rebuild → changed pixels.** Changed the splash string in
+  `examples/companion_radio/main.cpp` to `"PINBENCH M6.4"`, rebuilt through the
+  same `pio` + `dio_opi` + 16 M merge path (~25 s), re-captured — the rendered
+  text changed, full-width, no clipping. Proves the whole
+  source→emulator→pixels loop.
 - **Meters fixed** (`src/shared/devices/st7789.ts`). `flush` was recomputed on
   every pixel byte as `t − <last RAMWR>`; MeshCore issues one `RAMWR` *per row*
   (~240/frame), so it measured the last row and read multi-second garbage
-  (4331 ms live). Now a per-frame span: `frameFlushStartT` latches on the first
-  RAMWR after a `takeFrame` and `takeFrame` turns `lastPixelT − frameFlushStartT`
-  into `lastFlushMs` — reads **~9 ms** live. `dirtyRectCount` and the
-  host-filled `busShare` were already real; `txnPerFrame` reads 7–12.
-- **`dc` powers on LOW (command)**, not HIGH. The fork's GPIO observer forwards
-  only *changes*, so the driver's initial `digitalWrite(DC, LOW)` over a
-  reset-0 register is never seen; starting HIGH mis-read the first `SWRESET` as
-  a stray data byte (the one M6.3 `data byte with no command context` info).
-  Gone now — live diagnostics are clean.
-- **Dirty-rect throttling** already works: the host samples `takeFrame()` on a
-  ~30 fps timer (not per transaction), and live dirty rects are real subregions
-  (`240×74 @ 0,2`, `240×85 @ 0,76`, `6×1 @ 112,135`), not always full-frame.
+  (4331 ms live). Now a per-frame span latched on the first RAMWR after a
+  `takeFrame` — reads **2–9 ms** live. `dirtyRectCount` / host-filled
+  `busShare` were already real; `txnPerFrame` reads 7–12.
+- **`dc` powers on LOW (command)**, not HIGH — same no-change-observer reason
+  as the backlight. Killed the M6.3 `data byte with no command context` info;
+  live diagnostics are clean.
+- **Dirty-rect throttling** already worked: the host samples `takeFrame()` on a
+  ~30 fps timer (not per transaction), and live dirty rects are real subregions.
 
-**Remaining for M6.4 to close:**
+**Remaining for M6.4 to close — moved to M8:**
 
 - **The home screen** — node name, clock, battery. It renders in
-  `the_mesh.begin()` / the UI loop, which runs *after* `radio_init()`; that
-  halts at `-707` until **M8** gives the LR1110 a working bus. This is the
-  gating item.
-- **Backlight polarity.** The M9's `variant.h` sets `TFT_BACKLIGHT_ON LOW` and
-  `ST7789Display::begin()` drives `PIN_TFT_LEDA_CTL` (GPIO17) LOW with no
-  `_ACTIVE` override — i.e. **backlight on**. The model defaults
-  `backlightActiveHigh: true`, so it reports the panel dark and
-  `St7789Screen.tsx` renders it dimmed. Needs a board-definition →
-  model-options path (`registry.create` takes no config today) so `u3` can
-  declare active-low; then "the BL ON/OFF toggle dimming it" reads correctly.
-- **Render orientation is wrong.** `St7789Screen.tsx` transposes GRAM for
-  `MADCTL.MV`, but the model *already* bakes scan direction into GRAM addresses
-  during RAMWR (`advanceCursor`'s MV branch), so the transform is applied
-  twice: the raw GRAM holds "Loading…" upright in a 240×320 portrait, and the
-  component's output is that rotated 90° (text reads bottom-to-top) in
-  320×240. Exactly one net rotation should happen, landing on a 320×240
-  landscape with upright text. Untangle the model↔component MADCTL split
-  against MeshCore's transposed per-row `setAddrWindow(minBoundX, y*8+temp,
-  span, 1)`, then crop the ~80 px the driver never addresses.
-- The run through the app's **Build & flash** button (still M6.2's owed UI
-  check) and the OUT panel shown in the actual Inspector.
-- **INVON is applied at GRAM-write time** (`applyInvert` in `writePixelByte`),
-  not at scan-out as a real ST7789 does. Identical for the M9 because MeshCore
-  sets INVON before any RAMWR, but `takeFrame`/`St7789Screen` ignore the
-  `inverted` flag, so firmware that toggles INVON mid-frame would render
-  wrong. Move the invert to render.
+  `the_mesh.begin()` / the UI loop, *after* `radio_init()`, which halts at
+  `-707` until M8 gives the LR1110 a working bus. Added to M8's Build list; M8
+  is where the ST7789 render path finally gets its real target (a screen with
+  distinct corners is also the right thing to validate orientation against — a
+  near-symmetric "Loading…" is a weak test).
+- **Not milestone-gated, tracked with M6.2:** the run through the app's
+  **Build & flash** button and the OUT panel shown in the live Inspector
+  (verified here through the component code and a decoded capture, not the
+  running Electron app).
 
 ## M7 · The keyboard: closing the interaction loop — `L`
 
@@ -1078,10 +1080,17 @@ This is the device the whole product exists for.
   meters.
 - **Inspector config** wired live: BW 125/250/500, SF 7/9/11, CR 5/6/8, TX power
   14/17/22.
+- **Carried from M6.4: the ST7789 home screen.** Once `radio_init()` succeeds,
+  MeshCore reaches `the_mesh.begin()` and the UI loop draws the real home
+  screen — node name, clock, battery. The whole display path (M6.3 bridge, the
+  fixed MADCTL/INVON model, `St7789Screen.tsx`) is already in and proven
+  against the `"Loading…"` splash; this milestone just gives it a target with
+  distinct corners to confirm orientation on, and closes M6.4.
 
 **Done when.** With MeshCore running, inject `#public "trailhead in 20"` from the
 IN panel and see it arrive in the serial log **and** appear on the emulated LCD's
-channel list with an unread dot.
+channel list with an unread dot. The home screen (node name, clock, battery)
+renders — closing M6.4.
 
 **Watch for.** The LR1110 command surface is large. Implement only what MeshCore
 calls, driven by tracing real firmware traffic — and make unimplemented commands

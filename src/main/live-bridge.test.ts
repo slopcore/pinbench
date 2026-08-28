@@ -93,7 +93,12 @@ describe.skipIf(!LIVE || !IMAGE || !existsSync(IMAGE) || !existsSync(QEMU))(
 
     it('drives the ST7789 model through MeshCore init, contention-free', () => {
       const devices = (
-        host as unknown as { devices: Map<string, { model: { id: string; snapshot(): unknown } }> }
+        host as unknown as {
+          devices: Map<
+            string,
+            { model: { id: string; snapshot(): unknown; meter(id: string): number | undefined } }
+          >
+        }
       ).devices
       const st = [...devices.values()].find((d) => d.model.id === 'sitronix.st7789')
       expect(st).toBeDefined()
@@ -103,8 +108,15 @@ describe.skipIf(!LIVE || !IMAGE || !existsSync(IMAGE) || !existsSync(QEMU))(
       expect(snap['bpp']).toBe(16)
       expect((snap['window'] as { w: number }).w).toBeGreaterThan(0)
       expect(framebufferMessages).toBeGreaterThan(0)
+      // The flush meter is a whole-frame span now, not the tail of ~240 per-row
+      // RAMWRs — a real MeshCore frame streams in single-digit ms, never seconds.
+      const flush = st!.model.meter('flush') ?? 0
+      expect(flush).toBeGreaterThan(0)
+      expect(flush).toBeLessThan(1000)
       expect(diagnostics.filter((m) => /unimplemented command/i.test(m))).toEqual([])
       expect(diagnostics.filter((m) => /cs-contention|asserted together/i.test(m))).toEqual([])
+      // dc powers on in command mode, so the first transfer is not a stray byte.
+      expect(diagnostics.filter((m) => /no command context/i.test(m))).toEqual([])
     })
   }
 )

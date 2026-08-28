@@ -162,8 +162,12 @@ export class St7789Model implements DeviceModel {
   /** Physical 240×320 GRAM, RGB565. */
   private gram = new Uint16Array(GRAM_W * GRAM_H)
 
-  // Line state, fed by onSignal.
-  private dc: 0 | 1 = 1
+  // Line state, fed by onSignal. `dc` powers on LOW (command): every real
+  // driver's first transfer is a command, and the fork's GPIO observer only
+  // forwards *changes*, so an initial `digitalWrite(DC, LOW)` over a reset-0
+  // register is never seen — starting HIGH mis-reads that first command as a
+  // stray data byte.
+  private dc: 0 | 1 = 0
   private csLow = false
   private rstAsserted = false
   private backlightOn = false
@@ -192,8 +196,17 @@ export class St7789Model implements DeviceModel {
   private frames = 0
   private ramwrBytes = 0
   private dirtyRectCount = 0
+  /** ms the guest spent streaming pixels for the last completed frame. */
   private lastFlushMs = 0
-  private flushStartT = 0
+  /**
+   * Guest timestamp of the first `RAMWR` since the last {@link takeFrame}, and
+   * of the most recent pixel byte. `takeFrame` turns the span between them into
+   * {@link lastFlushMs}. `-1` = no RAMWR yet this frame. MeshCore's driver
+   * issues one `RAMWR` *per row* (~240/frame), so this must span the whole
+   * frame, not reset per RAMWR.
+   */
+  private frameFlushStartT = -1
+  private lastPixelT = 0
   private txnsThisFrame = 0
   private txnsPerFrame = 0
   private bytesOnBus = 0
@@ -219,7 +232,7 @@ export class St7789Model implements DeviceModel {
 
   private powerOn(): void {
     this.gram = new Uint16Array(GRAM_W * GRAM_H)
-    this.dc = 1
+    this.dc = 0
     this.csLow = false
     this.rstAsserted = false
     this.backlightOn = false
@@ -239,6 +252,8 @@ export class St7789Model implements DeviceModel {
     this.frameDirty = true
     this.ramwrBytes = 0
     this.txnsThisFrame = 0
+    this.frameFlushStartT = -1
+    this.lastPixelT = 0
   }
 
   // --- lines in ------------------------------------------------------------
@@ -308,12 +323,13 @@ export class St7789Model implements DeviceModel {
       // Pixel stream follows (DC high). Reset the cursor to the window origin.
       this.col = this.caset.xs
       this.row = this.raset.ys
-      this.flushStartT = t
+      if (this.frameFlushStartT < 0) this.frameFlushStartT = t
       this.pending = { cmd, params: [], need: Number.POSITIVE_INFINITY }
       return
     }
     if (cmd === CMD.RAMWRC) {
       // Continue writing at the current cursor.
+      if (this.frameFlushStartT < 0) this.frameFlushStartT = t
       this.pending = { cmd, params: [], need: Number.POSITIVE_INFINITY }
       return
     }
@@ -467,7 +483,7 @@ export class St7789Model implements DeviceModel {
       this.rgb18 = []
       this.putPixel(this.applyInvert(((r << 11) | (g << 5) | b) & 0xffff))
     }
-    this.lastFlushMs = Math.max(0, Math.round((t - this.flushStartT) / 1e4) / 100)
+    this.lastPixelT = t
   }
 
   private applyInvert(rgb565: number): number {
@@ -567,6 +583,11 @@ export class St7789Model implements DeviceModel {
     this.frames += 1
     this.txnsPerFrame = this.txnsThisFrame
     this.txnsThisFrame = 0
+    if (this.frameFlushStartT >= 0) {
+      // Whole-frame pixel-streaming span, ms with 2 decimals.
+      this.lastFlushMs = Math.max(0, Math.round((this.lastPixelT - this.frameFlushStartT) / 1e4) / 100)
+      this.frameFlushStartT = -1
+    }
     return frame
   }
 

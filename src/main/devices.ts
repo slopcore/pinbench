@@ -32,7 +32,11 @@ import { unlink } from 'node:fs/promises'
 import type { BoardDefinition, PartDefinition } from '../shared/board'
 import type { Diagnostic } from '../shared/diagnostics'
 import type { DeviceContext, DeviceModel } from '../shared/devices/model'
-import type { DeviceEventMessage, DeviceSnapshotMessage } from '../shared/devices/messages'
+import type {
+  DeviceEventMessage,
+  DeviceFramebufferMessage,
+  DeviceSnapshotMessage
+} from '../shared/devices/messages'
 import { deviceRegistry, type DeviceRegistry } from '../shared/devices/registry'
 import {
   BUS_NONE,
@@ -45,17 +49,49 @@ import {
   type FrameError
 } from '../shared/devices/protocol'
 
-export type { DeviceSnapshotMessage, DeviceEventMessage }
+export type { DeviceSnapshotMessage, DeviceEventMessage, DeviceFramebufferMessage }
+
+/**
+ * A framebuffer-bearing model (the ST7789 from M6). Duck-typed rather than
+ * added to {@link DeviceModel} so a model only implements it when it has
+ * pixels; the host pulls it on a refresh timer, never per transaction.
+ */
+interface FramebufferSource {
+  takeFrame(): {
+    width: number
+    height: number
+    madctl: number
+    displayOn: boolean
+    backlightOn: boolean
+    dirty: { x: number; y: number; w: number; h: number }
+    pixels: Uint16Array
+  } | null
+}
+
+function isFramebufferSource(model: DeviceModel): model is DeviceModel & FramebufferSource {
+  return typeof (model as Partial<FramebufferSource>).takeFrame === 'function'
+}
+
+/** How often the host samples display models for a new frame. ~30 fps. */
+const FRAME_INTERVAL_MS = 33
 
 interface LoadedDevice {
   part: PartDefinition
   model: DeviceModel
   /** signalHash → the part's signal name, for decoding `Signal` frames. */
   signalsByHash: Map<number, string>
+  /** SoC pin number → the part's own signal name, for decoding `Gpio` frames. */
+  signalsByPin: Map<number, string>
+  /** The SoC pin carrying this part's SPI chip-select, if it has one. */
+  csPin: number | null
+  /** Whether this part's chip-select is currently asserted (low). */
+  csLow: boolean
   quarantined: boolean
   slowWarned: boolean
   lastSnapshotJson: string
   lastT: number
+  /** Bytes this device has clocked on its bus since the last frame, for `busShare`. */
+  frameBytes: number
 }
 
 export interface DeviceHostOptions {
@@ -75,6 +111,9 @@ export class DeviceHost extends EventEmitter {
   private server: Server | null = null
   private socketPath: string | null = null
   private connection: Socket | null = null
+  /** board bus id → part ids on it, in board order. */
+  private busMembers = new Map<string, string[]>()
+  private frameTimer: ReturnType<typeof setInterval> | null = null
 
   constructor(options: DeviceHostOptions = {}) {
     super()
@@ -101,6 +140,15 @@ export class DeviceHost extends EventEmitter {
 
     this.unloadModels()
     this.busOrder = board.buses.map((bus) => bus.id)
+    this.busMembers = new Map()
+    for (const part of board.parts) {
+      for (const busId of part.buses) {
+        const members = this.busMembers.get(busId) ?? []
+        members.push(part.id)
+        this.busMembers.set(busId, members)
+      }
+    }
+    const spiBusIds = new Set(board.buses.filter((b) => b.kind === 'spi').map((b) => b.id))
 
     for (const part of board.parts) {
       const id = part.deviceModel
@@ -116,6 +164,8 @@ export class DeviceHost extends EventEmitter {
       }
 
       const signalsByHash = new Map<number, string>()
+      const signalsByPin = new Map<number, string>()
+      let csPin: number | null = null
       for (const binding of part.pins) {
         const hash = signalHash(binding.signal)
         const clash = signalsByHash.get(hash)
@@ -127,21 +177,76 @@ export class DeviceHost extends EventEmitter {
           )
         }
         signalsByHash.set(hash, binding.signal)
+        const pinNum = pinNumber(binding.pin)
+        if (pinNum !== null) {
+          signalsByPin.set(pinNum, binding.signal)
+          if (binding.signal === 'CS' && part.buses.some((b) => spiBusIds.has(b))) csPin = pinNum
+        }
       }
 
       const loaded: LoadedDevice = {
         part,
         model,
         signalsByHash,
+        signalsByPin,
+        csPin,
+        // A chip-select idles high (deselected); the LR1110, which has no CS
+        // GPIO of its own on this board, is treated as always addressable.
+        csLow: csPin === null,
         quarantined: false,
         slowWarned: false,
         lastSnapshotJson: '',
-        lastT: 0
+        lastT: 0,
+        frameBytes: 0
       }
       model.attach(this.contextFor(loaded))
       this.devices.set(part.id, loaded)
       this.pushSnapshot(loaded)
     }
+
+    this.updateFrameTimer()
+  }
+
+  /**
+   * Run the display-refresh timer only while a model with a framebuffer is
+   * loaded. It samples {@link FramebufferSource.takeFrame} and emits a
+   * `framebuffer` message per changed panel — off the per-transaction path,
+   * so a 153,600-byte flush never touches {@link pushSnapshot}'s JSON dedupe.
+   */
+  private updateFrameTimer(): void {
+    const wanted = [...this.devices.values()].some((d) => isFramebufferSource(d.model))
+    if (wanted && !this.frameTimer) {
+      this.frameTimer = setInterval(() => this.sampleFrames(), FRAME_INTERVAL_MS)
+      if (typeof this.frameTimer.unref === 'function') this.frameTimer.unref()
+    } else if (!wanted && this.frameTimer) {
+      clearInterval(this.frameTimer)
+      this.frameTimer = null
+    }
+  }
+
+  private sampleFrames(): void {
+    for (const device of this.devices.values()) {
+      const model = device.model
+      if (device.quarantined || !isFramebufferSource(model)) continue
+      const frame = this.guard(device, 'takeFrame', () => model.takeFrame())
+      if (!frame) continue
+      const message: DeviceFramebufferMessage = {
+        partId: device.part.id,
+        deviceModel: device.model.id,
+        width: frame.width,
+        height: frame.height,
+        madctl: frame.madctl,
+        displayOn: frame.displayOn,
+        backlightOn: frame.backlightOn,
+        dirty: frame.dirty,
+        // `takeFrame` already hands back a standalone copy, exactly sized.
+        pixels: frame.pixels.buffer as ArrayBuffer
+      }
+      this.emit('framebuffer', message)
+    }
+    // Close the per-frame byte window for the bus-share meter across every
+    // device on every bus, not just panels.
+    for (const device of this.devices.values()) device.frameBytes = 0
   }
 
   /** Registered model ids the loaded board actually uses. */
@@ -256,8 +361,12 @@ export class DeviceHost extends EventEmitter {
         }
         return null
       }
+      case Op.Gpio: {
+        this.handleGpio(frame.select, (frame.payload[0] ? 1 : 0) as 0 | 1, frame.t)
+        return null
+      }
       case Op.Xfer: {
-        const device = this.deviceOnBus(frame.bus, frame.select)
+        const device = this.deviceForXfer(frame.bus, frame.select)
         const bus = this.busOrder[frame.bus] ?? 'unknown'
         const miso = device
           ? this.runBus(device, {
@@ -302,6 +411,10 @@ export class DeviceHost extends EventEmitter {
   async dispose(): Promise<void> {
     this.unloadModels()
     this.loadedSignature = null
+    if (this.frameTimer) {
+      clearInterval(this.frameTimer)
+      this.frameTimer = null
+    }
     await this.close()
   }
 
@@ -341,6 +454,7 @@ export class DeviceHost extends EventEmitter {
     txn: Parameters<NonNullable<DeviceModel['onBus']>>[0]
   ): Uint8Array {
     device.lastT = txn.t
+    device.frameBytes += txn.mosi.length
     if (device.quarantined || !device.model.onBus) return loud(txn.mosi.length)
     const result = this.guard(device, 'onBus', () => device.model.onBus!(txn))
     if (!result) return loud(txn.mosi.length)
@@ -399,10 +513,60 @@ export class DeviceHost extends EventEmitter {
     if (!busId) return undefined
     const onBus = [...this.devices.values()].filter((d) => d.part.buses.includes(busId))
     if (onBus.length <= 1) return onBus[0]
-    // More than one device shares this bus (SPI0 on the M9). Disambiguate by
-    // the selected signal's hash matching one of the part's own signals. M6
-    // makes this exact once the SPI controller tracks chip-select indices.
     return onBus.find((d) => d.signalsByHash.has(select)) ?? undefined
+  }
+
+  /**
+   * Route one SPI transaction. The M9's SPI parts are addressed by GPIO
+   * chip-selects the firmware toggles itself (see {@link Op.Gpio}), so with no
+   * hardware select in the frame the target is whichever device on the bus has
+   * its `CS` currently low. Exactly one should — {@link handleGpio} raises a
+   * bus-contention diagnostic when two are, which is a real hardware fault the
+   * roadmap calls out as a class of bug PinBench can catch.
+   */
+  private deviceForXfer(busIndex: number, select: number): LoadedDevice | undefined {
+    if (busIndex === BUS_NONE) return undefined
+    const busId = this.busOrder[busIndex]
+    if (!busId) return undefined
+    const onBus = [...this.devices.values()].filter((d) => d.part.buses.includes(busId))
+    if (onBus.length <= 1) return onBus[0]
+    if (select !== SELECT_NONE) {
+      const byHash = onBus.find((d) => d.signalsByHash.has(select))
+      if (byHash) return byHash
+    }
+    const selected = onBus.filter((d) => d.csLow)
+    return selected.length === 1 ? selected[0] : undefined
+  }
+
+  /**
+   * A guest GPIO write. Fan it out to every device model that binds the pin,
+   * update chip-select tracking, and flag two-selects-low bus contention.
+   */
+  private handleGpio(pin: number, level: 0 | 1, t: number): void {
+    for (const device of this.devices.values()) {
+      const signal = device.signalsByPin.get(pin)
+      if (!signal) continue
+      if (device.csPin === pin) device.csLow = level === 0
+      this.runSignal(device, signal, level, t)
+    }
+    this.checkBusContention(t)
+  }
+
+  private checkBusContention(t: number): void {
+    for (const [busId, partIds] of this.busMembers) {
+      const low = partIds
+        .map((id) => this.devices.get(id))
+        .filter((d): d is LoadedDevice => !!d && d.csPin !== null && d.csLow)
+      const key = `cs-contention-${busId}`
+      if (low.length >= 2) {
+        const names = low.map((d) => `${d.part.designator} ${signalCsLabel(d)}`).join(' + ')
+        this.diagnose(
+          'warn',
+          key,
+          `${busId}: ${names} chip-selects asserted together at ${(t / 1e6).toFixed(1)} ms — a bus fault; the last writer wins and reads collide`
+        )
+      }
+    }
   }
 
   private pushSnapshot(device: LoadedDevice): void {
@@ -411,7 +575,7 @@ export class DeviceHost extends EventEmitter {
       id: m.id,
       label: m.label,
       ...(m.unit === undefined ? {} : { unit: m.unit }),
-      value: safeMeter(device.model, m.id)
+      value: m.id === 'busShare' ? this.busShareOf(device) : safeMeter(device.model, m.id)
     }))
     const message: DeviceSnapshotMessage = {
       partId: device.part.id,
@@ -432,6 +596,22 @@ export class DeviceHost extends EventEmitter {
     this.emit('diagnostic', { id: `device-${id}`, severity, message } satisfies Diagnostic)
   }
 
+  /**
+   * This device's share of the traffic on its bus this frame, as a whole
+   * percentage. The model cannot compute it — it only sees its own bytes — so
+   * the host, which routes for the whole bus, fills the `busShare` meter here.
+   */
+  private busShareOf(device: LoadedDevice): number | undefined {
+    const busId = device.part.buses[0]
+    if (!busId) return undefined
+    const peers = (this.busMembers.get(busId) ?? [])
+      .map((id) => this.devices.get(id))
+      .filter((d): d is LoadedDevice => !!d)
+    const total = peers.reduce((sum, d) => sum + d.frameBytes, 0)
+    if (total <= 0) return 0
+    return Math.round((device.frameBytes / total) * 100)
+  }
+
   private unloadModels(): void {
     for (const device of this.devices.values()) {
       try {
@@ -447,6 +627,17 @@ export class DeviceHost extends EventEmitter {
 /** A reply that is impossible to mistake for real data — never silent zeros. */
 function loud(length: number): Uint8Array {
   return new Uint8Array(length).fill(0xff)
+}
+
+/** `"GPIO16"` → `16`; anything without a trailing number → `null`. */
+function pinNumber(pinId: string): number | null {
+  const m = /(\d+)$/.exec(pinId)
+  return m ? Number(m[1]) : null
+}
+
+/** The board net label for a device's chip-select, for a contention message. */
+function signalCsLabel(device: LoadedDevice): string {
+  return device.part.pins.find((b) => b.signal === 'CS')?.pin ?? 'CS'
 }
 
 function safeMeter(model: DeviceModel, id: string): number | undefined {

@@ -1,5 +1,6 @@
 import type { PartDefinition } from '@shared/board'
 import type { PartDeviceView } from '../state/useDevices'
+import { St7789Screen } from './St7789Screen'
 import './outpanel.css'
 
 interface OutPanelProps {
@@ -22,8 +23,10 @@ interface OutPanelProps {
 export function OutPanel({ part, view, onSetLevel }: OutPanelProps): React.JSX.Element {
   const snapshot = view?.snapshot
   const isLed = part.deviceModel === 'pinbench.led'
+  const isPanel = part.deviceModel === 'sitronix.st7789'
   const lit = snapshot?.state['lit'] === true
   const pinHigh = snapshot?.state['pin'] === 1
+  const zoom = panelZoom(part)
 
   return (
     <section className="inspector__section outpanel" aria-label="Output">
@@ -63,6 +66,8 @@ export function OutPanel({ part, view, onSetLevel }: OutPanelProps): React.JSX.E
             </div>
           )}
 
+          {isPanel && <St7789Screen framebuffer={view?.framebuffer} zoom={zoom} />}
+
           {snapshot.meters.length > 0 && (
             <dl className="outpanel__meters">
               {snapshot.meters.map((meter) => (
@@ -95,6 +100,16 @@ export function OutPanel({ part, view, onSetLevel }: OutPanelProps): React.JSX.E
       )}
     </section>
   )
+}
+
+/** The ST7789 "Panel zoom" segmented control → a pixel multiplier. */
+function panelZoom(part: PartDefinition): number {
+  const field = part.config.find((f) => f.id === 'scale')
+  if (field && field.kind === 'segmented') {
+    const n = parseInt(field.value, 10)
+    if (n === 1 || n === 2 || n === 3) return n
+  }
+  return 2
 }
 
 /** ns since emulator start → a compact `s.mmm` reading. */

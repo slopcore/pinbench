@@ -66,6 +66,7 @@ export function installBridge(initial: WorkspaceState = DEFAULT_WORKSPACE): Test
       onSnapshot: () => () => undefined,
       onEvent: () => () => undefined,
       onDiagnostic: () => () => undefined,
+      onFramebuffer: () => () => undefined,
       command: vi.fn()
     }
   }

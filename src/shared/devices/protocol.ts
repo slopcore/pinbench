@@ -47,7 +47,21 @@ export const Op = {
    *  No reply. */
   Signal: 0x03,
   /** Reset every model to power-on. No payload, no reply. */
-  Reset: 0x04
+  Reset: 0x04,
+  /**
+   * The guest wrote a GPIO output. `select` carries the raw SoC pin number
+   * (0–48), `payload[0]` the level (0/1). No reply.
+   *
+   * M6: the M9's SPI parts are selected by ordinary GPIOs the firmware toggles
+   * with `digitalWrite` (`ST7789_CS`, `LORA_CS`, `SD_CS`), not by the SPI
+   * controller's hardware chip-selects — which the Arduino driver is told not
+   * to use (`SPI.begin(sck, miso, mosi, -1)`). The host maps the pin number to
+   * a part+signal through the board definition and both routes {@link Xfer} to
+   * whichever SPI device's `CS` is currently low and forwards the edge to that
+   * device's model as a {@link SignalEdge}. The ST7789's `DC`/`RST`/`BL` lines
+   * arrive the same way.
+   */
+  Gpio: 0x05
 } as const
 
 export type OpCode = (typeof Op)[keyof typeof Op]

@@ -436,11 +436,11 @@
         },
         {
           "signal": "BL",
-          "pin": "GPIO10"
+          "pin": "GPIO17"
         },
         {
           "signal": "TE",
-          "pin": "GPIO46"
+          "pin": "GPIO19"
         }
       ],
       "config": [
@@ -749,7 +749,7 @@
         },
         {
           "signal": "CHG_STAT",
-          "pin": "GPIO17"
+          "pin": "GPIO10"
         }
       ],
       "config": [

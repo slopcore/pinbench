@@ -12,5 +12,9 @@
 
 import type { DeviceModelDescriptor } from './model'
 import { ledDescriptor } from './led'
+import { st7789Descriptor } from './st7789'
 
-export const BUILT_IN_DEVICE_MODELS: readonly DeviceModelDescriptor[] = [ledDescriptor]
+export const BUILT_IN_DEVICE_MODELS: readonly DeviceModelDescriptor[] = [
+  ledDescriptor,
+  st7789Descriptor
+]

@@ -41,3 +41,29 @@ export interface DeviceCommandMessage {
   command: string
   args?: Record<string, unknown>
 }
+
+/**
+ * A display framebuffer, host → renderer, down a channel of its own.
+ *
+ * ADR 0001's rule is that a device model is handed whole buffers, never bytes;
+ * the corollary M6 adds is that a 153,600-byte framebuffer must not ride in
+ * {@link DeviceSnapshotMessage}, which the host JSON-stringifies on every
+ * transaction to dedupe. The host pulls this from the model on a refresh-rate
+ * timer instead and posts it here as a transferable. `pixels` is RGB565, row
+ * major, `width * height` entries; the OUT panel applies `madctl` rotation.
+ */
+export interface DeviceFramebufferMessage {
+  partId: string
+  deviceModel: string
+  /** GRAM dimensions, before any MADCTL rotation. */
+  width: number
+  height: number
+  /** The raw MADCTL register value, for the panel's display transform. */
+  madctl: number
+  displayOn: boolean
+  backlightOn: boolean
+  /** The region that changed since the previous message, in GRAM coordinates. */
+  dirty: { x: number; y: number; w: number; h: number }
+  /** RGB565, `width * height` entries, row major. Sent as a transferable buffer. */
+  pixels: ArrayBuffer
+}

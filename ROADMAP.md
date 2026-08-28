@@ -536,7 +536,7 @@ referred to the M9 by name.
 
 # Phase 4 — The payoff
 
-## M6 · The display: ST7789, and real firmware pixels — `XL`
+## M6 · The display: ST7789, and real firmware pixels — `XL` 🚧 **in progress**
 
 **Goal.** The moment PinBench justifies choosing full emulation. The LCD's OUT
 panel shows the MeshCore home screen — not a lookalike drawn in TypeScript, but
@@ -594,6 +594,224 @@ here, the first suspect is not the model's language — it is a controller that 
 still round-tripping per byte, or a firmware access pattern that produces many
 small transactions instead of few large ones. Count transactions per frame
 before rewriting anything in C.
+
+### Progress
+
+The MeshCore side is now known, not guessed: the M9 uses `DISPLAY_CLASS =
+ST7789Display`, whose `ST7789Spi` driver talks to the panel one
+`SPI.transfer(uint8_t)` at a time on **SPI2_HOST**, toggling the `DC` GPIO
+around command vs. data, with chip-select a plain `digitalWrite` GPIO (not a
+hardware SPI select). That shaped every decision below. Firmware is
+`meshcore-dev/MeshCore` PR #2942 (merged), env `ThinkNode_M9_companion_radio_usb`
+— no BLE, so nothing hits the WiFi/BLE non-goal.
+
+**Landed and verified without QEMU (the TypeScript half — 218 tests green):**
+
+- **`sitronix.st7789` device model** (`src/shared/devices/st7789.ts`,
+  registered in `builtin.ts`). Transaction-shaped `onBus` — never a byte —
+  interpreting each transfer against the current `DC` level fed by `onSignal`:
+  a full command state machine (SWRESET/SLPOUT/DISPON/INVON, `COLMOD` 16/18bpp,
+  `MADCTL`, `CASET`/`RASET` window, `RAMWR`/`RAMWRC` streaming with cursor wrap
+  and MX/MY/MV scan order), a real 240×320 RGB565 GRAM, `RST`/`BL` lines with
+  configurable polarity, and — M8's rule, one milestone early — a loud named
+  diagnostic for any unimplemented command rather than a silent accept.
+  `st7789.test.ts` walks the real MeshCore init sequence, a windowed `RAMWR`,
+  the MV fast-axis swap, a split-across-transactions pixel, and a hardware
+  reset.
+- **The framebuffer travels in a side channel, not a snapshot.**
+  `DeviceHost` JSON-stringifies every snapshot to dedupe it (devices.ts:534);
+  a 153,600-byte GRAM through that, per `RAMWR`, is the exact failure ADR 0001
+  exists to prevent, arriving via the host instead of the bus. So `snapshot()`
+  is scalars only, and the host pulls `takeFrame()` on a ~30 fps timer and
+  emits a `device:framebuffer` IPC message (RGB565 buffer + dirty rect +
+  MADCTL). New `DeviceFramebufferMessage`, `IpcChannel.deviceFramebuffer`,
+  preload `onFramebuffer`, and `useDevices` fan-out.
+- **SPI selection is by observed GPIO, not a hardware CS.** New `Op.Gpio`
+  frame (pin number in `select`, level in the payload). `DeviceHost` maps the
+  pin to a part+signal through the board definition, tracks which SPI device's
+  `CS` is low, routes each `Op.Xfer` to that device, and forwards `DC`/`RST`/
+  `BL` edges as `SignalEdge`s. Two chip-selects low on one bus raises the
+  named **bus-contention diagnostic** the roadmap calls for. `devices.test.ts`
+  covers routing, contention and the framebuffer channel.
+- **Meters**: flush-time-per-frame, dirty-rect count, transactions-per-frame
+  (the number the "Watch for" says to check first), and bus-share — the last
+  filled by the host, since a model only sees its own bytes.
+- **OUT-panel render** (`St7789Screen.tsx`): the GRAM drawn to a `<canvas>` at
+  native resolution, `MADCTL`-transposed to landscape, CSS-scaled to the
+  Inspector's 1×/2×/3× zoom, dimmed when display or backlight is off.
+- **`DeviceHost.listen()` is wired.** `src/main/index.ts` starts the host on a
+  `userData` socket *before* any emulator spawn (the guest connects during
+  QEMU realize and blocks on the first reply), and `EmulatorSupervisor` passes
+  the path to the child as `PINBENCH_DEVICE_SOCKET`.
+- **Board definition reconciled to the real M9 pinout** for the display path:
+  `u3` `BL` → GPIO17 (`PIN_TFT_LEDA_CTL`), `TE` → GPIO19; `u9` `CHG_STAT`
+  moved off the freed GPIO17.
+
+**Landed and compile-verified only (the QEMU C half — builds and links clean
+into the fork; not yet exercised by a live guest):**
+
+- **GP-SPI2 / GP-SPI3 controllers** (`qemu/hw/ssi/pinbench_gpspi.c`). The fork
+  models SPI1 (flash) only; these are the general-purpose `SPI_*` register
+  layout that every M9 peripheral needs and that did not exist. Scoped to the
+  Arduino FIFO path: `SPI_CMD.USR`/`.UPDATE` (self-clearing), `SPI_MS_DLEN`,
+  `SPI_USER*`, `SPI_W0..W15`; unknown registers absorbed so clock/DMA/timing
+  pokes read back and nothing faults.
+- **The bulk hook.** On one `SPI_USR` pulse the whole FIFO window is handed to
+  the device host in a single socket round trip — ADR 0001's "few large
+  transactions, not thousands of small ones", realised in the controller
+  rather than bolted on later.
+- **GPIO output in the fork** (`qemu/hw/gpio/esp32_gpio.c`, a pinned
+  replacement — `esp32_gpio_write` was `{ }` upstream). `OUT`/`OUT1`/`ENABLE`
+  and their `W1TS`/`W1TC` aliases, with every level change forwarded as
+  `Op.Gpio`. Retires M4's deferred "firmware toggles a GPIO → LED blinks".
+- **The socket bridge** (`qemu/hw/misc/pinbench_host.c`): the M4 20-byte
+  protocol (not the spike's 5-byte one), a lazy singleton keyed by
+  `PINBENCH_DEVICE_SOCKET` (unset ⇒ every call a no-op, so a stock
+  `qemu-system-xtensa` is unaffected), a Hello handshake, and the
+  **socket-read timeout** the `devices.ts` header promised as the backstop for
+  a hung model — after it, the guest sees `0xFF`, never silent zeros.
+- **Instantiation**: `qemu/hw/xtensa/pinbench_esp32s3.c` maps the two
+  controllers at `0x60024000` / `0x60025000`; `qemu/apply.sh` adds three meson
+  lines and two lines to `esp32s3.c` (an include and one call after the GPIO
+  controller realizes). `apply.sh` is wired into `npm run setup:emulator` with
+  a `.pinbench-applied` marker for idempotency — the M6 answer to "the spike's
+  patch dir is declared throwaway".
+
+**Not reached this session, and why:**
+
+- **A live MeshCore boot drawing the home screen** — the milestone's Done-when.
+  The rebuilt `.qemu` binary produces no UART output booting even the
+  pre-existing M0 `bench-flash.bin` (no ROM banner, drive or no drive), so the
+  blocker is emulator bring-up in this environment, upstream of anything M6
+  added — the M6 C code compiles and links, and the pristine fork behaves
+  identically. Resolving that, then building the `companion_radio_usb` image
+  through PinBench's `pio` path (16 MB partitions, the DIO `-c` override) and
+  booting it, is M6's remaining work. Until then the GP-SPI register model,
+  the `SPI_MS_DLEN`/`W0` FIFO assumptions, and the `DC`-ordering-over-one-socket
+  premise are reasoned from the driver source, not confirmed against a
+  running core.
+- **Per-frame transaction count against real traffic** — the "Watch for"
+  number. The meter and the batching path exist; the value needs a live flush
+  to read.
+
+**Carries forward:** the risk-register rows for the SPI controllers, the GPIO
+stub, the bulk hook and the unwired socket are addressed in code but stay open
+until the live boot confirms them. M7's `KEY_INT` wake line and M11's Probe-pin
+tool now have the GPIO-output plumbing they were waiting on.
+
+### Remaining sub-milestones
+
+M6's TypeScript half is done and tested; the QEMU C half compiles but has never
+run against a guest. These four slices close the gap, each with its own
+demoable Done-when so progress is visible rather than "still integrating". They
+are strictly ordered — each unblocks the next.
+
+#### M6.1 · A firmware image boots again — `S`
+
+**Goal.** Get *any* image printing on UART0 under the current `.qemu` build,
+because right now none does.
+
+**Build**
+
+- Reproduce and characterise the regression: the rebuilt
+  `.qemu/build/qemu-system-xtensa` emits no ROM banner and no serial output
+  for `.qemu/bench-flash.bin` (the M0 spike image), with or without a drive
+  attached. A pristine (PinBench patch reverted) rebuild behaves identically,
+  so this is bring-up drift in the checkout or the image, **not** M6's C.
+- Check, in order: is the ESP32-S3 ROM blob present and loaded by this fork
+  tag; does `spike/bin/mkflash.sh` regenerate a working `bench-flash.bin` from
+  `spike/firmware/bench/.pio/build/esp32s3`; does a clean
+  `rm -rf .qemu && npm run setup:emulator` produce a binary that boots; did a
+  host toolchain / Homebrew bump change the build.
+- Whatever the fix, encode it — a pinned ROM path, a `configure` flag, a
+  regenerated image checked into the spike results, or a note in
+  `setup-emulator.sh`. M2/M3 claimed this path worked; make it true again and
+  keep it true.
+
+**Done when.** `npm run dev`, File ▸ Open firmware image, the M0 spike image (or
+a fresh Arduino build), Start — and the boot log scrolls in the serial dock,
+exactly as M2's Done-when promised.
+
+**Watch for.** The espressif fork prints ROM messages by default; total silence
+usually means the image is not being mapped, not that the firmware hung. Bisect
+with `-d in_asm,int` before assuming a firmware problem.
+
+#### M6.2 · MeshCore for the M9, built and booted through PinBench — `M`
+
+**Goal.** The real firmware this milestone is about, running.
+
+**Build**
+
+- Point PinBench's Open-project at a `meshcore-dev/MeshCore` checkout (PR #2942
+  is merged into `dev`; the M9 support is `variants/thinknode_m9/` and
+  `boards/thinknode_m9.json`). Pick env `ThinkNode_M9_companion_radio_usb` —
+  no BLE, so nothing hits the WiFi/BLE non-goal, and no phone app is needed to
+  see it run.
+- Confirm the M3 build path handles it: 16 MB `default_16MB.csv` partitions,
+  the PinBench-owned DIO `-c` override, the `adafruit/Adafruit GFX` lib
+  dependency, and the merged-image size the launcher expects.
+- Boot the result. Expect it to reach further than M0's "stalls before first
+  serial output" now that GPIO output exists, but the SPI models are still
+  untested — record exactly how far it gets and on what.
+
+**Done when.** Build & flash a `companion_radio_usb` M9 image from a MeshCore
+checkout and see MeshCore's own boot banner in the serial dock.
+
+**Watch for.** `companion_radio_usb` brings up the USB CDC interface
+(`-D ENABLE_USB_INTERFACE`); the console may land on the USB-serial device, not
+UART0. Check which serial the banner comes out on before concluding it hung.
+
+#### M6.3 · The bridge carries real traffic — `M`
+
+**Goal.** Prove the GP-SPI2 register model and the GPIO observer against a
+running core, not against reasoning from the driver source.
+
+**Build**
+
+- With MeshCore running and `PINBENCH_DEVICE_SOCKET` set, verify `Op.Gpio`
+  frames arrive as `ST7789Spi::connect` pulses `RST` and toggles `DC`/`CS`,
+  and `Op.Xfer` frames arrive as it clocks the init commands.
+- Confirm the `SPI_MS_DLEN` / `SPI_W0..W15` FIFO assumptions in
+  `pinbench_gpspi.c` match what Arduino-ESP32's `spiTransferBytesNL` actually
+  writes for this SoC — fix the offsets or the bit math if a byte count or a
+  command lands wrong. Confirm `SPI_CMD.UPDATE` self-clear does not spin the
+  driver.
+- Confirm the host routes the transaction to `u3` (LCD) because its `CS`
+  (GPIO16) is low, and that asserting the radio's select instead routes there.
+- Read the **transactions-per-frame** meter — the number M6's "Watch for" says
+  to check before optimising anything.
+
+**Done when.** The ST7789 model's OUT-panel *state* (not pixels yet) tracks
+MeshCore's init: `poweredOn`, `displayOn`, `madctl`, the CASET/RASET window all
+move to sensible values driven by the guest, and the Diagnostics dock is free of
+`unimplemented command` / desync rows.
+
+**Watch for.** Ordering: the `DC` GPIO write and the SPI transaction are
+separate MMIO writes. If `onBus` sees the wrong `DC` level, the socket is
+reordering or the GPIO observer is batching — it must forward each edge
+synchronously.
+
+#### M6.4 · Real firmware pixels — `M`
+
+**Goal.** M6's original Done-when.
+
+**Build**
+
+- The ST7789 OUT panel shows what `ST7789Spi::display()` pushes — MeshCore's
+  home screen, scaled from its 1bpp UI buffer to the 320×240 panel.
+- Dirty-rect throttling so a partial-screen update does not repaint the whole
+  canvas; the BL ON/OFF dimming and ½/¾/1:1 zoom from the design.
+- Meters read real numbers: flush time per frame, dirty-rect count, bus share.
+- Change the MeshCore home-screen draw code, rebuild, and the rendered screen
+  changes.
+
+**Done when.** Boot MeshCore, and the emulated panel draws the home screen —
+node name, clock, battery. Edit the UI code, rebuild, and it changes. M6 closes.
+
+**Watch for.** If the flush is visibly slow, count transactions per frame
+(M6.3's meter) before touching the model's language — a chatty driver or a
+per-byte controller path is the likely cause, exactly as M6's "Watch for" and
+the risk register say.
 
 ## M7 · The keyboard: closing the interaction loop — `L`
 
@@ -887,13 +1105,19 @@ the M9, and lands a new device model as a PR — working only from the docs.
   carries board id, PlatformIO dir + env and per-part config, with save,
   reopen-on-launch and recents. With the LED gone the M9 instantiates no device
   model until M6's ST7789.
-- **M6 is the next milestone, and the demo milestone.** Everything before it is plumbing; it is the first
-  slice that makes the project's premise obvious to someone watching. If you need
-  to show PinBench to anyone, show them M6. It has also absorbed four carry-overs
-  now spelled out in its Build list and the risk register: the SPI2/SPI3
-  controllers (from M0), and from M4 the `ssi_transfer()` bulk hook, the GPIO
-  output registers in the fork, and wiring `DeviceHost.listen()` to a socket the
-  guest connects to. None are loose ends — the ST7789 needs all four.
+- **M6 is in progress** — see its Progress section. The TypeScript half (the
+  `sitronix.st7789` model, the framebuffer side channel, GPIO-based SPI
+  routing, the bus-contention diagnostic, meters, the OUT-panel render, and
+  `DeviceHost.listen()` wired to the emulator) is landed with 218 tests green.
+  The QEMU C half (GP-SPI2/3 controllers, the bulk hook, GPIO output registers,
+  the 20-byte socket bridge, and the `apply.sh` wired into `setup:emulator`)
+  compiles and links into the fork but is not yet exercised by a live guest:
+  the rebuilt `.qemu` binary does not boot even the M0 spike image in this
+  environment, an emulator-bring-up problem upstream of M6's code. The four
+  carry-overs it absorbed — the SPI2/SPI3 controllers (from M0), and from M4
+  the bulk hook, the GPIO output registers, and the unwired socket — are
+  written but stay open on the risk register until that live boot confirms
+  them.
 - **M9, M10 and M14 are parallelisable** once the device API is stable — they are
   independent devices against a fixed interface, which is exactly what the
   modular architecture was for.

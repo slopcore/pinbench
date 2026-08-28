@@ -105,3 +105,25 @@
 .outpanel__log-empty {
   color: var(--text-muted);
 }
+
+/* M6 — the ST7789 panel picture. */
+.st7789 {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) 0;
+}
+
+.st7789__canvas {
+  image-rendering: pixelated;
+  border-radius: 3px;
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  background: #000;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4);
+}
+
+.st7789__idle {
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+}

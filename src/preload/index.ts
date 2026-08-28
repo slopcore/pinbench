@@ -17,6 +17,7 @@ import type { CommandId } from '../shared/commands'
 import type {
   DeviceCommandMessage,
   DeviceEventMessage,
+  DeviceFramebufferMessage,
   DeviceSnapshotMessage
 } from '../shared/devices/messages'
 import type { Diagnostic } from '../shared/diagnostics'
@@ -90,6 +91,8 @@ const api: PinBenchApi = {
     onSnapshot: (listener) => subscribe<DeviceSnapshotMessage>(IpcChannel.deviceSnapshot, listener),
     onEvent: (listener) => subscribe<DeviceEventMessage>(IpcChannel.deviceEvent, listener),
     onDiagnostic: (listener) => subscribe<Diagnostic>(IpcChannel.deviceDiagnostic, listener),
+    onFramebuffer: (listener) =>
+      subscribe<DeviceFramebufferMessage>(IpcChannel.deviceFramebuffer, listener),
     command: (message: DeviceCommandMessage) => ipcRenderer.send(IpcChannel.deviceCommand, message)
   }
 }

@@ -5,6 +5,7 @@ import type { ProjectFile } from './project'
 import type {
   DeviceCommandMessage,
   DeviceEventMessage,
+  DeviceFramebufferMessage,
   DeviceSnapshotMessage
 } from './devices/messages'
 import type { Diagnostic } from './diagnostics'
@@ -48,6 +49,7 @@ export const IpcChannel = {
   deviceSnapshot: 'device:snapshot',
   deviceEvent: 'device:event',
   deviceDiagnostic: 'device:diagnostic',
+  deviceFramebuffer: 'device:framebuffer',
   deviceCommand: 'device:command'
 } as const
 
@@ -150,6 +152,8 @@ export interface PinBenchApi {
     onEvent(listener: (message: DeviceEventMessage) => void): () => void
     /** A device model raised a diagnostic (unimplemented op, quarantine, …). */
     onDiagnostic(listener: (row: Diagnostic) => void): () => void
+    /** A display model produced a new framebuffer (M6). Off the snapshot path. */
+    onFramebuffer(listener: (message: DeviceFramebufferMessage) => void): () => void
     /** Send a command from an IN panel to a device model (wired from M7). */
     command(message: DeviceCommandMessage): void
   }

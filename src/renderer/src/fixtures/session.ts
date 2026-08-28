@@ -1,4 +1,5 @@
-import type { Diagnostic, SerialLine } from '../components/Dock'
+import type { SerialLine } from '@shared/serial'
+import type { Diagnostic } from '../components/Dock'
 
 /**
  * Dock content for M1. These are shaped exactly like the rows M2's UART reader

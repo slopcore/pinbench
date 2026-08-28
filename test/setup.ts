@@ -4,11 +4,6 @@ import { DEFAULT_WORKSPACE } from '../src/shared/workspace'
 import type { PinBenchApi } from '../src/shared/ipc'
 import type { WorkspaceState } from '../src/shared/workspace'
 
-/**
- * A fake preload bridge. The renderer is written as though `window.pinbench` is
- * the only way out of the sandbox, so faking it here is enough to drive the
- * whole shell in tests.
- */
 export interface TestBridge extends PinBenchApi {
   saved: WorkspaceState[]
   savedWorkspace: WorkspaceState
@@ -33,13 +28,23 @@ export function installBridge(initial: WorkspaceState = DEFAULT_WORKSPACE): Test
       close: vi.fn(),
       onStateChange: () => () => undefined
     },
-    onMenuCommand: () => () => undefined
+    onMenuCommand: () => () => undefined,
+    emulator: {
+      openFirmware: vi.fn(() => Promise.resolve(null)),
+      start: vi.fn(),
+      stop: vi.fn(),
+      reset: vi.fn(),
+      onStatus: () => () => undefined
+    },
+    serial: {
+      write: vi.fn(),
+      onData: () => () => undefined
+    }
   }
   Object.defineProperty(window, 'pinbench', { value: bridge, configurable: true, writable: true })
   return bridge
 }
 
-// jsdom has neither of these, and the canvas leans on both.
 if (!('ResizeObserver' in globalThis)) {
   Object.defineProperty(globalThis, 'ResizeObserver', {
     writable: true,
@@ -51,7 +56,7 @@ if (!('ResizeObserver' in globalThis)) {
   })
 }
 
-if (!Element.prototype.setPointerCapture) {
+if (typeof Element !== 'undefined' && !Element.prototype.setPointerCapture) {
   Element.prototype.setPointerCapture = function setPointerCapture(): void {}
   Element.prototype.releasePointerCapture = function releasePointerCapture(): void {}
   Element.prototype.hasPointerCapture = function hasPointerCapture(): boolean {

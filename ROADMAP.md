@@ -186,7 +186,7 @@ later provide, or M5 becomes a rewrite.
 
 # Phase 2 — Real firmware, really running
 
-## M2 · Boot a binary and see its serial output — `L`
+## M2 · Boot a binary and see its serial output — `L` ✅ **done**
 
 > M0 already proved this path end to end from the command line: Arduino
 > firmware for `esp32-s3-devkitc-1` boots under `-machine esp32s3` and prints
@@ -639,8 +639,20 @@ the M9, and lands a new device model as a PR — working only from the docs.
   canvas are in, driven by an M9 fixture that already implements the
   `BoardDefinition` types M5 will load from disk. CI runs typecheck, lint,
   format, tests and a build on macOS, Linux and Windows for every PR.
-- **M2 is the next milestone.** It needs nothing from M1 beyond the dock and the
-  supervised-process seam the main process already has.
+- **M2 is done.** The emulator supervisor (`src/main/emulator.ts`) spawns QEMU
+  with `-machine esp32s3 -monitor none -serial stdio` and the correct PSRAM
+  flags, streams UART0 into the serial dock (batched at 25ms, ANSI-stripped,
+  ring-buffered to 10K lines), supports serial input, and guarantees child death
+  on quit. File ▸ Open firmware image, Start, Stop, Reset are live. QEMU binary
+  discovery checks `PINBENCH_QEMU` env → `.qemu/build/` → `~/.espressif/` →
+  PATH; absence surfaces a crash diagnostic. `npm run setup:emulator` builds
+  the espressif/qemu fork (tag `esp-develop-9.2.2-20260417`) with gcrypt into
+  `.qemu/`, and `npm run dev` runs a fast preflight that verifies esp32s3
+  machine support. Verified end-to-end: the M0 spike firmware boots, the boot
+  log reaches the serial dock, and the firmware prints on UART0.
+- **M3 is the next milestone.** PlatformIO integration to close the
+  source-to-running-emulator loop — and it must also automate `mkflash.sh` to
+  produce the flash image M2's runner expects.
 - **M6 is the demo milestone.** Everything before it is plumbing; it is the first
   slice that makes the project's premise obvious to someone watching. If you need
   to show PinBench to anyone, show them M6.

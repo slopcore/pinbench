@@ -1,14 +1,6 @@
-/**
- * The whole renderer-to-main surface, in one file.
- *
- * The renderer is sandboxed with context isolation on and has no Node access;
- * everything privileged goes through these channels and the preload bridge that
- * wraps them. Adding a capability means adding it here first — that is the
- * point of establishing this in M1 rather than retrofitting it once the
- * emulator supervisor exists.
- */
-
 import type { CommandId } from './commands'
+import type { EmulatorStatus } from './emulator'
+import type { SerialLine } from './serial'
 import type { WorkspaceState } from './workspace'
 
 export const IpcChannel = {
@@ -19,13 +11,19 @@ export const IpcChannel = {
   windowToggleMaximise: 'window:toggle-maximise',
   windowClose: 'window:close',
   windowState: 'window:state',
-  menuCommand: 'menu:command'
+  menuCommand: 'menu:command',
+  emulatorOpenFirmware: 'emulator:open-firmware',
+  emulatorStart: 'emulator:start',
+  emulatorStop: 'emulator:stop',
+  emulatorReset: 'emulator:reset',
+  emulatorStatus: 'emulator:status',
+  serialData: 'serial:data',
+  serialWrite: 'serial:write'
 } as const
 
 export interface AppInfo {
   version: string
   platform: NodeJS.Platform
-  /** True in `electron-vite dev`; the renderer uses it for dev-only affordances. */
   isDev: boolean
 }
 
@@ -35,7 +33,6 @@ export interface WindowState {
   focused: boolean
 }
 
-/** The API the preload script exposes as `window.pinbench`. */
 export interface PinBenchApi {
   appInfo(): Promise<AppInfo>
   workspace: {
@@ -46,9 +43,18 @@ export interface PinBenchApi {
     minimise(): void
     toggleMaximise(): void
     close(): void
-    /** Returns an unsubscribe function. */
     onStateChange(listener: (state: WindowState) => void): () => void
   }
-  /** Native-menu commands arrive here. Returns an unsubscribe function. */
   onMenuCommand(listener: (command: CommandId) => void): () => void
+  emulator: {
+    openFirmware(): Promise<string | null>
+    start(firmwarePath: string): void
+    stop(): void
+    reset(): void
+    onStatus(listener: (status: EmulatorStatus) => void): () => void
+  }
+  serial: {
+    write(text: string): void
+    onData(listener: (lines: SerialLine[]) => void): () => void
+  }
 }

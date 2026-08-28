@@ -13,8 +13,9 @@ import { StatusBar } from './components/StatusBar'
 import { TitleBar } from './components/TitleBar'
 import { Toolbar } from './components/Toolbar'
 import { M9_BOARD } from './fixtures/m9'
-import { DIAGNOSTICS_FIXTURE, SERIAL_FIXTURE } from './fixtures/session'
+import type { Diagnostic } from './components/Dock'
 import { useMenuCommands } from './state/useCommands'
+import { useEmulator } from './state/useEmulator'
 import { useWorkspace } from './state/useWorkspace'
 import './styles/shell.css'
 
@@ -25,13 +26,26 @@ interface AppProps {
 
 export function App({ appInfo, windowState }: AppProps): React.JSX.Element {
   const { workspace, dispatch, restored } = useWorkspace()
+  const emulator = useEmulator()
   const board = M9_BOARD
   const totals = useMemo(() => boardTotals(board), [board])
   const selectedPart = workspace.selectedPartId
     ? findPart(board, workspace.selectedPartId)
     : undefined
 
-  // Inspector edits live here until M12 routes them into the device models.
+  const diagnostics = useMemo((): Diagnostic[] => {
+    const rows: Diagnostic[] = [
+      { id: 'board-loaded', severity: 'ok', message: `Board definition loaded: ${board.name} (${board.mcu})` }
+    ]
+    if (emulator.state === 'crashed' && emulator.error) {
+      rows.push({ id: 'emu-crash', severity: 'error', message: emulator.error })
+    }
+    if (emulator.state === 'idle' && !emulator.firmwarePath) {
+      rows.push({ id: 'no-firmware', severity: 'note', message: 'No firmware loaded — use File ▸ Open firmware image (⌘⇧O)' })
+    }
+    return rows
+  }, [board.name, board.mcu, emulator.state, emulator.error, emulator.firmwarePath])
+
   const [config, setConfig] = useState<Record<string, string | number | boolean>>({})
   const onConfigChange = useCallback(
     (partId: string, fieldId: string, value: string | number | boolean) =>
@@ -68,8 +82,6 @@ export function App({ appInfo, windowState }: AppProps): React.JSX.Element {
           dispatch({ type: 'togglePanel', panel: 'inspector' })
           break
         case 'view.toggleSource':
-          // ⌘3 flips the workspace between the diagram and the source, which is
-          // what "toggle" means for a tab rather than a panel.
           dispatch({
             type: 'setWorkspaceTab',
             tab: workspace.workspaceTab === 'source' ? 'diagram' : 'source'
@@ -105,16 +117,27 @@ export function App({ appInfo, windowState }: AppProps): React.JSX.Element {
         case 'view.snapToGrid':
           dispatch({ type: 'toggleSnapToGrid' })
           break
+        case 'file.openFirmware':
+          emulator.openAndStart()
+          break
+        case 'build.start':
+          if (emulator.firmwarePath) emulator.start(emulator.firmwarePath)
+          else emulator.openAndStart()
+          break
+        case 'build.stop':
+          emulator.stop()
+          break
+        case 'build.reset':
+          emulator.reset()
+          break
         case 'help.shortcuts':
         case 'help.about':
-          // Both open panes that do not exist yet; the menu entries are live so
-          // the shortcut table is easy to attach in M15.
           break
         default:
           break
       }
     },
-    [dispatch, fit, workspace.workspaceTab, zoomBy]
+    [dispatch, emulator, fit, workspace.workspaceTab, zoomBy]
   )
 
   useMenuCommands(runCommand)
@@ -147,12 +170,16 @@ export function App({ appInfo, windowState }: AppProps): React.JSX.Element {
     [workspace]
   )
 
+  const subtitle = emulator.firmwarePath
+    ? emulator.firmwarePath.split('/').pop() ?? 'untitled.pinbench'
+    : 'untitled.pinbench'
+
   return (
     <div className="shell">
       <TitleBar
         platform={appInfo.platform}
         title={board.name}
-        subtitle="untitled.pinbench"
+        subtitle={subtitle}
         windowState={windowState}
         onCommand={runCommand}
         isChecked={isChecked}
@@ -221,11 +248,13 @@ export function App({ appInfo, windowState }: AppProps): React.JSX.Element {
               <Dock
                 tab={workspace.dockTab}
                 height={workspace.dockHeight}
-                serial={SERIAL_FIXTURE}
-                diagnostics={DIAGNOSTICS_FIXTURE}
+                serial={emulator.serial}
+                diagnostics={diagnostics}
+                emulatorState={emulator.state}
                 onSelectTab={(tab) => dispatch({ type: 'setDockTab', tab })}
                 onResize={(height) => dispatch({ type: 'setDockHeight', height })}
                 onClose={() => dispatch({ type: 'setPanel', panel: 'dock', open: false })}
+                onSerialSubmit={emulator.writeSerial}
               />
             )}
           </div>
@@ -241,7 +270,7 @@ export function App({ appInfo, windowState }: AppProps): React.JSX.Element {
         )}
       </div>
 
-      <StatusBar board={board} totals={totals} emulator="idle" version={appInfo.version} />
+      <StatusBar board={board} totals={totals} emulator={emulator.state} version={appInfo.version} />
     </div>
   )
 }

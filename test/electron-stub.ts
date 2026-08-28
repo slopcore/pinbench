@@ -14,6 +14,12 @@ export const app = {
 
 export const shell = { openExternal: async (): Promise<void> => undefined }
 export const ipcMain = { on: (): void => undefined, handle: (): void => undefined }
+export const dialog = {
+  showOpenDialog: async (): Promise<{ canceled: boolean; filePaths: string[] }> => ({
+    canceled: true,
+    filePaths: []
+  })
+}
 export const Menu = {
   buildFromTemplate: (template: unknown) => template,
   setApplicationMenu: (): void => undefined

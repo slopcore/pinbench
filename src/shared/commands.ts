@@ -100,7 +100,7 @@ export const MENUS: MenuSpec[] = [
       item('file.openProject', 'Open project…', { accelerator: 'CmdOrCtrl+O', enabled: false }),
       item('file.openFirmware', 'Open firmware image…', {
         accelerator: 'CmdOrCtrl+Shift+O',
-        enabled: false
+        enabled: true
       }),
       separator,
       item('file.save', 'Save', { accelerator: 'CmdOrCtrl+S', enabled: false }),
@@ -166,9 +166,9 @@ export const MENUS: MenuSpec[] = [
       item('build.verifyPinMap', 'Verify pin map', { accelerator: 'CmdOrCtrl+B', enabled: false }),
       item('build.clean', 'Clean build cache', { enabled: false }),
       separator,
-      item('build.start', 'Start', { accelerator: 'CmdOrCtrl+R', enabled: false }),
-      item('build.stop', 'Stop', { accelerator: 'CmdOrCtrl+.', enabled: false }),
-      item('build.reset', 'Reset', { accelerator: 'CmdOrCtrl+Shift+R', enabled: false })
+      item('build.start', 'Start', { accelerator: 'CmdOrCtrl+R', enabled: true }),
+      item('build.stop', 'Stop', { accelerator: 'CmdOrCtrl+.', enabled: true }),
+      item('build.reset', 'Reset', { accelerator: 'CmdOrCtrl+Shift+R', enabled: true })
     ]
   },
   {

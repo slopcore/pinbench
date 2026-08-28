@@ -1,8 +1,8 @@
 import type { BoardDefinition, BoardTotals } from '@shared/board'
+import type { EmulatorState } from '@shared/emulator'
 import './statusbar.css'
 
-/** The emulator lifecycle from M2. M1 only ever reports `idle`. */
-export type EmulatorState = 'idle' | 'starting' | 'running' | 'stopping' | 'crashed'
+export type { EmulatorState }
 
 const EMULATOR_LABELS: Record<EmulatorState, string> = {
   idle: 'Emulator idle',

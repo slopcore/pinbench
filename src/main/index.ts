@@ -1,19 +1,34 @@
 import { join } from 'node:path'
-import { BrowserWindow, Menu, app, ipcMain, shell } from 'electron'
+import { BrowserWindow, Menu, app, dialog, ipcMain, shell } from 'electron'
 import { IpcChannel } from '../shared/ipc'
 import type { AppInfo, WindowState } from '../shared/ipc'
 import { normaliseWorkspace } from '../shared/workspace'
 import { buildApplicationMenu } from './menu'
+import { EmulatorSupervisor } from './emulator'
 import { SessionStore } from './store'
 
 const isDev = !app.isPackaged
 
 let mainWindow: BrowserWindow | null = null
 let store: SessionStore | null = null
+let emulator: EmulatorSupervisor | null = null
 
 const session = (): SessionStore => {
   store ??= new SessionStore()
   return store
+}
+
+const emu = (): EmulatorSupervisor => {
+  if (!emulator) {
+    emulator = new EmulatorSupervisor()
+    emulator.on('status', (status) => {
+      mainWindow?.webContents.send(IpcChannel.emulatorStatus, status)
+    })
+    emulator.on('serial', (lines) => {
+      mainWindow?.webContents.send(IpcChannel.serialData, lines)
+    })
+  }
+  return emulator
 }
 
 function windowState(window: BrowserWindow): WindowState {
@@ -41,16 +56,12 @@ function createWindow(): BrowserWindow {
     minHeight: 600,
     show: false,
     backgroundColor: '#161826',
-    // The 40px title bar is drawn by the renderer, so the frame goes away and
-    // macOS keeps only its traffic lights, inset to sit on our bar.
     frame: false,
     ...(process.platform === 'darwin'
       ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 14, y: 13 } }
       : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.cjs'),
-      // Non-negotiable, and established now rather than retrofitted once the
-      // emulator supervisor and device models exist.
       sandbox: true,
       contextIsolation: true,
       nodeIntegration: false,
@@ -84,8 +95,6 @@ function createWindow(): BrowserWindow {
     persistBounds(window)
   })
 
-  // Nothing in this app navigates or opens windows. Anything that tries is a
-  // bug or an attack; hand external links to the OS browser instead.
   window.webContents.setWindowOpenHandler(({ url }) => {
     void shell.openExternal(url)
     return { action: 'deny' }
@@ -130,6 +139,36 @@ function registerIpc(): void {
   ipcMain.on(IpcChannel.windowClose, (event) =>
     BrowserWindow.fromWebContents(event.sender)?.close()
   )
+
+  ipcMain.handle(IpcChannel.emulatorOpenFirmware, async () => {
+    if (!mainWindow) return null
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: 'Open firmware flash image',
+      filters: [
+        { name: 'Flash image', extensions: ['bin'] },
+        { name: 'All files', extensions: ['*'] }
+      ],
+      properties: ['openFile']
+    })
+    if (result.canceled || result.filePaths.length === 0) return null
+    return result.filePaths[0]
+  })
+
+  ipcMain.on(IpcChannel.emulatorStart, (_event, firmwarePath: string) => {
+    emu().start(firmwarePath)
+  })
+
+  ipcMain.on(IpcChannel.emulatorStop, () => {
+    emu().stop()
+  })
+
+  ipcMain.on(IpcChannel.emulatorReset, () => {
+    emu().reset()
+  })
+
+  ipcMain.on(IpcChannel.serialWrite, (_event, text: string) => {
+    emu().writeSerial(text)
+  })
 }
 
 if (!app.requestSingleInstanceLock()) {
@@ -150,6 +189,10 @@ if (!app.requestSingleInstanceLock()) {
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) mainWindow = createWindow()
     })
+  })
+
+  app.on('before-quit', () => {
+    emulator?.dispose()
   })
 
   app.on('window-all-closed', () => {

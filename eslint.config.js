@@ -5,7 +5,7 @@ import reactHooks from 'eslint-plugin-react-hooks'
 import prettier from 'eslint-config-prettier'
 
 export default tseslint.config(
-  { ignores: ['out', 'dist', 'node_modules', 'spike', 'coverage'] },
+  { ignores: ['out', 'dist', 'node_modules', 'spike', 'coverage', '.qemu', '.pio-venv'] },
   js.configs.recommended,
   tseslint.configs.recommended,
   {
@@ -15,7 +15,7 @@ export default tseslint.config(
     languageOptions: { globals: globals.browser }
   },
   {
-    files: ['src/main/**/*.ts', 'src/preload/**/*.ts', '*.config.{ts,js}'],
+    files: ['src/main/**/*.ts', 'src/preload/**/*.ts', 'scripts/**/*.{js,mjs}', '*.config.{ts,js}'],
     languageOptions: { globals: globals.node }
   },
   {

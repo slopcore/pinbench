@@ -7,7 +7,9 @@
   "type": "module",
   "main": "out/main/index.js",
   "scripts": {
+    "predev": "node scripts/preflight.mjs",
     "dev": "electron-vite dev",
+    "setup:emulator": "bash scripts/setup-emulator.sh",
     "prestart": "electron-vite build",
     "start": "electron-vite preview",
     "build": "electron-vite build",

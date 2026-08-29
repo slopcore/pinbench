@@ -1548,6 +1548,92 @@ with the keyboard's `SCL` before you get there.
 detect the divergence and ask, never silently overwrite. Getting this wrong
 destroys trust in the tool permanently.
 
+### Sub-milestones
+
+M11 is picked up out of order because M7.4 / M8 are blocked behind M7.2b's fork
+bug and M11 depends only on M5 (it needs a build, not `radio_init()`). Split
+the way M6/M7 were, each slice its own commit + Outcome, testable without a
+live guest first.
+
+#### M11.1 · Verify pin map — the rule engine — `M`
+
+**Goal.** `⌘B` "Verify pin map" is a real rule engine over the board
+definition, not a stub.
+
+**Build**
+
+- `src/shared/verify.ts`: `verifyBoard(board) → VerifyFinding[]`, pure, no
+  Electron/DOM. Severities `warn` / `info` / `note` / `ok` (the design's set).
+  Rules:
+  - a GPIO bound to two signals, with a declared-exception list (the M9's
+    `GPIO12` = `KEY_INT` + `ESP32_WAKEUP`, recorded in the board definition per
+    M8's watch-for — add the `pinExceptions` field here);
+  - strapping pins (`GPIO0`/`3`/`45`/`46` — the `strapping` capability already
+    in the pin list) bound to a non-idle peripheral role;
+  - a signal on a pin whose `capabilities` do not include the bus kind it is
+    used for (e.g. an `spi` signal on a pin with no `spi` capability) — the
+    "peripherals mapped to pins their silicon cannot route" rule;
+  - shared-bus chip-select: exactly one of `LR_NSS` / `LCD_CS` / `SD_CS` per
+    SPI bus, and each is a distinct pin;
+  - an `ok` row when a bus is clean.
+- Each finding carries an optional `ref` (`partId` / `pin` / `netId`) so the
+  dock row can be made clickable in M11.3.
+- Wire it to the existing `⌘B` command id and surface findings as `Diagnostic`
+  rows in the dock (reuse the device-diagnostic channel shape).
+- Harness tests: the shipped M9 board is clean bar the intentional `GPIO12`
+  exception; a fixture that moves `LCD_CS` to `GPIO21` produces the
+  keyboard-`SCL` collision finding (M11's Done-when, minus the rebuild).
+
+**Done when.** `verifyBoard` on the shipped M9 returns only `ok`/`note` rows
+plus the declared `GPIO12` note; a test board with `LCD_CS` on `GPIO21` yields
+a `warn` naming `GPIO21`, `u3:CS` and `u8:SCL`. Findings render in the dock.
+
+#### M11.2 · Pin-map codegen — `M`
+
+**Goal.** The board definition emits `board_m9.h` and the `platformio.ini`
+`build_flags`, regenerated on build.
+
+**Build**
+
+- `src/shared/codegen.ts`: `generatePinHeader(board) → string` (the
+  `#define <SIGNAL>_PIN <n>` block with the "Edit the canvas, not this file"
+  generated-header comment) and `generateBuildFlags(board) → string[]`.
+- On **Build & flash**, write the header into the project (a PinBench-owned
+  path, not over a user file blindly) and add the flags via the existing
+  `-c` override mechanism (M3), so codegen never edits the user's
+  `platformio.ini` directly — the same rule the DIO override follows.
+- Round-trip guard (M11's watch-for): hash the generated header; on the next
+  build, if the on-disk file diverges from the last generated hash, stop and
+  ask rather than overwrite.
+- Tests: golden-file the M9 header; a `LCD_CS`→`GPIO21` board changes exactly
+  the `LCD_CS_PIN` line; the divergence guard trips on a hand-edit.
+
+**Done when.** `generatePinHeader` on the M9 matches a checked-in golden file;
+moving `LCD_CS` in the definition changes one `#define`; Build & flash writes
+it and a hand-edit is detected, not clobbered.
+
+#### M11.3 · Canvas as editor, and Probe pin — `L`
+
+**Goal.** The remaining half — the canvas actually edits the definition.
+
+**Build**
+
+- Drag parts (persist `layout`), Draw-net tool between pins, reassign a
+  peripheral's pin, add a part from the Library, delete one — each mutating an
+  in-memory board definition that codegen and verify read. Undo/redo throughout
+  (a command stack over board-definition deltas).
+- Editing writes back to the `.board.json` / project on save; Verify re-runs on
+  every edit.
+- **Probe pin**: click a pin, see its live level / direction / recent
+  transitions — reads the `DeviceHost` pin-level and GPIO-observer state the
+  M6/M7 bridge already produces.
+- Make the dock's Verify rows clickable through to the offending part/pin
+  (the `ref` from M11.1).
+
+**Done when.** Move the LCD chip select from `GPIO16` to `GPIO21` on the
+canvas, rebuild, and the firmware drives the new pin — while Verify flags the
+`SCL` collision first. Closes M11.
+
 ## M12 · Inspector configuration, live — `S`
 
 **Goal.** The Inspector's segmented controls change real behaviour.

@@ -24,14 +24,14 @@ describe('Sx1262Model', () => {
     expect(statusOk(miso[1]!)).toBe(true)
   })
 
-  it('reports "SX1262" from the version register so RadioLib findChip() passes', () => {
+  it('version register reads back "SX1261" — RadioLib\'s SX1262 class uses the SX1261 chipType', () => {
     const h = harness(new Sx1262Model())
     // SPIreadRegisterBurst(0x0320, 16): [0x1D, addrHi, addrLo, NOP, ...16 zero bytes]
     const mosi = [0x1d, 0x03, 0x20, 0x00, ...new Array<number>(16).fill(0)]
     const miso = xfer(h, ...mosi)
-    // Register data starts at miso[cmdLen + 1] = miso[4].
+    // Register data starts at miso[cmdLen + 1] = miso[4]; findChip() strncmp's 6 bytes.
     const version = String.fromCharCode(...miso.slice(4, 4 + 6))
-    expect(version).toBe('SX1262')
+    expect(version).toBe('SX1261')
     expect(statusOk(miso[1]!)).toBe(true)
   })
 

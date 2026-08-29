@@ -6,26 +6,90 @@
   "vendor": "Heltec",
   "pins": [
     { "id": "GPIO0", "label": "IO0", "capabilities": ["gpio", "spi", "i2c", "uart", "strapping"] },
-    { "id": "GPIO1", "label": "IO1", "capabilities": ["gpio", "spi", "i2c", "uart", "adc", "touch"] },
-    { "id": "GPIO2", "label": "IO2", "capabilities": ["gpio", "spi", "i2c", "uart", "adc", "touch"] },
-    { "id": "GPIO3", "label": "IO3", "capabilities": ["gpio", "spi", "i2c", "uart", "adc", "touch", "strapping"] },
-    { "id": "GPIO4", "label": "IO4", "capabilities": ["gpio", "spi", "i2c", "uart", "adc", "touch"] },
-    { "id": "GPIO5", "label": "IO5", "capabilities": ["gpio", "spi", "i2c", "uart", "adc", "touch"] },
-    { "id": "GPIO6", "label": "IO6", "capabilities": ["gpio", "spi", "i2c", "uart", "adc", "touch"] },
-    { "id": "GPIO7", "label": "IO7", "capabilities": ["gpio", "spi", "i2c", "uart", "adc", "touch"] },
-    { "id": "GPIO8", "label": "IO8", "capabilities": ["gpio", "spi", "i2c", "uart", "adc", "touch"] },
-    { "id": "GPIO9", "label": "IO9", "capabilities": ["gpio", "spi", "i2c", "uart", "adc", "touch"] },
-    { "id": "GPIO10", "label": "IO10", "capabilities": ["gpio", "spi", "i2c", "uart", "adc", "touch"] },
-    { "id": "GPIO11", "label": "IO11", "capabilities": ["gpio", "spi", "i2c", "uart", "adc", "touch"] },
-    { "id": "GPIO12", "label": "IO12", "capabilities": ["gpio", "spi", "i2c", "uart", "adc", "touch"] },
-    { "id": "GPIO13", "label": "IO13", "capabilities": ["gpio", "spi", "i2c", "uart", "adc", "touch"] },
-    { "id": "GPIO14", "label": "IO14", "capabilities": ["gpio", "spi", "i2c", "uart", "adc", "touch"] },
+    {
+      "id": "GPIO1",
+      "label": "IO1",
+      "capabilities": ["gpio", "spi", "i2c", "uart", "adc", "touch"]
+    },
+    {
+      "id": "GPIO2",
+      "label": "IO2",
+      "capabilities": ["gpio", "spi", "i2c", "uart", "adc", "touch"]
+    },
+    {
+      "id": "GPIO3",
+      "label": "IO3",
+      "capabilities": ["gpio", "spi", "i2c", "uart", "adc", "touch", "strapping"]
+    },
+    {
+      "id": "GPIO4",
+      "label": "IO4",
+      "capabilities": ["gpio", "spi", "i2c", "uart", "adc", "touch"]
+    },
+    {
+      "id": "GPIO5",
+      "label": "IO5",
+      "capabilities": ["gpio", "spi", "i2c", "uart", "adc", "touch"]
+    },
+    {
+      "id": "GPIO6",
+      "label": "IO6",
+      "capabilities": ["gpio", "spi", "i2c", "uart", "adc", "touch"]
+    },
+    {
+      "id": "GPIO7",
+      "label": "IO7",
+      "capabilities": ["gpio", "spi", "i2c", "uart", "adc", "touch"]
+    },
+    {
+      "id": "GPIO8",
+      "label": "IO8",
+      "capabilities": ["gpio", "spi", "i2c", "uart", "adc", "touch"]
+    },
+    {
+      "id": "GPIO9",
+      "label": "IO9",
+      "capabilities": ["gpio", "spi", "i2c", "uart", "adc", "touch"]
+    },
+    {
+      "id": "GPIO10",
+      "label": "IO10",
+      "capabilities": ["gpio", "spi", "i2c", "uart", "adc", "touch"]
+    },
+    {
+      "id": "GPIO11",
+      "label": "IO11",
+      "capabilities": ["gpio", "spi", "i2c", "uart", "adc", "touch"]
+    },
+    {
+      "id": "GPIO12",
+      "label": "IO12",
+      "capabilities": ["gpio", "spi", "i2c", "uart", "adc", "touch"]
+    },
+    {
+      "id": "GPIO13",
+      "label": "IO13",
+      "capabilities": ["gpio", "spi", "i2c", "uart", "adc", "touch"]
+    },
+    {
+      "id": "GPIO14",
+      "label": "IO14",
+      "capabilities": ["gpio", "spi", "i2c", "uart", "adc", "touch"]
+    },
     { "id": "GPIO15", "label": "IO15", "capabilities": ["gpio", "spi", "i2c", "uart", "adc"] },
     { "id": "GPIO16", "label": "IO16", "capabilities": ["gpio", "spi", "i2c", "uart", "adc"] },
     { "id": "GPIO17", "label": "IO17", "capabilities": ["gpio", "spi", "i2c", "uart", "adc"] },
     { "id": "GPIO18", "label": "IO18", "capabilities": ["gpio", "spi", "i2c", "uart", "adc"] },
-    { "id": "GPIO19", "label": "IO19", "capabilities": ["gpio", "spi", "i2c", "uart", "adc", "usb"] },
-    { "id": "GPIO20", "label": "IO20", "capabilities": ["gpio", "spi", "i2c", "uart", "adc", "usb"] },
+    {
+      "id": "GPIO19",
+      "label": "IO19",
+      "capabilities": ["gpio", "spi", "i2c", "uart", "adc", "usb"]
+    },
+    {
+      "id": "GPIO20",
+      "label": "IO20",
+      "capabilities": ["gpio", "spi", "i2c", "uart", "adc", "usb"]
+    },
     { "id": "GPIO21", "label": "IO21", "capabilities": ["gpio", "spi", "i2c", "uart"] },
     { "id": "GPIO33", "label": "IO33", "capabilities": ["gpio", "spi", "i2c", "uart"] },
     { "id": "GPIO34", "label": "IO34", "capabilities": ["gpio", "spi", "i2c", "uart"] },
@@ -39,8 +103,16 @@
     { "id": "GPIO42", "label": "IO42", "capabilities": ["gpio", "spi", "i2c", "uart"] },
     { "id": "GPIO43", "label": "IO43", "capabilities": ["gpio", "spi", "i2c", "uart"] },
     { "id": "GPIO44", "label": "IO44", "capabilities": ["gpio", "spi", "i2c", "uart"] },
-    { "id": "GPIO45", "label": "IO45", "capabilities": ["gpio", "spi", "i2c", "uart", "strapping"] },
-    { "id": "GPIO46", "label": "IO46", "capabilities": ["gpio", "spi", "i2c", "uart", "strapping"] },
+    {
+      "id": "GPIO45",
+      "label": "IO45",
+      "capabilities": ["gpio", "spi", "i2c", "uart", "strapping"]
+    },
+    {
+      "id": "GPIO46",
+      "label": "IO46",
+      "capabilities": ["gpio", "spi", "i2c", "uart", "strapping"]
+    },
     { "id": "GPIO47", "label": "IO47", "capabilities": ["gpio", "spi", "i2c", "uart"] },
     { "id": "GPIO48", "label": "IO48", "capabilities": ["gpio", "spi", "i2c", "uart"] }
   ],
@@ -163,7 +235,7 @@
       "name": "2.13\" e-paper",
       "mpn": "SSD1680",
       "category": "display",
-      "deviceModel": "sitronix.ssd1680",
+      "deviceModel": "solomon.ssd1680",
       "deviceOptions": { "busyActiveHigh": true },
       "summary": "250×122 monochrome e-ink on its own SPI bus, chip select GPIO4, D/C GPIO5, BUSY GPIO7. Pixels latch on MASTER_ACTIVATION, not as RAM streams.",
       "buses": ["spi-disp"],
@@ -212,13 +284,12 @@
       "name": "Power & VEXT rail",
       "category": "power",
       "deviceModel": "pinbench.power",
-      "summary": "Peripheral power rail on GPIO45 (VEXT_EN, active-low), battery sense on GPIO20 gated by ADC_CTRL GPIO19, radio TX LED on GPIO18.",
+      "summary": "Peripheral power rail on GPIO45 (VEXT_EN, active-low), battery sense on GPIO20 gated by ADC_CTRL GPIO19.",
       "buses": [],
       "pins": [
         { "signal": "VEXT_EN", "pin": "GPIO45" },
         { "signal": "BAT_ADC", "pin": "GPIO20" },
-        { "signal": "ADC_CTRL", "pin": "GPIO19" },
-        { "signal": "TX_LED", "pin": "GPIO18" }
+        { "signal": "ADC_CTRL", "pin": "GPIO19" }
       ],
       "config": [
         {
@@ -342,7 +413,7 @@
     {
       "id": "net-tx-led",
       "label": "RADIO_TX_LED",
-      "nodes": ["GPIO18", "u2:TX_LED", "u4:TX_LED"]
+      "nodes": ["GPIO18", "u2:TX_LED"]
     },
     {
       "id": "net-user-btn",

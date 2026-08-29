@@ -147,7 +147,7 @@ interface DirtyRect {
 }
 
 export class Ssd1680Model implements DeviceModel {
-  readonly id = 'sitronix.ssd1680'
+  readonly id = 'solomon.ssd1680'
   /** BUSY (GPIO7) is an input the SoC level-polls during a refresh. */
   readonly outputSignals = ['BUSY'] as const
   readonly meters: readonly MeterDeclaration[] = [
@@ -573,7 +573,7 @@ function clamp(v: number, lo: number, hi: number): number {
 }
 
 export const ssd1680Descriptor: DeviceModelDescriptor = {
-  id: 'sitronix.ssd1680',
+  id: 'solomon.ssd1680',
   summary:
     'SSD1680 250×122 monochrome e-paper. Command state machine, RAM window + BW/RED planes, LUT-driven full/fast/partial refresh, BUSY line, refresh-time meter; pixels latch on MASTER_ACTIVATION. Unimplemented opcodes raise a named diagnostic.',
   create: (options) => new Ssd1680Model(ssd1680Options(options))

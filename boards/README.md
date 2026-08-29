@@ -51,31 +51,36 @@ Transcribed from the MeshCore checkout's own
 `variants/heltec_wireless_paper/platformio.ini` (`[Heltec_Wireless_Paper_base]`
 `build_flags`) — every pin below is a `-D` in that file, not a guess:
 
-| Signal                                | Pin              |
-| ------------------------------------- | ---------------- |
-| Radio SPI  SCLK / MOSI / MISO         | 9 / 10 / 11      |
-| SX1262  NSS / BUSY / DIO1 / RESET     | 8 / 13 / 14 / —  |
-| SX1262  TX-LED                        | 18               |
-| Display SPI  SCLK / MOSI              | 3 / 2            |
-| E-ink  CS / BUSY / DC / RST           | 4 / 7 / 5 / 6    |
-| USER_BTN                              | 0                |
-| VEXT_EN (peripheral power, active-low)| 45               |
-| VBAT_READ / ADC_CTRL                  | 20 / 19          |
+| Signal                                 | Pin             |
+| -------------------------------------- | --------------- |
+| Radio SPI SCLK / MOSI / MISO           | 9 / 10 / 11     |
+| SX1262 NSS / BUSY / DIO1 / RESET       | 8 / 13 / 14 / — |
+| SX1262 TX-LED (`P_LORA_TX_LED`)        | 18              |
+| Display SPI SCLK / MOSI                | 3 / 2           |
+| E-ink CS / BUSY / DC / RST             | 4 / 7 / 5 / 6   |
+| USER_BTN                               | 0               |
+| VEXT_EN (peripheral power, active-low) | 45              |
+| VBAT_READ / ADC_CTRL                   | 20 / 19         |
 
 `RESET` is `RADIOLIB_NC` — the SX1262 has no wired hardware reset on this board,
 so `u2` has no `NRESET` binding and the model resets only on power-on and the
 RadioLib soft path. The radio and the e-ink panel sit on **separate SPI buses**
 (`spi-radio`, `spi-disp`) — the M9 put every SPI peripheral on one shared bus,
 so this is the first board that exercises two. The e-ink bus has no `miso`
-signal: the panel is write-only. `GPIO0` doubles as the boot strapping pin and
-the user button — real Heltec hardware, and a genuine target for M11's
-strapping-pin rule.
+signal: the panel is write-only. `GPIO0` (`USER_BTN`), `GPIO3` (e-ink `SCLK`)
+and `GPIO45` (`VEXT_EN`) are strapping pins — real Heltec hardware, and genuine
+targets for M11's strapping-pin rule; `⌘B` Verify on this board is clean bar
+those three `note` rows. `TX_LED` on `GPIO18` is bound once, to `u2` (the radio
+owns it, `P_LORA_TX_LED`); the power block only reads battery and the rail.
 
 SX1262 build flags carried into `u2.deviceOptions`: `dio2RfSwitch`
 (`SX126X_DIO2_AS_RF_SWITCH=true`) and `dio3TcxoVoltage` 1.8 V
 (`SX126X_DIO3_TCXO_VOLTAGE=1.8`). The e-ink `u3.deviceOptions.busyActiveHigh`
-records that the Heltec Wireless Paper V1.1 panel's Solomon-Systech controller
-signals busy HIGH (the `heltec-eink-modules` `detectEInk()` probe).
+records that the Heltec Wireless Paper V1.1 panel's Solomon Systech controller
+signals busy HIGH (the `heltec-eink-modules` `detectEInk()` probe). The radio
+model (`semtech.sx1262`) answers RadioLib's version-register read with the
+string `SX1261` — RadioLib's `SX1262` class shares the SX1261 `chipType`, and
+`findChip()` `strncmp`s that, not what the silicon really reports.
 
 The MCU is a plain ESP32-S3 (`esp32-s3-devkitc-1`, 8 MB flash, **no PSRAM**), so
 `emulator` carries only `machine` and `flashSize: "8M"` — no `psramSize` /

@@ -25,8 +25,11 @@
  *     for `GET_*`, offset 3 for `READ_BUFFER` (`[0x1E, offset]`), offset 4 for
  *     `READ_REGISTER` (`[0x1D, addrHi, addrLo]`).
  *   - **`findChip`** reads 16 bytes from register `0x0320` and does
- *     `strncmp(chipType, version, 6)`. RadioLib's `chipType` for the SX1262 is
- *     the string `"SX1262"` — so the version register must read back `SX1262`.
+ *     `strncmp(chipType, version, 6)`. RadioLib's `SX1262` class carries
+ *     `RADIOLIB_SX1262_CHIP_TYPE`, which is the string **`"SX1261"`** (RadioLib
+ *     shares one version string across the SX1261/SX1262 — what real silicon
+ *     reports is irrelevant, the model has to satisfy RadioLib). So the version
+ *     register must read back `SX1261` for chip detection to pass.
  *   - **`BUSY`** is held high by the real part while it digests a command;
  *     RadioLib waits on it before every transfer. Modelled the same way the
  *     LR1110's `BUSY` is: pulsed around the (synchronous) command so a trace
@@ -142,7 +145,9 @@ const CR_DEN: Record<number, number> = {
 
 const PACKET_TYPE_LORA = 0x01
 const VERSION_REG = 0x0320
-const CHIP_VERSION_STRING = 'SX1262'
+// RadioLib's SX1262 class carries RADIOLIB_SX1262_CHIP_TYPE == "SX1261" (it
+// shares one version string across the family); findChip() strncmp's 6 bytes.
+const CHIP_VERSION_STRING = 'SX1261'
 
 type RadioMode = 'sleep' | 'standby' | 'fs' | 'rx' | 'tx'
 

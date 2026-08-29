@@ -17,7 +17,7 @@ model](../devices/authoring.md).
 `src/shared/devices/model.ts` — `DeviceModel`:
 
 - **Lifecycle**: `attach(ctx)` / `reset()` / `detach()`.
-- **`onBus(txn) → BusResponse`** — takes and returns a *whole buffer*, every byte
+- **`onBus(txn) → BusResponse`** — takes and returns a _whole buffer_, every byte
   clocked between one chip-select assertion and its release. There is no
   byte-level entry point, by design — a per-byte interface would make an ST7789
   frame flush take 7.7 seconds. Budget by transaction count, not byte count.

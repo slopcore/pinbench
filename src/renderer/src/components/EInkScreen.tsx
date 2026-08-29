@@ -26,11 +26,7 @@ const INK: [number, number, number] = [0x24, 0x24, 0x28]
  * The whole panel repaints on every message (an e-ink refresh is a whole-panel
  * event) so there is no dirty-rect fast path.
  */
-export function EInkScreen({
-  framebuffer,
-  zoom,
-  rotate = 0
-}: EInkScreenProps): React.JSX.Element {
+export function EInkScreen({ framebuffer, zoom, rotate = 0 }: EInkScreenProps): React.JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {

@@ -66,7 +66,7 @@ title: Status — done, blocked, next
   and into its main loop; the OutPanel shows the firmware's "Please wait…" screen
   (partial refresh, custom LUTs). Three bugs, all fixed on branch `usb-flash`:
   1. **e-ink init hang** (was misattributed to `startup.c:320`) — the fork only
-     forwarded GPIO `OUT` *changes*, so `E213Display::detectEInk()`'s first-touch
+     forwarded GPIO `OUT` _changes_, so `E213Display::detectEInk()`'s first-touch
      `digitalWrite(RST, LOW)` over a reset-0 pin produced no frame and the panel
      controller was mis-detected. Fix: forward a pin's `OUT` level on the
      `ENABLE` 0→1 edge (`qemu/hw/gpio/esp32_gpio.c`).

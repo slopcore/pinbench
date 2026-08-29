@@ -2,7 +2,7 @@
 title: Agent control plane (ACP + MCP)
 area: agent
 status: partial
-status_note: "core + binding + agent connection done; dock panel + stdio bridge (M16.4) pending"
+status_note: 'core + binding + agent connection done; dock panel + stdio bridge (M16.4) pending'
 ---
 
 # Agent control plane (ACP + MCP)
@@ -27,15 +27,15 @@ drives, and no more. Decision of record: [ADR 0002](../adr/0002-acp-control-plan
 
 ## Layers
 
-| Module | Role |
-|---|---|
-| `src/shared/acp/` | Pure core: JSON-RPC 2.0 framing + ndjson buffer, method/version tables, a transport-agnostic router, the operation catalogue with per-field validation + JSON-Schema emit + risk model, the MCP control-server core, the ACP session builders. |
-| `src/main/acp/invoker.ts` | One switch mapping every catalogue entry onto an injected `PinBenchAcpDeps`. An exhaustiveness test asserts no operation falls through, so catalogue and binding cannot drift. |
-| `src/main/acp/httpServer.ts` | The MCP server over loopback HTTP (`127.0.0.1`, bearer token, origin check, fail-closed). |
-| `src/main/acp/connection.ts` | `AcpConnection` — a symmetric JSON-RPC 2.0 peer over a line transport, both directions interleaving. |
-| `src/main/acp/agent.ts` | `spawnAgent()` — wraps the child's stdio as a transport, stderr forwarded. |
-| `src/main/acp/agentSession.ts` | `initialize` → `session/new` (listing the MCP control server) → `session/prompt`; serves `fs/read_text_file`, `fs/write_text_file` (both through `ProjectFiles.guard()`), `session/request_permission`, `session/update`; `cancel()`. |
-| `src/main/acp/bridge.ts` | Assembles deps from the live `EmulatorSupervisor` / `BuildRunner` / `DeviceHost` / `ProjectFiles` + the main-held board, composes the permission gate, spawns the agent, drives the session, exposes `bridge.prompt(text)`, kills the child on dispose. |
+| Module                         | Role                                                                                                                                                                                                                                                    |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/shared/acp/`              | Pure core: JSON-RPC 2.0 framing + ndjson buffer, method/version tables, a transport-agnostic router, the operation catalogue with per-field validation + JSON-Schema emit + risk model, the MCP control-server core, the ACP session builders.          |
+| `src/main/acp/invoker.ts`      | One switch mapping every catalogue entry onto an injected `PinBenchAcpDeps`. An exhaustiveness test asserts no operation falls through, so catalogue and binding cannot drift.                                                                          |
+| `src/main/acp/httpServer.ts`   | The MCP server over loopback HTTP (`127.0.0.1`, bearer token, origin check, fail-closed).                                                                                                                                                               |
+| `src/main/acp/connection.ts`   | `AcpConnection` — a symmetric JSON-RPC 2.0 peer over a line transport, both directions interleaving.                                                                                                                                                    |
+| `src/main/acp/agent.ts`        | `spawnAgent()` — wraps the child's stdio as a transport, stderr forwarded.                                                                                                                                                                              |
+| `src/main/acp/agentSession.ts` | `initialize` → `session/new` (listing the MCP control server) → `session/prompt`; serves `fs/read_text_file`, `fs/write_text_file` (both through `ProjectFiles.guard()`), `session/request_permission`, `session/update`; `cancel()`.                   |
+| `src/main/acp/bridge.ts`       | Assembles deps from the live `EmulatorSupervisor` / `BuildRunner` / `DeviceHost` / `ProjectFiles` + the main-held board, composes the permission gate, spawns the agent, drives the session, exposes `bridge.prompt(text)`, kills the child on dispose. |
 
 ## Operations live now
 

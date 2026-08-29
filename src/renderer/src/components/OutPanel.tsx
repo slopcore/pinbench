@@ -90,13 +90,9 @@ export function OutPanel({
             </div>
           )}
 
-          {isPanel && (
-            <St7789Screen framebuffer={view?.framebuffer} zoom={zoom} rotate={rotate} />
-          )}
+          {isPanel && <St7789Screen framebuffer={view?.framebuffer} zoom={zoom} rotate={rotate} />}
 
-          {isEInk && (
-            <EInkScreen framebuffer={view?.framebuffer} zoom={zoom} rotate={rotate} />
-          )}
+          {isEInk && <EInkScreen framebuffer={view?.framebuffer} zoom={zoom} rotate={rotate} />}
 
           {snapshot.meters.length > 0 && (
             <dl className="outpanel__meters">

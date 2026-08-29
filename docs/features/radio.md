@@ -2,7 +2,7 @@
 title: Radio — injection, airtime, panels
 area: radio
 status: done
-status_note: "TypeScript half complete; live end-to-end demo blocked — see [[status]]"
+status_note: 'TypeScript half complete; live end-to-end demo blocked — see [[status]]'
 ---
 
 # Radio — injection, airtime, panels

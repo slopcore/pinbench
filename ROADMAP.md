@@ -1684,6 +1684,23 @@ integration as making the canvas authoritative.
 canvas, rebuild, and the firmware drives the new pin — while Verify flags the
 `SCL` collision first. Closes M11.
 
+### Progress
+
+The **data layer is in** (`src/shared/boardEdit.ts`, 8 tests): a `BoardEdit`
+union (`moveParty` / `resizeParty` / `rebindPin` / `addPart` / `deletePart` /
+`addNet` / `deleteNet`), a pure `applyEdit` that throws `BoardEditError` on a
+bad ref and prunes dangling net endpoints on delete, and a `BoardHistory`
+undo/redo stack (apply clears redo; a failed edit is a no-op). A `rebindPin`
+flows straight through `generatePinHeader` and `verifyBoard` in the tests, so
+M11's "move the chip select, Verify flags it" chain is proven at the model
+level.
+
+**Remaining (UI):** the canvas drag / draw-net / Probe-pin gestures on top of
+`BoardHistory`, wiring it into `App` with `⌘Z` / `⌘⇧Z`, persisting edits to
+the `.board.json` on save, `BuildRunner.run` taking the board and writing the
+header (with the `checkHeaderDivergence` guard) through the `-c` path, and the
+firmware `#include`. Clickable Verify rows (the `ref` from M11.1).
+
 ## M12 · Inspector configuration, live — `S`
 
 **Goal.** The Inspector's segmented controls change real behaviour.

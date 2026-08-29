@@ -1129,6 +1129,124 @@ calls, driven by tracing real firmware traffic — and make unimplemented comman
 raise a loud, named diagnostic rather than silently returning zeros. Silent
 zeros will cost you days.
 
+### Sub-milestones
+
+M6 was closed in four strictly-ordered slices (M6.1–M6.4), each its own commit
+with an Outcome section. M7 follows the same shape. Each slice is landed on
+`main` before the next starts; a slice that turns out to need emulator infra it
+cannot get in-session is narrowed to its testable half and the rest carried
+forward, per the session goal.
+
+#### M7.1 · The LR1110 model, verified without QEMU — `L`
+
+**Goal.** The `semtech.lr1110` device model exists, is registered, and passes a
+harness test that walks MeshCore's real `radio_init()` SPI sequence — the
+TypeScript half, the way M6's ST7789 landed before the live bridge.
+
+**Build**
+
+- `src/shared/devices/lr1110.ts`: a transaction-shaped `onBus` implementing the
+  LR11x0 command framing RadioLib actually clocks — 16-bit opcode + 32-bit
+  address width, an 8-bit `Stat1` status byte prepended to every read response,
+  `GetVersion` (0x0101) answering a plausible LR1110 device id + firmware
+  version so `findChip()` succeeds, `SetStandby`/`SetPacketType`/`SetRfFrequency`
+  /`SetModulationParams`/`SetPaConfig`/`SetTxParams`/`Calibrate`/`SetDioIrqParams`
+  /`ClearIrq`/`GetIrqStatus`/`SetTx`/`SetRx`/`WriteBuffer8`/`ReadBuffer8`, and a
+  loud named `diagnose('warn', …)` for every opcode not in that set.
+- `onSignal` for `NSS` (chip-select tracking, shared-bus contention already
+  handled host-side), `NRESET` (power-on-reset state), and — as a stored level,
+  not yet host-driven — `BUSY` / `IRQ`.
+- `snapshot()` scalars: `packetType`, `freqHz`, `bw`/`sf`/`cr`, `txPowerDbm`,
+  `mode` (`sleep`/`standby`/`tx`/`rx`), `irqStatus`, `lastRssi`, `lastSnr`,
+  `resetCount`. Declared meters: `freq` (Hz), `rssi` (dBm), `airtime` (ms/frame),
+  `busShare` (%).
+- Register in `builtin.ts`. `boards/…m9….json` already names `semtech.lr1110`
+  on `u2` with `NSS`/`BUSY`/`IRQ`/`NRESET` bound — no board change needed.
+- `lr1110.test.ts` against the M4 harness: the `GetVersion` handshake, a
+  `SetRfFrequency` round trip that moves `freqHz`, a `SetModulationParams` that
+  moves `sf`, an unimplemented opcode raising exactly one diagnostic.
+
+**Done when.** `npm test` green with the new model and its harness test; a
+scripted `radio_init()` opcode sequence drives the model to `mode: 'standby'`
+with no `unimplemented` diagnostics.
+
+**Watch for.** The `Stat1`/`Stat2` status-byte convention — RadioLib's
+`parseStatusCb` reads it on every command and a wrong value makes
+`SPIcheckStatus` return `RADIOLIB_ERR_SPI_CMD_FAILED` long before any timeout.
+
+#### M7.2 · Host→guest line reads, and `radio_init()` succeeds — `L`
+
+**Goal.** `radio_init()` returns `RADIOLIB_ERR_NONE` against the live bridge, so
+MeshCore reaches `the_mesh.begin()` and the UI loop — which is where M6.4's
+carried home screen renders.
+
+**Build**
+
+- **GPIO input in the fork.** `esp32_gpio_read` for `A_GPIO_IN`/`A_GPIO_IN1`
+  currently returns the output drive. For pins the device host has claimed as
+  inputs, a read issues a synchronous request/reply frame (new op, same shape as
+  `Op.Xfer`) answered from a per-pin level table in `DeviceHost`. No async
+  machinery, no timer — a BUSY poll is a handful of reads and the round trip is
+  ~microseconds. RadioLib's BUSY and DIO9 waits are level polls (confirmed in
+  `Module::SPItransferStream` and `LR11x0::transmit`/`receive`), so no
+  CPU-interrupt raise is needed for M7 — `GPIO_STATUS` / int-enable / edge
+  config stays out of scope until a milestone attaches a real ISR.
+- `DeviceContext.driveSignal` wired through to that pin-level table, so the
+  LR1110 model can hold `BUSY` low during standby and pulse `IRQ` (DIO9) high
+  on TX-done / RX-done.
+- `live-bridge.test.ts` extended (still `PINBENCH_LIVE_QEMU`-gated): boot the M9
+  image, assert the LR1110 model reaches `mode: 'standby'`, the serial dock
+  shows no `radio init failed`, and the ST7789 model receives a post-`radio_init`
+  frame (the home screen).
+
+**Done when.** The `PINBENCH_LIVE_QEMU` test shows MeshCore past `radio_init()`;
+the ST7789 OUT panel draws the home screen — node name, clock, battery —
+**closing M6.4's carried clause**.
+
+**Watch for.** The stale-binary trap — `apply.sh`'s `.pinbench-applied` marker.
+Confirm a `qemu/hw/**` edit actually relinks `.qemu/build/qemu-system-xtensa`
+before trusting a live run.
+
+#### M7.3 · Injection, airtime, and the panels — `L`
+
+**Goal.** Inject a mesh frame from the IN panel and watch MeshCore receive it.
+
+**Build**
+
+- IN-panel commands via `onCommand`: node advert from an address at N hops, a
+  channel message (`#public "…"`), a delivery ack, a noise-floor burst with a
+  configurable floor — each carrying RSSI/SNR. On inject the model fills its RX
+  buffer, sets the RX-done IRQ bits, and pulses DIO9.
+- Airtime model from the active BW/SF/CR (standard LoRa time-on-air), feeding the
+  `airtime` meter and consistent with injected traffic timing.
+- OUT panel: TX/RX traffic log plus Frequency / Last RSSI / Airtime-used meters
+  (generic snapshot + meter rendering; a bespoke component only if needed).
+- The four Inspector config fields wired live through `onCommand` — BW 125/250/500,
+  SF 7/9/11, CR 5/6/8, TX power 14/17/22. The *general* Inspector-config
+  mechanism is M12; this is four fields, hand-wired.
+- Harness tests for injection → IRQ, and an airtime calculation cross-check.
+
+**Done when.** With MeshCore running, inject `#public "trailhead in 20"` from the
+IN panel and see it in the serial log **and** on the emulated LCD's channel list
+with an unread dot.
+
+#### M7.4 · The end-to-end app path — `M`
+
+**Goal.** Close M6.2's banner refinement and M6.4's "full app path" carry: the
+whole loop through the running Electron app.
+
+**Build**
+
+- Drive M7.1–M7.3 through the **Build & flash** button → emulator → device host
+  → the live Inspector OUT/IN panels, not `pio run` + a standalone `DeviceHost`.
+- Capture MeshCore's actual version/advert banner text (prints inside
+  `the_mesh.begin()`), noted in the Outcome.
+
+**Done when.** A from-scratch **Build & flash** of the `companion_radio_usb_` M9
+image boots, shows the MeshCore banner in the serial dock, renders the home
+screen in the ST7789 panel, and a frame injected from the LR1110 IN panel
+appears on the emulated LCD — all from the running app.
+
 ## M8 · The keyboard: closing the interaction loop — `L`
 
 > **Follows the radio (was M7).** With `radio_init()` succeeding after M7,

@@ -189,6 +189,24 @@ describe('menu handlers', () => {
     expect(within(inspector).queryByText('GPIO16')).not.toBeInTheDocument()
   })
 
+  it('syncs the OUT-panel zoom picker with the Inspector scale field', async () => {
+    const { user } = await renderApp()
+    await user.click(screen.getByRole('button', { name: /2.4" LCD/ }))
+    const inspector = screen.getByRole('complementary', { name: 'Inspector' })
+    const output = within(inspector).getByRole('region', { name: 'Output' })
+
+    // Two "3×" buttons: the OUT-panel picker and the Configuration field.
+    const threes = within(inspector).getAllByRole('button', { name: '3×' })
+    expect(threes).toHaveLength(2)
+    const configThree = threes.find((b) => !output.contains(b))!
+    const panelThree = threes.find((b) => output.contains(b))!
+    expect(configThree).toHaveAttribute('aria-pressed', 'false')
+
+    // Clicking the panel picker must move the Configuration field too.
+    await user.click(panelThree)
+    expect(configThree).toHaveAttribute('aria-pressed', 'true')
+  })
+
   it('toggles bus labels off from the View menu', async () => {
     const { bridge, user } = await renderApp()
     await user.click(screen.getByRole('menuitem', { name: 'View' }))

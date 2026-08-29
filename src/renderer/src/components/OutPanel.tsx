@@ -44,6 +44,17 @@ export function OutPanel({
     <section className="inspector__section outpanel" aria-label="Output">
       <h4 className="inspector__section-title">Output</h4>
 
+      {/* Config, not observed state — meaningful before any bus activity, and
+          the design keeps them on the panel at all times. */}
+      {(isPanel || isEInk) && onConfigChange && (
+        <ScreenControls
+          part={part}
+          configValues={configValues}
+          onConfigChange={onConfigChange}
+          showBacklight={isPanel}
+        />
+      )}
+
       {snapshot === undefined ? (
         <p className="panel__empty">
           {part.deviceModel
@@ -76,15 +87,6 @@ export function OutPanel({
                 </button>
               )}
             </div>
-          )}
-
-          {(isPanel || isEInk) && onConfigChange && (
-            <ScreenControls
-              part={part}
-              configValues={configValues}
-              onConfigChange={onConfigChange}
-              showBacklight={isPanel}
-            />
           )}
 
           {isPanel && <St7789Screen framebuffer={view?.framebuffer} zoom={zoom} />}

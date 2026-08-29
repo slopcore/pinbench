@@ -13,8 +13,10 @@
 import type { DeviceModelDescriptor } from './model'
 import { ledDescriptor } from './led'
 import { st7789Descriptor } from './st7789'
+import { lr1110Descriptor } from './lr1110'
 
 export const BUILT_IN_DEVICE_MODELS: readonly DeviceModelDescriptor[] = [
   ledDescriptor,
-  st7789Descriptor
+  st7789Descriptor,
+  lr1110Descriptor
 ]

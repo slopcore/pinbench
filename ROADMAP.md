@@ -1901,6 +1901,61 @@ MeshCore build to its first serial output. If a live boot hits the same
 pre-existing fork GPIO fault that blocks M7.2b, that is recorded as the blocker
 (not a Heltec bug) and M13.4 lands as far as the fault, like M7.2 did.
 
+### Progress — M13.1–M13.3 landed, M13.4 pending
+
+M13.1–M13.3 are done. M13.4 (live boot) still needs a merged QEMU image and is
+the only sub-milestone open.
+
+- **M13.1** — `loadBoard()` resolves `DEFAULT_BOARD_ID` (`thinknode-m9-v1.0`)
+  before the sole-file heuristic, so the second `*.board.json` does not flip the
+  default. `boards/heltec-wireless-paper-v1.1.board.json` validates and verifies
+  clean bar three real strapping-pin `note`s. Status-bar `<select>` board picker
+  switches boards without a restart (new `board:list` IPC; `key={board.id}` on
+  `<App>` for a clean remount). Not done: persisting the choice across launches;
+  a native `View → Board` submenu (the menu is a static `CommandId` enum).
+- **M13.2** — `solomon.ssd1680`: a 250×122 1bpp e-paper model, a genuinely
+  different class — RAM is buffered and only latches to the visible frame on
+  `MASTER_ACTIVATION`, with a modelled refresh time (full ~2.6 s / fast ~900 ms
+  / partial ~340 ms) as a meter, and `BUSY` as an `outputSignal` pulsed around
+  the update so `display.begin()`'s wait clears. `EInkScreen` renders the
+  `mono1` framebuffer.
+- **M13.3** — `semtech.sx1262`: 8-bit opcodes, in-band status byte at
+  `statusPos = 1`, version register answering `SX1261` (RadioLib's `SX1262`
+  class shares that `chipType`), `BUSY` + `DIO1` as `outputSignals`. Airtime
+  **reuses** `loraToaMs` from `lr1110.ts` and a test pins it equal to the
+  LR1110's for identical LoRa params — the abstraction check the roadmap asked
+  for. 24 new model tests (8 SSD1680, 8 SX1262, plus board/renderer).
+
+**M13's grade on M4/M5 so far.** The board is pure data and the two models are
+pure `src/shared/devices/*`. What the milestone additionally cost, outside those
+two buckets:
+
+- `src/shared/devices/messages.ts` + `src/main/devices.ts` — one optional
+  `format: 'rgb565' | 'mono1'` field on `DeviceFramebufferMessage`. The
+  framebuffer contract hardcoded RGB565; 1bpp e-ink needed a discriminator.
+  This is the one genuine "the abstraction did not quite reach" — small,
+  additive, RGB565 stays the default.
+- Board picker, always scoped into M13 (`board.ts` said so since M5): new
+  `board:list` IPC (`src/shared/ipc.ts`, `src/preload/index.ts`,
+  `src/main/index.ts`), `src/renderer/src/main.tsx` (switch + remount),
+  `App.tsx` (props + the old "restart PinBench" dead-end), `StatusBar.tsx` +
+  `statusbar.css`.
+- `EInkScreen.tsx` + `OutPanel.tsx` routing + `outpanel.css` — a new OUT-panel
+  renderer for the 1bpp buffer, parallel to `St7789Screen`.
+- Test-only: `src/main/board.test.ts`, `src/renderer/src/App.test.tsx`,
+  `src/renderer/src/components/OutPanel.test.tsx`, `test/setup.ts` (the
+  `board.list` bridge stub).
+- Docs: `boards/README.md` (Heltec provenance + WiFi-out-of-scope), this file.
+
+No `src/` change was forced by the abstraction being *wrong* — the models and
+board slotted in as data. The framebuffer format field is the honest exception.
+
+**M13.4 next.** Build `Heltec_Wireless_Paper_repeater` with the DIO /
+flash-size overrides, merge the 8 MB image, launch, and follow the boot through
+`display.begin()`'s e-ink `BUSY` handshake and `radio_init()`'s SX1262
+handshake. May hit the same fork GPIO fault as M7.2b — if so, record it as the
+pre-existing blocker and land M13.4 as far as the fault.
+
 ## M14 · Generic expansion parts — `M`
 
 **Goal.** PinBench stops being a two-board tool.

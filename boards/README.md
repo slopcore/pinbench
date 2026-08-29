@@ -90,3 +90,10 @@ QIO-crash finding); the board default is QIO and the emulator build overrides it
 The `esp32s3.soc`, `pinbench.power` and `pinbench.button` model ids are
 referenced but not yet registered — a visible no-op in the device registry, the
 same as the M9's unimplemented parts before their milestones.
+
+**WiFi is out of scope.** The build PinBench targets for this board is
+`Heltec_Wireless_Paper_repeater` (MeshCore `simple_repeater`) — a LoRa-only
+mesh repeater that uses neither WiFi nor BLE. The Heltec weather-station fork
+fetches over WiFi, which the QEMU fork does not emulate; that build will not run
+end to end under PinBench and there is no stub for it. If a WiFi-dependent
+Heltec build is ever wanted here, it is its own piece of work.

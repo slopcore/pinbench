@@ -64,8 +64,11 @@ interface FramebufferSource {
     displayOn: boolean
     backlightOn: boolean
     inverted: boolean
+    /** Pixel encoding. Omitted by the ST7789 (RGB565); the e-ink panel sets `mono1`. */
+    format?: 'rgb565' | 'mono1'
     dirty: { x: number; y: number; w: number; h: number }
-    pixels: Uint16Array
+    /** RGB565 (`Uint16Array`) or a packed 1bpp buffer (`Uint8Array`), row major. */
+    pixels: Uint16Array | Uint8Array
   } | null
 }
 
@@ -282,6 +285,7 @@ export class DeviceHost extends EventEmitter {
         displayOn: frame.displayOn,
         backlightOn: frame.backlightOn,
         inverted: frame.inverted,
+        format: frame.format ?? 'rgb565',
         dirty: frame.dirty,
         // `takeFrame` already hands back a standalone copy, exactly sized.
         pixels: frame.pixels.buffer as ArrayBuffer

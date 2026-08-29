@@ -49,8 +49,11 @@ export interface DeviceCommandMessage {
  * the corollary M6 adds is that a 153,600-byte framebuffer must not ride in
  * {@link DeviceSnapshotMessage}, which the host JSON-stringifies on every
  * transaction to dedupe. The host pulls this from the model on a refresh-rate
- * timer instead and posts it here as a transferable. `pixels` is RGB565, row
- * major, `width * height` entries; the OUT panel applies `madctl` rotation.
+ * timer instead and posts it here as a transferable. For `rgb565` (the ST7789)
+ * `pixels` is one `uint16` per pixel, row major; for `mono1` (the Heltec e-ink
+ * panel) it is a packed 1-bit-per-pixel buffer, `ceil(width / 8)` bytes per row,
+ * bit set = white. The OUT panel applies `madctl` rotation for the ST7789; the
+ * e-ink panel bakes its rotation into the buffer and leaves `madctl` at 0.
  */
 export interface DeviceFramebufferMessage {
   partId: string
@@ -64,8 +67,10 @@ export interface DeviceFramebufferMessage {
   backlightOn: boolean
   /** INVON state — the renderer inverts at scan-out, as real hardware does. */
   inverted: boolean
+  /** Pixel encoding of `pixels`. Defaults to `rgb565` when absent (pre-M13 hosts). */
+  format?: 'rgb565' | 'mono1'
   /** The region that changed since the previous message, in GRAM coordinates. */
   dirty: { x: number; y: number; w: number; h: number }
-  /** RGB565, `width * height` entries, row major. Sent as a transferable buffer. */
+  /** `rgb565`: `width * height` uint16, row major. `mono1`: packed 1bpp, row major. */
   pixels: ArrayBuffer
 }

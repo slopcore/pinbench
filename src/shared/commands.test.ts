@@ -64,6 +64,7 @@ describe('menu spec', () => {
         'file.save',
         'file.saveAs',
         'file.exportHeader',
+        'file.importPinout',
         'edit.undo',
         'edit.redo',
         'edit.duplicate',

@@ -29,12 +29,12 @@ only here.
 ## A. Missing — in the design, not built
 
 > **Update (branch `usb-flash`):** every item in section A is now built and
-> unit‑tested (tiers 1–7). One sub‑item is deliberately partial — writing the
-> generated pin header into the PlatformIO build on Build & flash — because the
-> build pipeline does no pin‑header codegen today, so that is new build‑contract
-> work rather than a canvas change. Wiring each keyboard/stimulus command into
-> the QEMU‑side device model is also follow‑on (the panels render and send the
-> commands; a model consumes what it understands).
+> unit‑tested (tiers 1–8). The pin header **is** written into the checkout on
+> Build & flash (`include/<boardId>_pins.h`, skipped if the on‑disk file has no
+> PinBench sentinel), and **File ▸ Import pin header** reads a `.h` back and
+> applies it as canvas rebind edits. Wiring each keyboard/stimulus command into
+> the QEMU‑side device model is the remaining follow‑on (the panels render and
+> send the commands; a model consumes what it understands).
 
 ### Canvas
 
@@ -55,8 +55,9 @@ only here.
       open, stale edits skipped). `useBoardEditor` folds the edits into the
       board the canvas/Inspector/Library/Verify/export all read. — `Canvas.tsx`,
       `state/useBoardEditor.ts`, `shared/boardEdit.ts`, `shared/project.ts`.
-      _Partial:_ writing the header into the PlatformIO build on Build & flash —
-      see the note above.
+      Build & flash writes the generated header into the checkout
+      (`include/<boardId>_pins.h`) before `pio run`, honouring the codegen
+      divergence guard. — `src/main/build.ts`, `src/main/index.ts`
 
 ### Inspector
 
@@ -105,9 +106,11 @@ only here.
 - [x] Help ▸ **Project wiki** / **User guide** links added (main‑process
       `shell.openExternal`, like Documentation). — `shared/commands.ts`,
       `src/main/menu.ts`
-- [ ] File ▸ "Import M9 pinout" — no delivered equivalent, and no import format
-      is defined (the design mock's is fabricated). Needs a format decision
-      before it can be built. `[untracked]` (deferred) — `shared/commands.ts`
+- [x] **File ▸ Import pin header…** — reads a `.h` in the exact format
+      `generatePinHeader` emits and folds it back onto the board as `rebindPin`
+      edits (`pinHeaderChanges` in `shared/codegen.ts`), the round trip for a
+      header hand‑edited outside PinBench. Replaces the design mock's fabricated
+      "Import M9 pinout". — `shared/commands.ts`, `src/main/index.ts`, `App.tsx`
 
 ### Library
 

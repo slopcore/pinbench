@@ -17,6 +17,7 @@ export const COMMANDS = [
   'file.save',
   'file.saveAs',
   'file.exportHeader',
+  'file.importPinout',
   'file.closeProject',
   'edit.undo',
   'edit.redo',
@@ -121,6 +122,9 @@ export const MENUS: MenuSpec[] = [
         accelerator: 'CmdOrCtrl+Shift+E',
         enabled: true
       }),
+      // Reads a pin header back in and applies it as canvas rebind edits — the
+      // round trip for a header hand-edited outside PinBench.
+      item('file.importPinout', 'Import pin header…', { enabled: true }),
       separator,
       item('file.closeProject', 'Close project', { accelerator: 'CmdOrCtrl+W', enabled: false })
     ]

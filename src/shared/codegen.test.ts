@@ -8,7 +8,9 @@ import {
   generateBuildFlags,
   generatePinHeader,
   headerFingerprint,
-  HEADER_SENTINEL
+  HEADER_SENTINEL,
+  parsePinHeader,
+  pinHeaderChanges
 } from './codegen'
 
 function m9(): BoardDefinition {
@@ -109,5 +111,34 @@ describe('checkHeaderDivergence — the round-trip guard', () => {
       diverged: true,
       foreign: true
     })
+  })
+})
+
+describe('parsePinHeader / pinHeaderChanges — the import round trip', () => {
+  it('parses #define lines and ignores the include guard', () => {
+    const defs = parsePinHeader(
+      '#ifndef X_H\n#define X_H\n#define U3_CS_PIN 16\n#define U2_NSS_PIN 39\n'
+    )
+    expect(defs).toEqual([
+      { name: 'U3_CS_PIN', value: 16 },
+      { name: 'U2_NSS_PIN', value: 39 }
+    ])
+  })
+
+  it('round-trips: export, edit one define, import yields the rebind', () => {
+    const header = generatePinHeader(m9()).replace(
+      /#define U3_CS_PIN\s+\d+/,
+      '#define U3_CS_PIN 21'
+    )
+    const changes = pinHeaderChanges(header, m9())
+    expect(changes).toContainEqual({ designator: 'U3', signal: 'CS', pin: 'GPIO21' })
+  })
+
+  it('an unedited header yields no changes', () => {
+    expect(pinHeaderChanges(generatePinHeader(m9()), m9())).toEqual([])
+  })
+
+  it('ignores defines that resolve to no part signal', () => {
+    expect(pinHeaderChanges('#define TOTALLY_MADE_UP_PIN 7\n', m9())).toEqual([])
   })
 })

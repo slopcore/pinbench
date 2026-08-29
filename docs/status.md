@@ -30,7 +30,9 @@ title: Status — done, blocked, next
   collapse chevron
 - Canvas editing: drag parts, Draw-net / Probe tools, ⌘Z undo/redo,
   Duplicate / Delete / Auto-arrange, edits persisted in `ProjectFile.boardEdits`
-  and replayed on open — [[pin-map-verify-and-codegen]]
+  and replayed on open; Build & flash writes the generated pin header into the
+  checkout and File ▸ Import pin header reads one back as rebind edits —
+  [[pin-map-verify-and-codegen]]
 - Per-model Inspector IN panels from `shared/stimuli.ts` + a keyboard matrix;
   Library "Expansion · generic" and "Firmware modules" catalogue groups that
   drop a part onto the canvas
@@ -55,9 +57,6 @@ title: Status — done, blocked, next
   _Erase + flash_, `pio device list` port picker. Shared layer, `UsbFlashRunner`
   and the dialog are built and unit-tested; **not yet run against a physical
   board** — [[usb-flashing]], [ADR 0003](adr/0003-usb-flashing.md)
-- Canvas editing: write the generated pin header into the PlatformIO build on
-  Build & flash (the UI edits + `⌘Z` + persistence are done; the build pipeline
-  does no pin-header codegen yet) — [[pin-map-verify-and-codegen]]
 - Agent session dock panel + the `pinbench-mcp` stdio bridge — [[agent-control-plane]]
 - microSD + GNSS models with fault injection; RTC / IMU / magnetometer / power
   models — the Inspector IN panels now send the stimulus commands; the QEMU-side

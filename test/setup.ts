@@ -25,7 +25,8 @@ export function installBridge(initial: WorkspaceState = DEFAULT_WORKSPACE): Test
     board: {
       load: vi.fn(() => Promise.resolve({ error: 'no board in tests' as string })),
       list: vi.fn(() => Promise.resolve([] as string[])),
-      exportPinHeader: vi.fn(() => Promise.resolve(null as string | null))
+      exportPinHeader: vi.fn(() => Promise.resolve(null as string | null)),
+      importPinHeader: vi.fn(() => Promise.resolve(null as string | null))
     },
     projectFile: {
       open: vi.fn(() => Promise.resolve(null)),

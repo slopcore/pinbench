@@ -43,6 +43,7 @@ export const IpcChannel = {
   boardLoad: 'board:load',
   boardList: 'board:list',
   exportPinHeader: 'board:export-pin-header',
+  importPinHeader: 'board:import-pin-header',
   projectFileOpen: 'projectfile:open',
   projectFileSave: 'projectfile:save',
   projectFileRecent: 'projectfile:recent',
@@ -103,6 +104,12 @@ export interface BuildRequest {
   env: string
   /** Emulator launch options for the board, forwarded to the merge/boot step. */
   emulator: EmulatorLaunchOptions
+  /**
+   * Canvas edits to fold into the board before generating the pin-map header
+   * that Build & flash writes into the checkout. Empty / omitted → the pristine
+   * board's header.
+   */
+  boardEdits?: BoardEdit[]
 }
 
 export interface UsbFlashRequest {
@@ -133,6 +140,11 @@ export interface PinBenchApi {
      * board). Resolves to the written path, or null if the dialog was cancelled.
      */
     exportPinHeader(edits?: BoardEdit[]): Promise<string | null>
+    /**
+     * Prompt for a `.h` pin-map file and return its text, for the renderer to
+     * fold back into the board as `rebindPin` edits. Null if cancelled.
+     */
+    importPinHeader(): Promise<string | null>
   }
   projectFile: {
     /** Prompt for a `.pinbench` file and open it, re-adopting its PlatformIO project. */

@@ -23,6 +23,7 @@ import { UsbFlashDialog } from './components/UsbFlashDialog'
 import type { UsbFlashMode } from '@shared/usb-flash'
 import type { Diagnostic } from '@shared/diagnostics'
 import { findingsToDiagnostics, verifyBoard } from '@shared/verify'
+import { pinHeaderChanges } from '@shared/codegen'
 import { isBuildRunning } from '@shared/build'
 import { useMenuCommands } from './state/useCommands'
 import { useBoardEditor } from './state/useBoardEditor'
@@ -210,9 +211,10 @@ export function App({
     build.start({
       projectDir: project.info.dir,
       env: project.env,
-      emulator: board.emulator
+      emulator: board.emulator,
+      boardEdits: editor.edits
     })
-  }, [board.emulator, build, project])
+  }, [board.emulator, build, editor.edits, project])
 
   const startUsbFlash = useCallback(
     (port: string, mode: UsbFlashMode) => {
@@ -334,6 +336,21 @@ export function App({
     dispatch({ type: 'setDockTab', tab: 'diagnostics' })
   }, [editedBoard, dispatch])
 
+  const importPinout = useCallback(async (): Promise<void> => {
+    const text = await window.pinbench.board.importPinHeader()
+    if (!text) return
+    const declared = new Set(editedBoard.pins.map((p) => p.id))
+    const edits = pinHeaderChanges(text, editedBoard)
+      .filter((change) => declared.has(change.pin))
+      .map((change) => ({
+        kind: 'rebindPin' as const,
+        partId: editedBoard.parts.find((p) => p.designator === change.designator)!.id,
+        signal: change.signal,
+        pin: change.pin
+      }))
+    if (edits.length > 0) editor.applyMany(edits)
+  }, [editedBoard, editor])
+
   const runCommand = useCallback(
     (command: CommandId): void => {
       switch (command) {
@@ -397,6 +414,9 @@ export function App({
         case 'file.exportHeader':
           void window.pinbench.board.exportPinHeader(editor.edits)
           break
+        case 'file.importPinout':
+          if (!structuralEditsLocked) void importPinout()
+          break
         case 'edit.undo':
           if (!structuralEditsLocked) editor.undo()
           break
@@ -459,6 +479,7 @@ export function App({
       editor,
       emulator,
       fit,
+      importPinout,
       openProjectFile,
       project,
       runVerify,

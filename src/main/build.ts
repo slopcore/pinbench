@@ -1,7 +1,9 @@
 import { spawn as nodeSpawn } from 'node:child_process'
 import type { ChildProcess } from 'node:child_process'
-import { existsSync, statSync } from 'node:fs'
+import { existsSync, readFileSync, statSync } from 'node:fs'
 import { mkdir as fsMkdir, writeFile as fsWriteFile } from 'node:fs/promises'
+import { dirname } from 'node:path'
+import { checkHeaderDivergence } from '../shared/codegen'
 import { EventEmitter } from 'node:events'
 import { basename, isAbsolute, join, resolve } from 'node:path'
 import { canTransition, phaseFromLine, transition } from '../shared/build'
@@ -20,11 +22,19 @@ export interface BuildRunOptions {
   env: string
   /** Emulator target: flash-image size, plus PSRAM width for the DIO override. */
   emulator: { flashSize?: string; psramSize?: string; psramOctal?: boolean }
+  /**
+   * The generated pin-map header to write into the checkout before compiling —
+   * `path` relative to `projectDir`. Skipped when the on-disk file was not
+   * PinBench-generated (no sentinel), so a hand-written header is never
+   * clobbered. Omit to not touch any header.
+   */
+  pinHeader?: { path: string; content: string }
 }
 
 export interface BuildRunnerDeps {
   spawn: typeof nodeSpawn
   writeFile: (path: string, data: string) => Promise<void>
+  readFileMaybe: (path: string) => string | null
   mkdir: (path: string) => Promise<void>
   fileExists: (path: string) => boolean
   mtime: (path: string) => number
@@ -41,6 +51,13 @@ function defaultDeps(cacheDir: string, userDataDir: string): BuildRunnerDeps {
   return {
     spawn: nodeSpawn,
     writeFile: (path, data) => fsWriteFile(path, data, 'utf8'),
+    readFileMaybe: (path) => {
+      try {
+        return readFileSync(path, 'utf8')
+      } catch {
+        return null
+      }
+    },
     mkdir: async (path) => {
       await fsMkdir(path, { recursive: true })
     },
@@ -117,6 +134,35 @@ export class BuildRunner extends EventEmitter {
     } catch (error) {
       return this.fail(`Could not write the emulator build config: ${String(error)}`)
     }
+
+    // Write the generated pin-map header into the checkout, honouring the
+    // codegen divergence guard: a header the user has hand-edited (no PinBench
+    // sentinel) is left alone.
+    if (options.pinHeader) {
+      const target = join(options.projectDir, options.pinHeader.path)
+      const onDisk = this.deps.readFileMaybe(target)
+      const { foreign } = checkHeaderDivergence(onDisk, null)
+      if (onDisk !== null && foreign) {
+        this.emit('output', {
+          stream: 'stderr',
+          text: `[pinbench] ${options.pinHeader.path} was not PinBench-generated — leaving it untouched`,
+          replace: false
+        } satisfies BuildOutputLine)
+      } else {
+        try {
+          await this.deps.mkdir(dirname(target))
+          await this.deps.writeFile(target, options.pinHeader.content)
+          this.emit('output', {
+            stream: 'stdout',
+            text: `[pinbench] wrote pin map → ${options.pinHeader.path}`,
+            replace: false
+          } satisfies BuildOutputLine)
+        } catch (error) {
+          return this.fail(`Could not write the pin-map header: ${String(error)}`)
+        }
+      }
+    }
+    if (this.cancelled) return this.setState('cancelled')
 
     const buildDir = join(options.projectDir, '.pio', 'build', options.env)
     const firmwareBin = join(buildDir, 'firmware.bin')

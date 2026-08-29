@@ -51,6 +51,34 @@ let acpBridge: AcpBridge | null = null
 
 const cacheDir = (): string => join(app.getPath('userData'), 'build-cache')
 
+/** `currentBoard` with the renderer's canvas edits folded in, stale edits skipped. */
+function boardWithEdits(edits: BoardEdit[] | undefined): BoardDefinition | null {
+  let board = currentBoard
+  if (!board) return null
+  for (const edit of Array.isArray(edits) ? edits : []) {
+    try {
+      board = applyEdit(board, edit)
+    } catch {
+      /* a stale edit — skip it, same as the renderer's replay */
+    }
+  }
+  return board
+}
+
+/** The pin-map header Build & flash should write, or `{}` when no board is loaded. */
+function pinHeaderFor(
+  edits: BoardEdit[] | undefined
+): { pinHeader: { path: string; content: string } } | Record<string, never> {
+  const board = boardWithEdits(edits)
+  if (!board) return {}
+  return {
+    pinHeader: {
+      path: join('include', `${board.id}_pins.h`),
+      content: generatePinHeader(board)
+    }
+  }
+}
+
 const builder = (): BuildRunner => {
   if (!build) {
     build = new BuildRunner({ cacheDir: cacheDir(), userDataDir: app.getPath('userData') })
@@ -287,15 +315,8 @@ function registerIpc(): void {
   ipcMain.handle(
     IpcChannel.exportPinHeader,
     async (_event, edits?: BoardEdit[]): Promise<string | null> => {
-      if (!mainWindow || !currentBoard) return null
-      let board = currentBoard
-      for (const edit of Array.isArray(edits) ? edits : []) {
-        try {
-          board = applyEdit(board, edit)
-        } catch {
-          /* a stale edit — skip it, same as the renderer's replay */
-        }
-      }
+      const board = boardWithEdits(edits)
+      if (!mainWindow || !board) return null
       const result = await dialog.showSaveDialog(mainWindow, {
         title: 'Export pin header',
         defaultPath: `board_${board.id}.h`,
@@ -306,6 +327,21 @@ function registerIpc(): void {
       return result.filePath
     }
   )
+
+  ipcMain.handle(IpcChannel.importPinHeader, async (): Promise<string | null> => {
+    if (!mainWindow) return null
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: 'Import pin header',
+      filters: [{ name: 'C header', extensions: ['h'] }],
+      properties: ['openFile']
+    })
+    if (result.canceled || result.filePaths.length === 0) return null
+    try {
+      return readFileSync(result.filePaths[0]!, 'utf8')
+    } catch (error) {
+      return `/* import failed: ${String(error)} */`
+    }
+  })
 
   ipcMain.on(
     IpcChannel.deviceCommand,
@@ -366,7 +402,12 @@ function registerIpc(): void {
     // an arbitrary path off the bridge is refused, the way file reads are.
     if (!isOpenProject(request.projectDir)) return
     void builder()
-      .run({ projectDir: request.projectDir, env: request.env, emulator: request.emulator })
+      .run({
+        projectDir: request.projectDir,
+        env: request.env,
+        emulator: request.emulator,
+        ...pinHeaderFor(request.boardEdits)
+      })
       .catch((error: unknown) => {
         mainWindow?.webContents.send(IpcChannel.buildState, {
           state: 'failed',

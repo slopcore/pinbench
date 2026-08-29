@@ -80,6 +80,42 @@ export function pinDefines(
   return out
 }
 
+/** `#define NAME 12` lines → `{ name, value }`, ignoring guards and comments. */
+export function parsePinHeader(text: string): { name: string; value: number }[] {
+  const out: { name: string; value: number }[] = []
+  for (const line of text.split(/\r?\n/)) {
+    const m = /^#define\s+([A-Za-z_][A-Za-z0-9_]*)\s+(-?\d+)/.exec(line.trim())
+    if (m && !/_H$/.test(m[1]!)) out.push({ name: m[1]!, value: Number(m[2]) })
+  }
+  return out
+}
+
+/**
+ * Map a parsed header back onto a board: for each `<DESIGNATOR>_<SIGNAL>_PIN`
+ * define, if the named part has that signal on a different pin, produce the
+ * `{ designator, signal, pin }` change. Defines that resolve to nothing on the
+ * board (bus roles, net labels, unknown parts) are ignored.
+ */
+export function pinHeaderChanges(
+  text: string,
+  board: BoardDefinition
+): { designator: string; signal: string; pin: string }[] {
+  const byDesignator = new Map(board.parts.map((p) => [ident(p.designator), p]))
+  const changes: { designator: string; signal: string; pin: string }[] = []
+  for (const { name, value } of parsePinHeader(text)) {
+    const m = /^(.+)_(.+)_PIN$/.exec(name)
+    if (!m) continue
+    const part = byDesignator.get(m[1]!)
+    if (!part) continue
+    const binding = part.pins.find((b) => ident(b.signal) === m[2])
+    if (!binding) continue
+    const pin = `GPIO${value}`
+    if (binding.pin !== pin)
+      changes.push({ designator: part.designator, signal: binding.signal, pin })
+  }
+  return changes
+}
+
 /** The full C header text. Deterministic — sorted by name for a stable diff. */
 export function generatePinHeader(board: BoardDefinition): string {
   const defines = pinDefines(board).sort((a, b) => a.name.localeCompare(b.name))

@@ -54,6 +54,7 @@ function makeRunner(overrides: Partial<BuildRunnerDeps> = {}) {
     writeFile: async (path, data) => {
       writes[path] = data
     },
+    readFileMaybe: () => null,
     mkdir: async () => undefined,
     fileExists: () => true,
     mtime: () => 1,
@@ -109,6 +110,41 @@ describe('BuildRunner', () => {
     const mergeArgs = spawns[1]!.args
     expect(mergeArgs[mergeArgs.indexOf('--flash_size') + 1]).toBe('16MB')
     expect(mergeArgs[mergeArgs.indexOf('--fill-flash-size') + 1]).toBe('16MB')
+    finish(spawns[1]!, '', 0)
+    await done
+  })
+
+  it('writes the pin header into the checkout before compiling', async () => {
+    const { runner, spawns, writes } = makeRunner()
+    const header = '/* PinBench-generated pin map — DO NOT EDIT. Edit the canvas. */\n#define X 1\n'
+    const done = runner.run({
+      projectDir: '/proj',
+      env: 'esp32s3',
+      emulator: {},
+      pinHeader: { path: join('include', 'b_pins.h'), content: header }
+    })
+    await vi.waitFor(() => expect(spawns).toHaveLength(1))
+    expect(writes[join('/proj', 'include', 'b_pins.h')]).toBe(header)
+    finish(spawns[0]!, 'Compiling src/main.cpp.o\nLinking firmware.elf\n', 0)
+    await vi.waitFor(() => expect(spawns).toHaveLength(2))
+    finish(spawns[1]!, '', 0)
+    await done
+  })
+
+  it('leaves a hand-written header (no sentinel) untouched', async () => {
+    const { runner, spawns, writes } = makeRunner({
+      readFileMaybe: () => '#define X 1  // my own header\n'
+    })
+    const done = runner.run({
+      projectDir: '/proj',
+      env: 'esp32s3',
+      emulator: {},
+      pinHeader: { path: join('include', 'b_pins.h'), content: '/* generated */\n' }
+    })
+    await vi.waitFor(() => expect(spawns).toHaveLength(1))
+    expect(writes[join('/proj', 'include', 'b_pins.h')]).toBeUndefined()
+    finish(spawns[0]!, 'Compiling src/main.cpp.o\nLinking firmware.elf\n', 0)
+    await vi.waitFor(() => expect(spawns).toHaveLength(2))
     finish(spawns[1]!, '', 0)
     await done
   })

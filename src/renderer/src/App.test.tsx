@@ -176,6 +176,19 @@ describe('menu handlers', () => {
     expect(window.pinbench.board.exportPinHeader).toHaveBeenCalled()
   })
 
+  it('imports a pin header and applies it as a canvas rebind', async () => {
+    const { user } = await renderApp()
+    vi.mocked(window.pinbench.board.importPinHeader).mockResolvedValueOnce('#define U3_CS_PIN 21\n')
+    await user.click(screen.getByRole('button', { name: /2.4" LCD/ }))
+    const inspector = screen.getByRole('complementary', { name: 'Inspector' })
+    expect(within(inspector).getByText('GPIO16')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('menuitem', { name: 'File' }))
+    await user.click(screen.getByRole('menuitem', { name: /Import pin header/ }))
+    await waitFor(() => expect(within(inspector).getByText('GPIO21')).toBeInTheDocument())
+    expect(within(inspector).queryByText('GPIO16')).not.toBeInTheDocument()
+  })
+
   it('toggles bus labels off from the View menu', async () => {
     const { bridge, user } = await renderApp()
     await user.click(screen.getByRole('menuitem', { name: 'View' }))

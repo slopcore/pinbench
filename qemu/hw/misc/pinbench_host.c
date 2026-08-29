@@ -19,6 +19,7 @@ struct PinbenchHost {
     int fd;
     uint16_t seq;
     bool warned;
+    uint64_t input_mask; /* SoC input pins the host answers GPIO_IN for */
 };
 
 static bool write_all(int fd, const void *buf, size_t len)
@@ -56,6 +57,12 @@ static bool read_all(int fd, void *buf, size_t len)
         len -= n;
     }
     return true;
+}
+
+static uint32_t get_le32(const uint8_t *p)
+{
+    return (uint32_t) p[0] | ((uint32_t) p[1] << 8) |
+           ((uint32_t) p[2] << 16) | ((uint32_t) p[3] << 24);
 }
 
 static void put_le16(uint8_t *p, uint16_t v) { p[0] = v; p[1] = v >> 8; }
@@ -137,12 +144,72 @@ PinbenchHost *pinbench_host_get(void)
         host = NULL;
         return NULL;
     }
-    /* Drain the 3-byte Hello echo payload. */
-    uint8_t echo[3];
-    read_all(fd, echo, sizeof(echo));
+    /*
+     * The Hello reply payload is the 8-byte little-endian mask of SoC input
+     * pins the host will answer GPIO_IN reads for (M7). An older host echoed
+     * the 3-byte "pb1" tag instead — tolerate any length, only an exact 8
+     * bytes is read as a mask.
+     */
+    uint32_t plen = get_le32(hdr + 16);
+    if (plen == 8) {
+        uint8_t buf[8];
+        if (read_all(fd, buf, 8)) {
+            for (int i = 0; i < 8; i++) {
+                host->input_mask |= (uint64_t) buf[i] << (8 * i);
+            }
+        }
+    } else {
+        uint8_t drain[64];
+        while (plen) {
+            uint32_t n = plen > sizeof(drain) ? sizeof(drain) : plen;
+            if (!read_all(fd, drain, n)) {
+                break;
+            }
+            plen -= n;
+        }
+    }
 
-    qemu_log("pinbench: connected to device host at %s\n", path);
+    qemu_log("pinbench: connected to device host at %s (input mask 0x%016llx)\n",
+             path, (unsigned long long) host->input_mask);
     return host;
+}
+
+uint64_t pinbench_host_input_mask(PinbenchHost *h)
+{
+    return h ? h->input_mask : 0;
+}
+
+int pinbench_host_gpio_read(PinbenchHost *h, uint32_t pin)
+{
+    if (!h) {
+        return 0;
+    }
+
+    uint8_t hdr[PINBENCH_FRAME_HDR];
+    encode_header(hdr, PINBENCH_OP_GPIO_READ, PINBENCH_BUS_NONE,
+                  (uint16_t) pin, h->seq++, 0);
+
+    if (!write_all(h->fd, hdr, sizeof(hdr)) ||
+        !read_all(h->fd, hdr, PINBENCH_FRAME_HDR)) {
+        goto fail;
+    }
+    uint32_t rlen = get_le32(hdr + 16);
+    if (rlen != 1) {
+        goto fail;
+    }
+    uint8_t level;
+    if (!read_all(h->fd, &level, 1)) {
+        goto fail;
+    }
+    return level ? 1 : 0;
+
+fail:
+    if (!h->warned) {
+        h->warned = true;
+        qemu_log_mask(LOG_GUEST_ERROR,
+                      "pinbench: GPIO input read failed — line reads low\n");
+    }
+    return 0;
 }
 
 bool pinbench_host_xfer(PinbenchHost *h, uint8_t bus_index,

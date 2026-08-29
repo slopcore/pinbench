@@ -96,6 +96,12 @@ interface LoadedDevice {
   csPin: number | null
   /** Whether this part's chip-select is currently asserted (low). */
   csLow: boolean
+  /**
+   * `model.outputSignals` resolved to SoC pin numbers — the lines this device
+   * drives *into* the SoC (`BUSY`, `IRQ`, `PPS`). The host answers the guest's
+   * `GPIO_IN` reads of these pins from {@link DeviceHost.pinLevels}.
+   */
+  outPinBySignal: Map<string, number>
   quarantined: boolean
   slowWarned: boolean
   lastSnapshotJson: string
@@ -121,6 +127,13 @@ export class DeviceHost extends EventEmitter {
   private server: Server | null = null
   private socketPath: string | null = null
   private connection: Socket | null = null
+  /**
+   * SoC input-pin number → the level a device model is currently driving onto
+   * it (M7 host→guest line read). Answered on {@link Op.GpioRead}; the set of
+   * keys is also the mask the {@link Op.Hello} reply hands the guest so it
+   * knows which `GPIO_IN` reads to route here.
+   */
+  private pinLevels = new Map<number, 0 | 1>()
   /** board bus id → part ids on it, in board order. */
   private busMembers = new Map<string, string[]>()
   private frameTimer: ReturnType<typeof setInterval> | null = null
@@ -196,6 +209,23 @@ export class DeviceHost extends EventEmitter {
         }
       }
 
+      const outPinBySignal = new Map<string, number>()
+      for (const signal of model.outputSignals ?? []) {
+        const binding = part.pins.find((b) => b.signal === signal)
+        const pinNum = binding ? pinNumber(binding.pin) : null
+        if (pinNum !== null) {
+          outPinBySignal.set(signal, pinNum)
+          // Default the line to idle-low until the model drives it.
+          if (!this.pinLevels.has(pinNum)) this.pinLevels.set(pinNum, 0)
+        } else {
+          this.diagnose(
+            'warn',
+            `outsig-${part.id}-${signal}`,
+            `${part.designator}: model drives "${signal}" but the board binds no such pin`
+          )
+        }
+      }
+
       const loaded: LoadedDevice = {
         part,
         model,
@@ -205,6 +235,7 @@ export class DeviceHost extends EventEmitter {
         // A chip-select idles high (deselected); the LR1110, which has no CS
         // GPIO of its own on this board, is treated as always addressable.
         csLow: csPin === null,
+        outPinBySignal,
         quarantined: false,
         slowWarned: false,
         lastSnapshotJson: '',
@@ -362,7 +393,13 @@ export class DeviceHost extends EventEmitter {
   handleFrame(frame: Frame): Uint8Array | null {
     switch (frame.op) {
       case Op.Hello:
-        return encodeFrame({ ...frame, reply: true })
+        // Reply payload = 8-byte little-endian mask of the SoC input pins the
+        // host will answer GPIO_IN reads for (M7 host→guest line read).
+        return encodeFrame({ ...frame, reply: true, payload: this.inputPinMask() })
+      case Op.GpioRead: {
+        const level = this.pinLevels.get(frame.select) ?? 0
+        return encodeFrame({ ...frame, reply: true, payload: Uint8Array.of(level) })
+      }
       case Op.Reset:
         this.resetAll()
         return null
@@ -436,6 +473,10 @@ export class DeviceHost extends EventEmitter {
   private contextFor(device: LoadedDevice): DeviceContext {
     return {
       driveSignal: (signal, level) => {
+        // Host→guest line: record the level so a guest GPIO_IN read of the
+        // bound pin (Op.GpioRead) sees it. The LR1110's BUSY/IRQ arrive here.
+        const pin = device.outPinBySignal.get(signal)
+        if (pin !== undefined) this.pinLevels.set(pin, level)
         this.emit('event', {
           partId: device.part.id,
           event: {
@@ -518,6 +559,15 @@ export class DeviceHost extends EventEmitter {
       this.pushSnapshot(device)
       return undefined
     }
+  }
+
+  /** 8-byte LE bitmask of the SoC input pins the host answers GPIO_IN for. */
+  private inputPinMask(): Uint8Array {
+    const out = new Uint8Array(8)
+    for (const pin of this.pinLevels.keys()) {
+      if (pin >= 0 && pin < 64) out[pin >> 3]! |= 1 << (pin & 7)
+    }
+    return out
   }
 
   private deviceOnBus(busIndex: number, select: number): LoadedDevice | undefined {
@@ -634,6 +684,7 @@ export class DeviceHost extends EventEmitter {
       }
     }
     this.devices = new Map()
+    this.pinLevels = new Map()
   }
 }
 

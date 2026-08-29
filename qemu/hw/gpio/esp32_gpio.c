@@ -11,6 +11,12 @@
  *
  * Register offsets are the ESP32-S3 GPIO block (also correct for the classic
  * ESP32 for the subset used here).
+ *
+ * PinBench M7 adds the reverse direction: a GPIO_IN / GPIO_IN1 read of a pin
+ * in the device host's input mask (LR1110 BUSY / DIO9, later GNSS PPS,
+ * KEY_INT) is routed to the host, which answers with the level a TS device
+ * model is driving. Pins outside the mask still read back the guest's own
+ * output drive, as before.
  */
 #include "qemu/osdep.h"
 #include "qemu/log.h"
@@ -40,6 +46,31 @@
 #define A_GPIO_IN1           0x0040
 
 #define GPIO_BANK1_PINS 22 /* GPIO32..53 */
+
+/*
+ * Overlay host-driven input levels onto `base` for the pins of one bank that
+ * are set in the device host's input mask. `bank_lo` is the first pin number
+ * of the bank (0 or 32); the returned value is bank-relative like the register.
+ */
+static uint32_t esp32_gpio_apply_host_inputs(uint32_t base, int bank_lo)
+{
+    PinbenchHost *host = pinbench_host_get();
+    uint64_t mask = pinbench_host_input_mask(host);
+    if (!mask) {
+        return base;
+    }
+    for (int pin = bank_lo; pin < bank_lo + 32; pin++) {
+        if (mask & (1ull << pin)) {
+            int bit = pin - bank_lo;
+            if (pinbench_host_gpio_read(host, pin)) {
+                base |= (1u << bit);
+            } else {
+                base &= ~(1u << bit);
+            }
+        }
+    }
+    return base;
+}
 
 static void esp32_gpio_forward(Esp32GpioState *s)
 {
@@ -74,9 +105,10 @@ static uint64_t esp32_gpio_read(void *opaque, hwaddr addr, unsigned int size)
     case A_GPIO_ENABLE1:
         return s->enable1;
     case A_GPIO_IN:
-        return s->out;   /* no external inputs modelled; read back the drive */
+        /* Host-driven inputs override the drive-back for masked pins (M7). */
+        return esp32_gpio_apply_host_inputs(s->out, 0);
     case A_GPIO_IN1:
-        return s->out1;
+        return esp32_gpio_apply_host_inputs(s->out1, 32);
     default:
         return 0;
     }

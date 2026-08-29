@@ -49,6 +49,20 @@ export const Op = {
   /** Reset every model to power-on. No payload, no reply. */
   Reset: 0x04,
   /**
+   * The guest read a GPIO **input**. `select` carries the raw SoC pin number;
+   * the host replies with `payload[0]` = the level (0/1) it is currently
+   * driving onto that pin from a device model's `driveSignal`, or 0 if nothing
+   * drives it.
+   *
+   * M7: the LR1110's `BUSY` (GPIO41) and `DIO9`/IRQ (GPIO42) are inputs to the
+   * SoC. RadioLib level-polls them (`while (digitalRead(busy)) …`), so a bare
+   * MMIO read of `GPIO_IN`/`GPIO_IN1` for a pin in the host's declared
+   * input-mask issues this frame and blocks on the reply — the same
+   * request/reply shape as {@link Xfer}, no async machinery. The mask is the
+   * 8-byte little-endian payload of the {@link Hello} reply.
+   */
+  GpioRead: 0x06,
+  /**
    * The guest wrote a GPIO output. `select` carries the raw SoC pin number
    * (0–48), `payload[0]` the level (0/1). No reply.
    *

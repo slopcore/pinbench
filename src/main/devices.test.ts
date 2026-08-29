@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { BoardDefinition } from '../shared/board'
 import { DeviceRegistry } from '../shared/devices/registry'
 import { ledDescriptor } from '../shared/devices/led'
+import { lr1110Descriptor } from '../shared/devices/lr1110'
 import { encodeFrame, FrameDecoder, Op, signalHash, type Frame } from '../shared/devices/protocol'
 import { st7789Descriptor } from '../shared/devices/st7789'
 import {
@@ -268,12 +269,101 @@ describe('DeviceHost — socket transport', () => {
       }
     ])
 
-    // Hello echoes; Signal takes no reply; Xfer replies (LED has no onBus → 0xFF).
+    // Hello replies with the 8-byte input-pin mask; Signal takes no reply;
+    // Xfer replies (LED has no onBus → 0xFF). The LED drives nothing into the
+    // SoC, so the mask is empty.
     expect(replies).toHaveLength(2)
     expect(replies[0]).toMatchObject({ op: Op.Hello, reply: true })
-    expect(new TextDecoder().decode(replies[0]!.payload)).toBe('pb1')
+    expect(replies[0]!.payload).toHaveLength(8)
+    expect([...replies[0]!.payload]).toEqual([0, 0, 0, 0, 0, 0, 0, 0])
     expect(replies[1]).toMatchObject({ op: Op.Xfer, reply: true, seq: 3 })
     expect([...replies[1]!.payload]).toEqual([0xff, 0xff, 0xff, 0xff])
+  })
+})
+
+describe('DeviceHost — host→guest GPIO input (M7)', () => {
+  function radioBoard(): BoardDefinition {
+    return board({
+      parts: [
+        {
+          id: 'u2',
+          designator: 'U2',
+          name: 'LR1110',
+          category: 'radio',
+          deviceModel: 'semtech.lr1110',
+          summary: '',
+          buses: ['spi0'],
+          pins: [
+            { signal: 'NSS', pin: 'GPIO39' },
+            { signal: 'BUSY', pin: 'GPIO41' },
+            { signal: 'IRQ', pin: 'GPIO42' },
+            { signal: 'NRESET', pin: 'GPIO45' }
+          ],
+          config: [],
+          layout: { x: 0, y: 0, width: 10, height: 10 }
+        }
+      ]
+    })
+  }
+
+  function radioHost(): DeviceHost {
+    const registry = new DeviceRegistry()
+    registry.register(lr1110Descriptor)
+    const h = new DeviceHost({ registry })
+    h.load(radioBoard())
+    return h
+  }
+
+  const helloFrame = (): Frame => ({
+    op: Op.Hello,
+    reply: false,
+    bus: 0xff,
+    select: 0xffff,
+    seq: 1,
+    t: 0,
+    payload: new Uint8Array(0)
+  })
+
+  const gpioRead = (pin: number): Frame => ({
+    op: Op.GpioRead,
+    reply: false,
+    bus: 0xff,
+    select: pin,
+    seq: 2,
+    t: 0,
+    payload: new Uint8Array(0)
+  })
+
+  const decodeReply = (bytes: Uint8Array | null): Frame => {
+    expect(bytes).not.toBeNull()
+    return new FrameDecoder().push(bytes!)[0]!
+  }
+
+  it('the Hello reply masks exactly the pins a model drives (BUSY 41, IRQ 42)', () => {
+    host = radioHost()
+    const reply = decodeReply(host.handleFrame(helloFrame()))
+    expect(reply.payload).toHaveLength(8)
+    // 41 → byte 5 bit 1, 42 → byte 5 bit 2.
+    expect([...reply.payload]).toEqual([0, 0, 0, 0, 0, 0x06, 0, 0])
+  })
+
+  it('answers GPIO_IN for BUSY (idle low) and reflects a driven IRQ', () => {
+    host = radioHost()
+    expect(decodeReply(host.handleFrame(gpioRead(41))).payload[0]).toBe(0) // BUSY low
+
+    // Walk the model to a TX so it raises DIO9/IRQ.
+    const w = (op: number, ...p: number[]) =>
+      host!.injectBus('u2', Uint8Array.from([op >> 8, op & 0xff, ...p]), { select: 'NSS' })
+    w(0x020e, 0x02) // SET_PACKET_TYPE LoRa
+    w(0x020f, 9, 0x05, 0x05, 0x00) // SET_MODULATION_PARAMS
+    w(0x0113, 0xff, 0xff, 0xff, 0xff, 0, 0, 0, 0) // SET_DIO_IRQ_PARAMS
+    w(0x0109, 1, 2, 3, 4) // WRITE_BUFFER
+    w(0x020a, 0, 0, 0) // SET_TX → IRQ high
+
+    expect(decodeReply(host.handleFrame(gpioRead(42))).payload[0]).toBe(1) // DIO9 high
+
+    w(0x0114, 0xff, 0xff, 0xff, 0xff) // CLEAR_IRQ
+    expect(decodeReply(host.handleFrame(gpioRead(42))).payload[0]).toBe(0)
   })
 })
 

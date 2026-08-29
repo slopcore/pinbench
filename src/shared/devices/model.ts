@@ -121,6 +121,14 @@ export interface DeviceModel {
   readonly id: string
   /** Meters this model publishes. Fixed for the life of the instance. */
   readonly meters: readonly MeterDeclaration[]
+  /**
+   * Signal names this model drives *out* onto SoC pins via
+   * {@link DeviceContext.driveSignal} — the LR1110's `BUSY` and `IRQ`, a
+   * GNSS `PPS`, a keyboard `KEY_INT`. The host maps each to its board pin and
+   * answers the guest's `GPIO_IN` reads of those pins (M7's host→guest line
+   * read). Omit for a model that drives nothing into the SoC.
+   */
+  readonly outputSignals?: readonly string[]
 
   /** Called once when the board loads. The context is valid until `detach`. */
   attach(ctx: DeviceContext): void

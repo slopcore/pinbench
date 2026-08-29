@@ -184,6 +184,8 @@ export function loraToaMs(sf: number, bwHz: number, crDen: number, payloadLen: n
 
 export class Lr1110Model implements DeviceModel {
   readonly id = 'semtech.lr1110'
+  /** BUSY (GPIO41) and DIO9/IRQ (GPIO42) are inputs the SoC level-polls. */
+  readonly outputSignals = ['BUSY', 'IRQ'] as const
   readonly meters: readonly MeterDeclaration[] = [
     { id: 'freq', label: 'Frequency', unit: 'Hz' },
     { id: 'rssi', label: 'Last RSSI', unit: 'dBm' },

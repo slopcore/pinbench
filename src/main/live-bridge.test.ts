@@ -34,7 +34,9 @@ describe.skipIf(!LIVE || !IMAGE || !existsSync(IMAGE) || !existsSync(QEMU))(
 
     beforeAll(async () => {
       const board = parseBoard(
-        JSON.parse(readFileSync(resolve(__dirname, '../../boards/thinknode-m9-v1.0.board.json'), 'utf8'))
+        JSON.parse(
+          readFileSync(resolve(__dirname, '../../boards/thinknode-m9-v1.0.board.json'), 'utf8')
+        )
       )
       host.load(board)
       host.on('diagnostic', (d: { message: string }) => diagnostics.push(d.message))
@@ -59,11 +61,16 @@ describe.skipIf(!LIVE || !IMAGE || !existsSync(IMAGE) || !existsSync(QEMU))(
         QEMU,
         [
           '-nographic',
-          '-machine', 'esp32s3',
-          '-m', '8M',
-          '-global', 'ssi_psram.is_octal=true',
-          '-drive', `file=${IMAGE},if=mtd,format=raw`,
-          '-serial', 'mon:stdio',
+          '-machine',
+          'esp32s3',
+          '-m',
+          '8M',
+          '-global',
+          'ssi_psram.is_octal=true',
+          '-drive',
+          `file=${IMAGE},if=mtd,format=raw`,
+          '-serial',
+          'mon:stdio',
           '-no-reboot'
         ],
         { env: { ...process.env, PINBENCH_DEVICE_SOCKET: sock }, stdio: ['ignore', 'pipe', 'pipe'] }
@@ -121,6 +128,95 @@ describe.skipIf(!LIVE || !IMAGE || !existsSync(IMAGE) || !existsSync(QEMU))(
       expect(diagnostics.filter((m) => /cs-contention|asserted together/i.test(m))).toEqual([])
       // dc powers on in command mode, so the first transfer is not a stray byte.
       expect(diagnostics.filter((m) => /no command context/i.test(m))).toEqual([])
+    })
+  }
+)
+
+/**
+ * M7.2 — the host→guest GPIO input read against a live guest. Same gating as
+ * above (`PINBENCH_LIVE_QEMU=1`, `PINBENCH_M9_IMAGE`).
+ *
+ * What this proves: the `Op.Hello` reply hands the guest the 8-byte input-pin
+ * mask, and the patched `esp32_gpio.c` routes `GPIO_IN1` reads of the masked
+ * LR1110 lines (BUSY 41, DIO9 42) through `Op.GpioRead` to `DeviceHost`, which
+ * answers from `pinLevels`. Verified live: the mask arrives as
+ * `0x0000060000000000` and both pins are read over the bridge.
+ *
+ * What it does NOT yet prove — and why it is carried to **M7.2b**: MeshCore's
+ * `radio_init()` still fails `-707` before it clocks a single SPI byte to the
+ * radio, stopped by a pre-existing GPIO fault in the espressif fork (the
+ * `__pinMode(): Invalid pin selected` / `gpio_set_level(227)` errors first
+ * seen in M6.2 and never chased down). The LR1110 model therefore receives no
+ * bus traffic in this run — the blocker is upstream of it, in the fork's GPIO
+ * model, not in M7.1/M7.2 code.
+ */
+describe.skipIf(!LIVE || !IMAGE || !existsSync(IMAGE) || !existsSync(QEMU))(
+  'M7.2 — host→guest line reads (LR1110 BUSY / DIO9)',
+  () => {
+    const host = new DeviceHost()
+    let serial = ''
+    let child: ReturnType<typeof spawn> | null = null
+    const gpioReadPins = new Set<number>()
+    let helloMask: number[] = []
+
+    beforeAll(async () => {
+      const board = parseBoard(
+        JSON.parse(
+          readFileSync(resolve(__dirname, '../../boards/thinknode-m9-v1.0.board.json'), 'utf8')
+        )
+      )
+      host.load(board)
+      const orig = host.handleFrame.bind(host)
+      ;(host as unknown as { handleFrame: typeof orig }).handleFrame = (f) => {
+        if (f.op === Op.GpioRead) gpioReadPins.add(f.select)
+        const reply = orig(f)
+        if (f.op === Op.Hello && reply) helloMask = [...reply.subarray(20)]
+        return reply
+      }
+      const sock = join(tmpdir(), `m72-test-${process.pid}.sock`)
+      await host.listen(sock)
+      child = spawn(
+        QEMU,
+        [
+          '-nographic',
+          '-machine',
+          'esp32s3',
+          '-m',
+          '8M',
+          '-global',
+          'ssi_psram.is_octal=true',
+          '-drive',
+          `file=${IMAGE},if=mtd,format=raw`,
+          '-serial',
+          'mon:stdio',
+          '-no-reboot'
+        ],
+        { env: { ...process.env, PINBENCH_DEVICE_SOCKET: sock }, stdio: ['ignore', 'pipe', 'pipe'] }
+      )
+      child.stdout?.on('data', (d: Buffer) => (serial += d.toString()))
+      child.stderr?.on('data', (d: Buffer) => (serial += d.toString()))
+      await new Promise((r) => setTimeout(r, 10_000))
+    }, 20_000)
+
+    afterAll(async () => {
+      child?.kill('SIGKILL')
+      await host.dispose()
+    })
+
+    it('hands the guest the input-pin mask in the Hello reply (BUSY 41, DIO9 42)', () => {
+      // Bits 41 and 42 → byte 5, bits 1 and 2 → 0x06.
+      expect(helloMask).toEqual([0, 0, 0, 0, 0, 0x06, 0, 0])
+    })
+
+    it('routes GPIO_IN reads of the masked LR1110 lines through Op.GpioRead', () => {
+      expect(serial).toContain('input mask 0x0000060000000000')
+      expect([...gpioReadPins].sort((a, b) => a - b)).toEqual([41, 42])
+    })
+
+    // Carried to M7.2b: radio_init() is blocked by the fork's pre-existing
+    // pin-227 GPIO fault, upstream of any LR1110 SPI traffic.
+    it.skip('radio_init() succeeds and the LR1110 model reaches LoRa standby', () => {
+      expect(serial).not.toMatch(/radio init failed/i)
     })
   }
 )

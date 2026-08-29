@@ -25,11 +25,12 @@
 #define PINBENCH_SELECT_NONE   0xffff
 
 enum {
-    PINBENCH_OP_HELLO  = 0x01,
-    PINBENCH_OP_XFER   = 0x02,
-    PINBENCH_OP_SIGNAL = 0x03,
-    PINBENCH_OP_RESET  = 0x04,
-    PINBENCH_OP_GPIO   = 0x05,
+    PINBENCH_OP_HELLO     = 0x01,
+    PINBENCH_OP_XFER      = 0x02,
+    PINBENCH_OP_SIGNAL    = 0x03,
+    PINBENCH_OP_RESET     = 0x04,
+    PINBENCH_OP_GPIO_READ = 0x06,
+    PINBENCH_OP_GPIO      = 0x05,
 };
 
 typedef struct PinbenchHost PinbenchHost;
@@ -52,6 +53,22 @@ bool pinbench_host_xfer(PinbenchHost *h, uint8_t bus_index,
 
 /* One GPIO output edge: SoC pin number `pin`, level 0/1. Fire-and-forget. */
 void pinbench_host_gpio(PinbenchHost *h, uint32_t pin, int level);
+
+/*
+ * The 64-bit mask of SoC input pins the host will answer for — bit N set means
+ * a GPIO_IN read of pin N should be routed through pinbench_host_gpio_read()
+ * rather than read back the guest's own output drive. Delivered as the 8-byte
+ * payload of the Hello reply; 0 if the socket is unset or the host is old.
+ */
+uint64_t pinbench_host_input_mask(PinbenchHost *h);
+
+/*
+ * Read one SoC input pin the host is driving from a device model
+ * (LR1110 BUSY / DIO9, GNSS PPS, …). Blocks the vCPU on the reply. Returns
+ * 0 or 1; on any socket failure returns 0 (a released line — never 0xFF,
+ * because a stuck-high BUSY would hang RadioLib's poll).
+ */
+int pinbench_host_gpio_read(PinbenchHost *h, uint32_t pin);
 
 /*
  * Instantiate the GP-SPI2 / GP-SPI3 controllers and map them into `sys_mem`.

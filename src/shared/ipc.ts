@@ -41,6 +41,7 @@ export const IpcChannel = {
   projectFileChanged: 'project:file-changed',
   boardLoad: 'board:load',
   boardList: 'board:list',
+  exportPinHeader: 'board:export-pin-header',
   projectFileOpen: 'projectfile:open',
   projectFileSave: 'projectfile:save',
   projectFileRecent: 'projectfile:recent',
@@ -125,6 +126,11 @@ export interface PinBenchApi {
     load(id?: string): Promise<BoardLoadResult>
     /** Board ids available on disk, sorted — for the board picker. */
     list(): Promise<string[]>
+    /**
+     * Write the pin-map C header for the loaded board to a path the user picks.
+     * Resolves to the written path, or null if the save dialog was cancelled.
+     */
+    exportPinHeader(): Promise<string | null>
   }
   projectFile: {
     /** Prompt for a `.pinbench` file and open it, re-adopting its PlatformIO project. */

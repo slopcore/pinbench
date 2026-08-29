@@ -1,7 +1,8 @@
 import type { BuildState } from '@shared/build'
 import { buildButtonLabel, isBuildRunning } from '@shared/build'
 import type { EmulatorState } from '@shared/emulator'
-import type { CanvasTool, GridStyle, WorkspaceState } from '@shared/workspace'
+import { BUS_FILTER_KINDS } from '@shared/workspace'
+import type { BusFilterKind, CanvasTool, GridStyle, WorkspaceState } from '@shared/workspace'
 import './toolbar.css'
 
 export interface ToolSpec {
@@ -35,11 +36,13 @@ interface ToolbarProps {
   onBuildAndFlash: () => void
   onCancelBuild: () => void
   onFlashUsb: () => void
+  onVerify: () => void
   onEmulatorStart: () => void
   onEmulatorStop: () => void
   onEmulatorReset: () => void
   onSelectTool: (tool: CanvasTool) => void
   onSelectGrid: (grid: GridStyle) => void
+  onToggleBusFilter: (kind: BusFilterKind) => void
   onZoomIn: () => void
   onZoomOut: () => void
   onFit: () => void
@@ -55,11 +58,13 @@ export function Toolbar({
   onBuildAndFlash,
   onCancelBuild,
   onFlashUsb,
+  onVerify,
   onEmulatorStart,
   onEmulatorStop,
   onEmulatorReset,
   onSelectTool,
   onSelectGrid,
+  onToggleBusFilter,
   onZoomIn,
   onZoomOut,
   onFit,
@@ -90,6 +95,14 @@ export function Toolbar({
         title="Flash the firmware to an attached board over USB (⌘⇧U)"
       >
         Flash USB…
+      </button>
+      <button
+        type="button"
+        className="toolbar__button toolbar__button--wide"
+        onClick={onVerify}
+        title="Verify the pin map against the board rules (⌘B)"
+      >
+        Verify
       </button>
       <div className="toolbar__group" role="group" aria-label="Emulator">
         <button
@@ -139,6 +152,25 @@ export function Toolbar({
             {tool.glyph}
           </button>
         ))}
+      </div>
+
+      <div className="toolbar__group" role="group" aria-label="Bus filter">
+        {BUS_FILTER_KINDS.map((kind) => {
+          const on = !workspace.canvas.hiddenBuses.includes(kind)
+          return (
+            <button
+              key={kind}
+              type="button"
+              className="toolbar__chip"
+              aria-pressed={on}
+              data-active={on || undefined}
+              title={`${on ? 'Hide' : 'Show'} ${kind.toUpperCase()} nets`}
+              onClick={() => onToggleBusFilter(kind)}
+            >
+              {kind.toUpperCase()}
+            </button>
+          )
+        })}
       </div>
 
       <div className="toolbar__spacer" />

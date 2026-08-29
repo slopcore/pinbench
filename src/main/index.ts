@@ -1,5 +1,6 @@
 import { watch, type FSWatcher } from 'node:fs'
 import { existsSync, readFileSync, rmSync } from 'node:fs'
+import { writeFile } from 'node:fs/promises'
 import { basename, join, resolve } from 'node:path'
 import { BrowserWindow, Menu, app, dialog, ipcMain, shell } from 'electron'
 import { IpcChannel } from '../shared/ipc'
@@ -24,6 +25,7 @@ import { isBuildRunning } from '../shared/build'
 import { isUsbFlashRunning } from '../shared/usb-flash'
 import { parseEnvNamesFromIni } from '../shared/pio'
 import { availableBoardIds, loadBoard } from './board'
+import { generatePinHeader } from '../shared/codegen'
 import { readProjectFile, writeProjectFile } from './projectFile'
 import { BuildRunner } from './build'
 import { UsbFlashRunner } from './usb-flash'
@@ -280,6 +282,18 @@ function registerIpc(): void {
   })
 
   ipcMain.handle(IpcChannel.boardList, (): string[] => availableBoardIds())
+
+  ipcMain.handle(IpcChannel.exportPinHeader, async (): Promise<string | null> => {
+    if (!mainWindow || !currentBoard) return null
+    const result = await dialog.showSaveDialog(mainWindow, {
+      title: 'Export pin header',
+      defaultPath: `board_${currentBoard.id}.h`,
+      filters: [{ name: 'C header', extensions: ['h'] }]
+    })
+    if (result.canceled || !result.filePath) return null
+    await writeFile(result.filePath, generatePinHeader(currentBoard), 'utf8')
+    return result.filePath
+  })
 
   ipcMain.on(
     IpcChannel.deviceCommand,

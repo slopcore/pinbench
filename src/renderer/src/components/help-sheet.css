@@ -1,0 +1,106 @@
+.help-sheet__scrim {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: grid;
+  place-items: center;
+  background: rgb(0 0 0 / 0.32);
+}
+
+.help-sheet {
+  width: min(560px, 90vw);
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-panel);
+  overflow: hidden;
+}
+
+.help-sheet__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.help-sheet__header h2 {
+  margin: 0;
+  font-size: var(--font-size-md);
+  font-weight: var(--weight-semibold);
+}
+
+.help-sheet__close {
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--font-size-lg);
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 var(--space-2);
+}
+
+.help-sheet__close:hover {
+  color: var(--text-primary);
+}
+
+.help-sheet__body {
+  padding: var(--space-4);
+  overflow-y: auto;
+}
+
+.help-sheet__group + .help-sheet__group {
+  margin-top: var(--space-4);
+}
+
+.help-sheet__group h3 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  color: var(--text-muted);
+}
+
+.help-sheet__group dl,
+.help-sheet__about dl {
+  margin: 0;
+}
+
+.help-sheet__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-1) 0;
+}
+
+.help-sheet__row dt {
+  color: var(--text-secondary);
+}
+
+.help-sheet__row dd {
+  margin: 0;
+}
+
+.help-sheet__row kbd {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  padding: 2px 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+}
+
+.help-sheet__product {
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-size-lg);
+  font-weight: var(--weight-semibold);
+}
+
+.help-sheet__blurb {
+  margin: var(--space-3) 0 0;
+  color: var(--text-muted);
+}

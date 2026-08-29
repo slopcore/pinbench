@@ -1,8 +1,9 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { DEFAULT_WORKSPACE } from '@shared/workspace'
 import type { WorkspaceState } from '@shared/workspace'
+import { MENUS } from '@shared/commands'
 import { App } from './App'
 import { M9_BOARD } from '../../../test/board'
 import { installBridge, type TestBridge } from '../../../test/setup'
@@ -26,8 +27,9 @@ async function renderApp(
     />
   )
   // The status bar is always present; waiting on it lets the restore land
-  // before a test starts clicking.
-  await screen.findByText(/GPIO assigned/)
+  // before a test starts clicking. (The same totals string also renders in the
+  // canvas overlay chip, so match all occurrences.)
+  await screen.findAllByText(/GPIO assigned/)
   return { bridge, user }
 }
 
@@ -62,7 +64,8 @@ describe('the shell', () => {
 
   it('shows counts computed from the board definition', async () => {
     await renderApp()
-    expect(screen.getByText('9 parts · 12 nets · 31 GPIO assigned')).toBeInTheDocument()
+    // Both the status bar and the canvas overlay chip carry the computed totals.
+    expect(screen.getAllByText('9 parts · 12 nets · 31 GPIO assigned').length).toBeGreaterThan(0)
   })
 })
 
@@ -86,6 +89,14 @@ describe('panel toggles', () => {
     const { user } = await renderApp()
     await user.click(screen.getByRole('button', { name: 'Hide dock' }))
     expect(screen.queryByRole('region', { name: 'Dock' })).not.toBeInTheDocument()
+  })
+
+  it('collapses the dock to its tab strip from the chevron', async () => {
+    const { bridge, user } = await renderApp()
+    await user.click(screen.getByRole('button', { name: 'Collapse dock' }))
+    expect(screen.queryByRole('tabpanel', { name: 'Serial monitor' })).not.toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Dock' })).toHaveAttribute('data-collapsed')
+    await waitFor(() => expect(bridge.saved.at(-1)?.dockCollapsed).toBe(true))
   })
 })
 
@@ -140,6 +151,65 @@ describe('the menu bar', () => {
     await user.click(screen.getByRole('menuitem', { name: /Verify pin map/ }))
     // The shipped M9 is clean, so the SPI0 chip-select `ok` row appears.
     expect(await screen.findByText(/SPI0: 3 chip-selects/)).toBeInTheDocument()
+  })
+})
+
+describe('menu handlers', () => {
+  it('opens the keyboard-shortcuts sheet from Help', async () => {
+    const { user } = await renderApp()
+    await user.click(screen.getByRole('menuitem', { name: 'Help' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Keyboard shortcuts' }))
+    expect(screen.getByRole('dialog', { name: 'Keyboard shortcuts' })).toBeInTheDocument()
+  })
+
+  it('opens the About sheet from Help', async () => {
+    const { user } = await renderApp()
+    await user.click(screen.getByRole('menuitem', { name: 'Help' }))
+    await user.click(screen.getByRole('menuitem', { name: 'About PinBench' }))
+    expect(screen.getByRole('dialog', { name: 'About PinBench' })).toBeInTheDocument()
+  })
+
+  it('exports the pin header through the bridge', async () => {
+    const { user } = await renderApp()
+    await user.click(screen.getByRole('menuitem', { name: 'File' }))
+    await user.click(screen.getByRole('menuitem', { name: /Export pin header/ }))
+    expect(window.pinbench.board.exportPinHeader).toHaveBeenCalled()
+  })
+
+  it('toggles bus labels off from the View menu', async () => {
+    const { bridge, user } = await renderApp()
+    await user.click(screen.getByRole('menuitem', { name: 'View' }))
+    await user.click(screen.getByRole('menuitemcheckbox', { name: /Bus labels/ }))
+    await waitFor(() => expect(bridge.saved.at(-1)?.canvas.busLabels).toBe(false))
+  })
+
+  // Guards the `default: break` in runCommand — an enabled menu item with no
+  // handler (how help.shortcuts / help.about originally shipped dead) throws
+  // here or, worse, silently does nothing. Fires every enabled item once.
+  it('every enabled menu item runs without throwing', async () => {
+    const errors: unknown[] = []
+    const onError = (event: ErrorEvent): void => void errors.push(event.error)
+    window.addEventListener('error', onError)
+    try {
+      for (const menu of MENUS) {
+        const labels = menu.entries
+          .filter((entry) => entry.type === 'item' && entry.enabled)
+          .map((entry) => (entry as { label: string }).label)
+        for (const label of labels) {
+          cleanup()
+          const { user } = await renderApp()
+          await user.click(screen.getByRole('menuitem', { name: menu.label }))
+          const openMenu = screen.getByRole('menu', { name: menu.label })
+          const button = [
+            ...openMenu.querySelectorAll<HTMLButtonElement>('button.menu__item')
+          ].find((node) => node.querySelector('.menu__label')?.textContent === label)
+          if (button) await user.click(button)
+        }
+      }
+    } finally {
+      window.removeEventListener('error', onError)
+    }
+    expect(errors).toEqual([])
   })
 })
 

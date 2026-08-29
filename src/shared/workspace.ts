@@ -10,6 +10,10 @@ export type WorkspaceTab = 'diagram' | 'source'
 export type DockTab = 'serial' | 'diagnostics'
 export type GridStyle = 'dot' | 'line' | 'none'
 export type CanvasTool = 'select' | 'pan' | 'net' | 'probe'
+/** Bus kinds the toolbar filter chips can dim on the canvas. */
+export type BusFilterKind = 'spi' | 'i2c' | 'uart' | 'gpio'
+
+export const BUS_FILTER_KINDS: readonly BusFilterKind[] = ['spi', 'i2c', 'uart', 'gpio']
 
 export interface ViewportState {
   /** Canvas pan offset in screen pixels. */
@@ -30,10 +34,16 @@ export interface WorkspaceState {
   workspaceTab: WorkspaceTab
   dockTab: DockTab
   dockHeight: number
+  /** Dock shrunk to its tab strip (the design's collapse chevron). */
+  dockCollapsed: boolean
   canvas: {
     tool: CanvasTool
     grid: GridStyle
     snapToGrid: boolean
+    /** Net/bus labels drawn on the canvas (View ▸ Bus labels, key `L`). */
+    busLabels: boolean
+    /** Bus kinds dimmed by the toolbar filter chips. */
+    hiddenBuses: BusFilterKind[]
     viewport: ViewportState
   }
   selectedPartId: string | null
@@ -50,10 +60,13 @@ export const DEFAULT_WORKSPACE: WorkspaceState = {
   workspaceTab: 'diagram',
   dockTab: 'serial',
   dockHeight: 208,
+  dockCollapsed: false,
   canvas: {
     tool: 'select',
     grid: 'dot',
     snapToGrid: true,
+    busLabels: true,
+    hiddenBuses: [],
     viewport: { x: 0, y: 0, zoom: 1 }
   },
   selectedPartId: null
@@ -68,9 +81,13 @@ export type WorkspaceAction =
   | { type: 'setWorkspaceTab'; tab: WorkspaceTab }
   | { type: 'setDockTab'; tab: DockTab }
   | { type: 'setDockHeight'; height: number }
+  | { type: 'toggleDockCollapsed' }
+  | { type: 'setDockCollapsed'; collapsed: boolean }
   | { type: 'setTool'; tool: CanvasTool }
   | { type: 'setGrid'; grid: GridStyle }
   | { type: 'toggleSnapToGrid' }
+  | { type: 'toggleBusLabels' }
+  | { type: 'toggleBusFilter'; kind: BusFilterKind }
   | { type: 'setViewport'; viewport: ViewportState }
   | { type: 'panBy'; dx: number; dy: number }
   | { type: 'zoomTo'; zoom: number; origin?: { x: number; y: number } }
@@ -94,12 +111,24 @@ export function workspaceReducer(state: WorkspaceState, action: WorkspaceAction)
       return { ...state, dockTab: action.tab, panels: { ...state.panels, dock: true } }
     case 'setDockHeight':
       return { ...state, dockHeight: clamp(action.height, MIN_DOCK_HEIGHT, MAX_DOCK_HEIGHT) }
+    case 'toggleDockCollapsed':
+      return { ...state, dockCollapsed: !state.dockCollapsed }
+    case 'setDockCollapsed':
+      return { ...state, dockCollapsed: action.collapsed }
     case 'setTool':
       return { ...state, canvas: { ...state.canvas, tool: action.tool } }
     case 'setGrid':
       return { ...state, canvas: { ...state.canvas, grid: action.grid } }
     case 'toggleSnapToGrid':
       return { ...state, canvas: { ...state.canvas, snapToGrid: !state.canvas.snapToGrid } }
+    case 'toggleBusLabels':
+      return { ...state, canvas: { ...state.canvas, busLabels: !state.canvas.busLabels } }
+    case 'toggleBusFilter': {
+      const hidden = state.canvas.hiddenBuses.includes(action.kind)
+        ? state.canvas.hiddenBuses.filter((kind) => kind !== action.kind)
+        : [...state.canvas.hiddenBuses, action.kind]
+      return { ...state, canvas: { ...state.canvas, hiddenBuses: hidden } }
+    }
     case 'setViewport':
       return {
         ...state,
@@ -182,10 +211,17 @@ export function normaliseWorkspace(input: unknown): WorkspaceState {
       MIN_DOCK_HEIGHT,
       MAX_DOCK_HEIGHT
     ),
+    dockCollapsed: bool(raw.dockCollapsed, DEFAULT_WORKSPACE.dockCollapsed),
     canvas: {
       tool: pick(canvas.tool, ['select', 'pan', 'net', 'probe'], DEFAULT_WORKSPACE.canvas.tool),
       grid: pick(canvas.grid, ['dot', 'line', 'none'], DEFAULT_WORKSPACE.canvas.grid),
       snapToGrid: bool(canvas.snapToGrid, DEFAULT_WORKSPACE.canvas.snapToGrid),
+      busLabels: bool(canvas.busLabels, DEFAULT_WORKSPACE.canvas.busLabels),
+      hiddenBuses: Array.isArray(canvas.hiddenBuses)
+        ? canvas.hiddenBuses.filter((kind): kind is BusFilterKind =>
+            BUS_FILTER_KINDS.includes(kind as BusFilterKind)
+          )
+        : [],
       viewport: {
         x: num(viewport.x, 0),
         y: num(viewport.y, 0),

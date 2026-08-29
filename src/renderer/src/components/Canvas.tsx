@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { MAX_ZOOM, MIN_ZOOM, clamp, fitViewport } from '@shared/workspace'
 import type { ViewportState, WorkspaceState } from '@shared/workspace'
+import { boardTotals } from '@shared/board'
 import type { BoardDefinition, PartDefinition } from '@shared/board'
+import { netColour, netFilterKind } from '@shared/nets'
 import './canvas.css'
 
 const GRID_SPACING = 20
@@ -22,19 +24,12 @@ interface CanvasProps {
   ready: boolean
 }
 
-/** Nets are coloured by the bus they belong to; loose nets stay neutral. */
-function netColour(busId: string | undefined, buses: BoardDefinition['buses']): string {
-  const bus = buses.find((candidate) => candidate.id === busId)
-  switch (bus?.kind) {
-    case 'spi':
-      return 'var(--accent-500)'
-    case 'i2c':
-      return 'var(--accent-2-500)'
-    case 'uart':
-      return 'var(--status-warn)'
-    default:
-      return 'var(--neutral-600)'
-  }
+/** SPI buses carrying more than one peripheral — the "Shared SPI bus" notice. */
+function sharedSpiBuses(board: BoardDefinition): string[] {
+  return board.buses
+    .filter((bus) => bus.kind === 'spi')
+    .filter((bus) => board.parts.filter((part) => part.buses.includes(bus.id)).length > 1)
+    .map((bus) => bus.label)
 }
 
 const partCentre = (part: PartDefinition): { x: number; y: number } => ({
@@ -54,7 +49,10 @@ export function Canvas({
   const hostRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<{ pointerId: number; x: number; y: number } | null>(null)
   const spaceHeldRef = useRef(false)
-  const { viewport, grid, tool } = workspace.canvas
+  const { viewport, grid, tool, busLabels, hiddenBuses } = workspace.canvas
+  const [spiToastDismissed, setSpiToastDismissed] = useState(false)
+  const sharedSpi = sharedSpiBuses(board)
+  const totals = boardTotals(board)
 
   const measure = useCallback((): { width: number; height: number } => {
     const rect = hostRef.current?.getBoundingClientRect()
@@ -207,23 +205,57 @@ export function Canvas({
             board.nets.map((net) => {
               const hub = partCentre(mcu)
               const colour = netColour(net.bus, board.buses)
-              return net.nodes
+              const filterKind = netFilterKind(net.bus, board.buses)
+              const dimmed = filterKind !== null && hiddenBuses.includes(filterKind)
+              const ends = net.nodes
                 .filter((node) => node.includes(':'))
                 .map((node) => {
                   const partId = node.split(':')[0] ?? ''
                   const part = board.parts.find((candidate) => candidate.id === partId)
-                  if (!part) return null
-                  const end = partCentre(part)
-                  const midX = (hub.x + end.x) / 2
-                  return (
-                    <polyline
-                      key={`${net.id}-${node}`}
-                      className="canvas__net"
-                      points={`${hub.x},${hub.y} ${midX},${hub.y} ${midX},${end.y} ${end.x},${end.y}`}
-                      stroke={colour}
-                    />
-                  )
+                  return part ? { node, end: partCentre(part) } : null
                 })
+                .filter(
+                  (entry): entry is { node: string; end: { x: number; y: number } } =>
+                    entry !== null
+                )
+              if (ends.length === 0) return null
+              // Put the label on the leg to the furthest peripheral, so it sits
+              // clear of the MCU card.
+              const furthest = ends.reduce((a, b) =>
+                Math.abs(b.end.x - hub.x) > Math.abs(a.end.x - hub.x) ? b : a
+              )
+              const labelX = (hub.x + furthest.end.x) / 2
+              const labelY = furthest.end.y - 8
+              return (
+                <g key={net.id} className="canvas__net-group" data-dimmed={dimmed || undefined}>
+                  {ends.map(({ node, end }) => {
+                    const midX = (hub.x + end.x) / 2
+                    return (
+                      <polyline
+                        key={`${net.id}-${node}`}
+                        className="canvas__net"
+                        points={`${hub.x},${hub.y} ${midX},${hub.y} ${midX},${end.y} ${end.x},${end.y}`}
+                        stroke={colour}
+                      />
+                    )
+                  })}
+                  {busLabels && !dimmed && (
+                    <g className="canvas__net-label" transform={`translate(${labelX} ${labelY})`}>
+                      <rect
+                        className="canvas__net-label-box"
+                        x={-net.label.length * 3.4 - 6}
+                        y={-9}
+                        width={net.label.length * 6.8 + 12}
+                        height={16}
+                        rx={8}
+                      />
+                      <text className="canvas__net-label-text" x={0} y={2} textAnchor="middle">
+                        {net.label}
+                      </text>
+                    </g>
+                  )}
+                </g>
+              )
             })}
 
           {board.parts.map((part) => {
@@ -259,6 +291,26 @@ export function Canvas({
           })}
         </g>
       </svg>
+
+      <div className="canvas__stats" aria-label="Diagram totals">
+        {totals.parts} parts · {totals.nets} nets · {totals.assignedGpio} GPIO assigned
+      </div>
+
+      {sharedSpi.length > 0 && !spiToastDismissed && (
+        <div className="canvas__toast" role="status">
+          <span className="canvas__toast-text">
+            Shared SPI bus — {sharedSpi.join(', ')} carries more than one peripheral
+          </span>
+          <button
+            type="button"
+            className="canvas__toast-dismiss"
+            aria-label="Dismiss"
+            onClick={() => setSpiToastDismissed(true)}
+          >
+            ×
+          </button>
+        </div>
+      )}
     </div>
   )
 }

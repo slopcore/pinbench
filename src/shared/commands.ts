@@ -16,6 +16,7 @@ export const COMMANDS = [
   'file.openFirmware',
   'file.save',
   'file.saveAs',
+  'file.exportHeader',
   'file.closeProject',
   'edit.undo',
   'edit.redo',
@@ -37,6 +38,7 @@ export const COMMANDS = [
   'view.gridLine',
   'view.gridNone',
   'view.snapToGrid',
+  'view.busLabels',
   'build.buildAndFlash',
   'build.flashUsb',
   'build.verifyPinMap',
@@ -109,6 +111,13 @@ export const MENUS: MenuSpec[] = [
       item('file.save', 'Save', { accelerator: 'CmdOrCtrl+S', enabled: true }),
       item('file.saveAs', 'Save as…', { accelerator: 'CmdOrCtrl+Shift+S', enabled: true }),
       separator,
+      // Writes the pin-map C header (shared/codegen.ts) — the same output
+      // Build & flash produces, on demand and to a path the user picks.
+      item('file.exportHeader', 'Export pin header…', {
+        accelerator: 'CmdOrCtrl+Shift+E',
+        enabled: true
+      }),
+      separator,
       item('file.closeProject', 'Close project', { accelerator: 'CmdOrCtrl+W', enabled: false })
     ]
   },
@@ -153,7 +162,9 @@ export const MENUS: MenuSpec[] = [
       item('view.gridDot', 'Dot grid', { checkable: true }),
       item('view.gridLine', 'Line grid', { checkable: true }),
       item('view.gridNone', 'No grid', { checkable: true }),
-      item('view.snapToGrid', 'Snap to grid', { accelerator: 'CmdOrCtrl+G', checkable: true })
+      item('view.snapToGrid', 'Snap to grid', { accelerator: 'CmdOrCtrl+G', checkable: true }),
+      separator,
+      item('view.busLabels', 'Bus labels', { accelerator: 'L', checkable: true })
     ]
   },
   {

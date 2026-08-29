@@ -9,6 +9,8 @@ import { MAX_ZOOM, MIN_ZOOM, clamp, fitViewport } from '@shared/workspace'
 import type { CanvasTool, GridStyle, WorkspaceState } from '@shared/workspace'
 import { Canvas, ZOOM_STEP } from './components/Canvas'
 import { Dock } from './components/Dock'
+import { HelpSheet } from './components/HelpSheet'
+import type { HelpSheetKind } from './components/HelpSheet'
 import { Inspector } from './components/Inspector'
 import { LibraryPanel } from './components/LibraryPanel'
 import { SourceView } from './components/SourceView'
@@ -55,8 +57,17 @@ export function App({
   const build = useBuild((image) => emulator.start(image))
   const usbFlash = useUsbFlash()
   const [usbFlashOpen, setUsbFlashOpen] = useState(false)
+  const [helpSheet, setHelpSheet] = useState<HelpSheetKind | null>(null)
   const devices = useDevices()
   const totals = useMemo(() => boardTotals(board), [board])
+
+  // Populate the status-bar port label once on mount; the Flash-over-USB dialog
+  // refreshes the same list when it opens.
+  const refreshPorts = usbFlash.refreshPorts
+  useEffect(() => {
+    void refreshPorts()
+  }, [refreshPorts])
+  const activePort = usbFlash.ports[0]?.port ?? null
   const selectedPart = workspace.selectedPartId
     ? findPart(board, workspace.selectedPartId)
     : undefined
@@ -260,6 +271,11 @@ export function App({
     [dispatch, workspace.canvas.viewport.zoom]
   )
 
+  const runVerify = useCallback((): void => {
+    setVerifyRows(findingsToDiagnostics(verifyBoard(board)))
+    dispatch({ type: 'setDockTab', tab: 'diagnostics' })
+  }, [board, dispatch])
+
   const runCommand = useCallback(
     (command: CommandId): void => {
       switch (command) {
@@ -305,6 +321,9 @@ export function App({
         case 'view.snapToGrid':
           dispatch({ type: 'toggleSnapToGrid' })
           break
+        case 'view.busLabels':
+          dispatch({ type: 'toggleBusLabels' })
+          break
         case 'file.openFirmware':
           emulator.openAndStart()
           break
@@ -317,6 +336,9 @@ export function App({
         case 'file.saveAs':
           void saveProject(true)
           break
+        case 'file.exportHeader':
+          void window.pinbench.board.exportPinHeader()
+          break
         case 'build.buildAndFlash':
           buildAndFlash()
           break
@@ -324,8 +346,7 @@ export function App({
           setUsbFlashOpen(true)
           break
         case 'build.verifyPinMap':
-          setVerifyRows(findingsToDiagnostics(verifyBoard(board)))
-          dispatch({ type: 'setDockTab', tab: 'diagnostics' })
+          runVerify()
           break
         case 'build.clean':
           if (project.info) build.clean(project.info.dir)
@@ -341,14 +362,16 @@ export function App({
           emulator.reset()
           break
         case 'help.shortcuts':
+          setHelpSheet('shortcuts')
+          break
         case 'help.about':
+          setHelpSheet('about')
           break
         default:
           break
       }
     },
     [
-      board,
       buildAndFlash,
       build,
       dispatch,
@@ -356,6 +379,7 @@ export function App({
       fit,
       openProjectFile,
       project,
+      runVerify,
       saveProject,
       workspace.workspaceTab,
       zoomBy
@@ -385,6 +409,8 @@ export function App({
           return workspace.canvas.grid === 'none'
         case 'view.snapToGrid':
           return workspace.canvas.snapToGrid
+        case 'view.busLabels':
+          return workspace.canvas.busLabels
         default:
           return false
       }
@@ -418,6 +444,7 @@ export function App({
         onBuildAndFlash={buildAndFlash}
         onCancelBuild={build.cancel}
         onFlashUsb={() => setUsbFlashOpen(true)}
+        onVerify={runVerify}
         onEmulatorStart={() =>
           emulator.firmwarePath ? emulator.start(emulator.firmwarePath) : emulator.openAndStart()
         }
@@ -425,6 +452,7 @@ export function App({
         onEmulatorReset={emulator.reset}
         onSelectTool={(tool: CanvasTool) => dispatch({ type: 'setTool', tool })}
         onSelectGrid={(grid: GridStyle) => dispatch({ type: 'setGrid', grid })}
+        onToggleBusFilter={(kind) => dispatch({ type: 'toggleBusFilter', kind })}
         onZoomIn={() => zoomBy(ZOOM_STEP)}
         onZoomOut={() => zoomBy(1 / ZOOM_STEP)}
         onFit={fit}
@@ -498,6 +526,7 @@ export function App({
               <Dock
                 tab={workspace.dockTab}
                 height={workspace.dockHeight}
+                collapsed={workspace.dockCollapsed}
                 serial={emulator.serial}
                 diagnostics={diagnostics}
                 buildLog={build.log}
@@ -505,6 +534,7 @@ export function App({
                 emulatorState={emulator.state}
                 onSelectTab={(tab) => dispatch({ type: 'setDockTab', tab })}
                 onResize={(height) => dispatch({ type: 'setDockHeight', height })}
+                onToggleCollapsed={() => dispatch({ type: 'toggleDockCollapsed' })}
                 onClose={() => dispatch({ type: 'setPanel', panel: 'dock', open: false })}
                 onSerialSubmit={emulator.writeSerial}
                 onOpenSource={openInSource}
@@ -541,6 +571,7 @@ export function App({
         availableBoards={availableBoards}
         onSelectBoard={onSelectBoard}
         totals={totals}
+        port={activePort}
         emulator={emulator.state}
         version={appInfo.version}
       />
@@ -559,6 +590,13 @@ export function App({
           setUsbFlashOpen(false)
           usbFlash.reset()
         }}
+      />
+
+      <HelpSheet
+        kind={helpSheet}
+        platform={appInfo.platform}
+        appInfo={appInfo}
+        onClose={() => setHelpSheet(null)}
       />
     </div>
   )

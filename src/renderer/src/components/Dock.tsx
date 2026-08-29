@@ -14,6 +14,8 @@ export type { Diagnostic, DiagnosticSeverity }
 interface DockProps {
   tab: DockTab
   height: number
+  /** Shrunk to the tab strip (the design's collapse chevron). */
+  collapsed: boolean
   serial: SerialLine[]
   diagnostics: Diagnostic[]
   buildLog: BuildOutputLine[]
@@ -21,6 +23,7 @@ interface DockProps {
   emulatorState: EmulatorState
   onSelectTab: (tab: DockTab) => void
   onResize: (height: number) => void
+  onToggleCollapsed: () => void
   onClose: () => void
   onSerialSubmit: (text: string) => void
   onOpenSource: (file: string, line?: number) => void
@@ -42,6 +45,7 @@ const shortPath = (path: string): string => {
 export function Dock({
   tab,
   height,
+  collapsed,
   serial,
   diagnostics,
   buildLog,
@@ -49,6 +53,7 @@ export function Dock({
   emulatorState,
   onSelectTab,
   onResize,
+  onToggleCollapsed,
   onClose,
   onSerialSubmit,
   onOpenSource
@@ -117,25 +122,45 @@ export function Dock({
 
   const isRunning = emulatorState === 'running'
   const showBuildLog = buildLog.length > 0 || isBuildRunning(buildStatus.state)
+  const meta =
+    tab === 'serial'
+      ? `115200 8N1${isRunning ? ' · live' : ''}`
+      : `${diagnostics.length} message${diagnostics.length === 1 ? '' : 's'}`
 
   return (
-    <section className="dock" style={{ height }} aria-label="Dock">
-      <div
-        className="dock__resizer"
-        role="separator"
-        aria-orientation="horizontal"
-        aria-label="Resize dock"
-        aria-valuenow={height}
-        aria-valuemin={MIN_DOCK_HEIGHT}
-        aria-valuemax={MAX_DOCK_HEIGHT}
-        tabIndex={0}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={endDrag}
-        onPointerCancel={endDrag}
-        onKeyDown={onKeyDown}
-      />
+    <section
+      className="dock"
+      style={{ height: collapsed ? undefined : height }}
+      data-collapsed={collapsed || undefined}
+      aria-label="Dock"
+    >
+      {!collapsed && (
+        <div
+          className="dock__resizer"
+          role="separator"
+          aria-orientation="horizontal"
+          aria-label="Resize dock"
+          aria-valuenow={height}
+          aria-valuemin={MIN_DOCK_HEIGHT}
+          aria-valuemax={MAX_DOCK_HEIGHT}
+          tabIndex={0}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={endDrag}
+          onPointerCancel={endDrag}
+          onKeyDown={onKeyDown}
+        />
+      )}
       <div className="dock__tabs" role="tablist" aria-label="Dock panels">
+        <button
+          type="button"
+          className="dock__chevron"
+          aria-label={collapsed ? 'Expand dock' : 'Collapse dock'}
+          aria-expanded={!collapsed}
+          onClick={onToggleCollapsed}
+        >
+          {collapsed ? '▴' : '▾'}
+        </button>
         <button
           type="button"
           role="tab"
@@ -157,13 +182,14 @@ export function Dock({
           Diagnostics
           {diagnostics.length > 0 && <span className="tab__badge">{diagnostics.length}</span>}
         </button>
+        <span className="dock__meta">{meta}</span>
         <span className="dock__tabs-spacer" />
         <button type="button" className="dock__close" aria-label="Hide dock" onClick={onClose}>
           ×
         </button>
       </div>
 
-      {tab === 'serial' ? (
+      {collapsed ? null : tab === 'serial' ? (
         <div className="dock__body dock__body--serial" role="tabpanel" aria-label="Serial monitor">
           <ol className="serial" ref={listRef} onScroll={onScroll}>
             {serial.map((line, index) => (

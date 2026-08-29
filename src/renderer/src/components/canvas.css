@@ -31,6 +31,66 @@
   opacity: 0.55;
 }
 
+.canvas__net-group[data-dimmed] {
+  opacity: 0.12;
+}
+
+.canvas__net-label-box {
+  fill: var(--surface-raised);
+  stroke: var(--border-strong);
+  stroke-width: 1;
+}
+
+.canvas__net-label-text {
+  fill: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 9px;
+}
+
+.canvas__stats,
+.canvas__toast {
+  position: absolute;
+  z-index: 2;
+  font-size: var(--font-size-xs);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-panel);
+}
+
+.canvas__stats {
+  left: var(--space-3);
+  bottom: var(--space-3);
+  padding: var(--space-1) var(--space-3);
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+  pointer-events: none;
+}
+
+.canvas__toast {
+  right: var(--space-3);
+  top: var(--space-3);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  color: var(--text-primary);
+  max-width: 320px;
+}
+
+.canvas__toast-dismiss {
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--font-size-md);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.canvas__toast-dismiss:hover {
+  color: var(--text-primary);
+}
+
 .canvas__part {
   cursor: pointer;
 }

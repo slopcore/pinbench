@@ -101,6 +101,26 @@
   color: var(--neutral-100);
 }
 
+.toolbar__chip {
+  height: 18px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+  letter-spacing: var(--tracking-wide);
+}
+
+.toolbar__chip:hover {
+  color: var(--text-primary);
+}
+
+.toolbar__chip[data-active] {
+  background: var(--accent-800);
+  color: var(--accent-200);
+  border-color: var(--accent-700);
+}
+
 .toolbar__zoom {
   min-width: 44px;
   text-align: center;

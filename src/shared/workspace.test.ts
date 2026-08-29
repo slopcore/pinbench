@@ -67,6 +67,28 @@ describe('workspaceReducer', () => {
     )
     expect(next.canvas.viewport).toMatchObject({ x: 14, y: 0 })
   })
+
+  it('toggles the dock collapsed flag', () => {
+    expect(reduce(DEFAULT_WORKSPACE, { type: 'toggleDockCollapsed' }).dockCollapsed).toBe(true)
+    expect(
+      reduce(DEFAULT_WORKSPACE, { type: 'toggleDockCollapsed' }, { type: 'toggleDockCollapsed' })
+        .dockCollapsed
+    ).toBe(false)
+  })
+
+  it('toggles bus labels', () => {
+    expect(reduce(DEFAULT_WORKSPACE, { type: 'toggleBusLabels' }).canvas.busLabels).toBe(false)
+  })
+
+  it('adds and removes a bus filter without duplicating it', () => {
+    const hidden = reduce(
+      DEFAULT_WORKSPACE,
+      { type: 'toggleBusFilter', kind: 'spi' },
+      { type: 'toggleBusFilter', kind: 'i2c' },
+      { type: 'toggleBusFilter', kind: 'spi' }
+    ).canvas.hiddenBuses
+    expect(hidden).toEqual(['i2c'])
+  })
 })
 
 describe('normaliseWorkspace', () => {
@@ -91,11 +113,15 @@ describe('normaliseWorkspace', () => {
         tool: 'pan',
         grid: 'line',
         snapToGrid: false,
+        busLabels: false,
+        hiddenBuses: ['spi', 'bogus'],
         viewport: { x: 12, y: -4, zoom: 99 }
       },
       selectedPartId: 'u2'
     })
 
+    expect(restored.canvas.busLabels).toBe(false)
+    expect(restored.canvas.hiddenBuses).toEqual(['spi'])
     expect(restored.panels.library).toBe(false)
     expect(restored.panels.inspector).toBe(DEFAULT_WORKSPACE.panels.inspector)
     expect(restored.workspaceTab).toBe('source')
@@ -104,6 +130,19 @@ describe('normaliseWorkspace', () => {
     expect(restored.canvas.tool).toBe('pan')
     expect(restored.canvas.viewport).toEqual({ x: 12, y: -4, zoom: MAX_ZOOM })
     expect(restored.selectedPartId).toBe('u2')
+  })
+
+  it('fills the new canvas/dock fields on a v1 state that predates them', () => {
+    const { canvas, selectedPartId, ...rest } = DEFAULT_WORKSPACE
+    const canvasRest: Record<string, unknown> = { ...canvas }
+    delete canvasRest['busLabels']
+    delete canvasRest['hiddenBuses']
+    const legacy = { ...rest, canvas: canvasRest } as unknown
+    const restored = normaliseWorkspace(legacy)
+    expect(restored.dockCollapsed).toBe(false)
+    expect(restored.canvas.busLabels).toBe(true)
+    expect(restored.canvas.hiddenBuses).toEqual([])
+    expect(restored.selectedPartId).toBe(selectedPartId)
   })
 
   it('round-trips a state it produced', () => {

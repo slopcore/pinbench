@@ -36,6 +36,30 @@
   flex: 1;
 }
 
+.dock[data-collapsed] {
+  height: var(--dock-tabbar-height);
+}
+
+.dock__chevron {
+  width: 20px;
+  margin-right: var(--space-1);
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.dock__chevron:hover {
+  color: var(--text-primary);
+}
+
+.dock__meta {
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-3);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+}
+
 .dock__close {
   width: 22px;
   color: var(--text-muted);

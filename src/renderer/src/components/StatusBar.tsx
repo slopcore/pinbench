@@ -18,6 +18,8 @@ interface StatusBarProps {
   availableBoards: string[]
   onSelectBoard: (id: string) => void
   totals: BoardTotals
+  /** First serial port `pio device list` sees, or null when none is attached. */
+  port: string | null
   emulator: EmulatorState
   version: string
 }
@@ -27,6 +29,7 @@ export function StatusBar({
   availableBoards,
   onSelectBoard,
   totals,
+  port,
   emulator,
   version
 }: StatusBarProps): React.JSX.Element {
@@ -49,6 +52,9 @@ export function StatusBar({
         <span className="statusbar__board">{board.name}</span>
       )}
       <span className="statusbar__mcu">{board.mcu}</span>
+      <span className="statusbar__port" title="Attached serial port">
+        {port ?? 'no port'}
+      </span>
       <span className="statusbar__spacer" />
       {/* Computed from the board definition, never written down. */}
       <span className="statusbar__totals">

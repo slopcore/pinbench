@@ -8,6 +8,7 @@ import { DEFAULT_PROJECT } from '@shared/project'
 import { MAX_ZOOM, MIN_ZOOM, clamp, fitViewport } from '@shared/workspace'
 import type { CanvasTool, GridStyle, WorkspaceState } from '@shared/workspace'
 import { autoArrangeByBus, duplicatePart } from '@shared/boardEdit'
+import { instantiateCatalogueEntry, type CatalogueEntry } from '@shared/catalogue'
 import { Canvas, ZOOM_STEP } from './components/Canvas'
 import { Dock } from './components/Dock'
 import { HelpSheet } from './components/HelpSheet'
@@ -310,6 +311,19 @@ export function App({
     [dispatch, workspace.canvas.viewport.zoom]
   )
 
+  const placeCatalogueEntry = useCallback(
+    (entry: CatalogueEntry): void => {
+      const taken = new Set(editedBoard.parts.map((p) => p.id))
+      const part = instantiateCatalogueEntry(entry, taken, {
+        x: editedBoard.canvas.width / 2 - 75,
+        y: editedBoard.canvas.height / 2 - 55
+      })
+      editor.apply({ kind: 'addPart', part })
+      dispatch({ type: 'selectPart', partId: part.id })
+    },
+    [dispatch, editedBoard, editor]
+  )
+
   const runVerify = useCallback((): void => {
     setVerifyRows(findingsToDiagnostics(verifyBoard(editedBoard)))
     dispatch({ type: 'setDockTab', tab: 'diagnostics' })
@@ -533,6 +547,7 @@ export function App({
             board={editedBoard}
             selectedPartId={workspace.selectedPartId}
             onSelectPart={(partId) => dispatch({ type: 'selectPart', partId })}
+            onPlaceCatalogueEntry={placeCatalogueEntry}
           />
         )}
 

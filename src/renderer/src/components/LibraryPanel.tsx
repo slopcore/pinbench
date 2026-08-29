@@ -1,12 +1,15 @@
 import { useMemo, useState } from 'react'
 import { CATEGORY_LABELS, partsByCategory } from '@shared/board'
 import type { BoardDefinition, PartCategory } from '@shared/board'
+import { CATALOGUE, type CatalogueEntry } from '@shared/catalogue'
 import './panels.css'
 
 interface LibraryPanelProps {
   board: BoardDefinition
   selectedPartId: string | null
   onSelectPart: (partId: string) => void
+  /** Add a generic/firmware catalogue part to the board (canvas editing). */
+  onPlaceCatalogueEntry: (entry: CatalogueEntry) => void
 }
 
 const CATEGORY_ORDER: PartCategory[] = [
@@ -23,12 +26,23 @@ const CATEGORY_ORDER: PartCategory[] = [
 export function LibraryPanel({
   board,
   selectedPartId,
-  onSelectPart
+  onSelectPart,
+  onPlaceCatalogueEntry
 }: LibraryPanelProps): React.JSX.Element {
   const [query, setQuery] = useState('')
+  const needle = query.trim().toLowerCase()
+  const catalogue = useMemo(
+    () =>
+      CATALOGUE.map((group) => ({
+        ...group,
+        entries: group.entries.filter((entry) =>
+          `${entry.designator} ${entry.name}`.toLowerCase().includes(needle)
+        )
+      })).filter((group) => group.entries.length > 0),
+    [needle]
+  )
 
   const grouped = useMemo(() => {
-    const needle = query.trim().toLowerCase()
     const matching =
       needle === ''
         ? board
@@ -39,7 +53,7 @@ export function LibraryPanel({
             )
           }
     return partsByCategory(matching)
-  }, [board, query])
+  }, [board, needle])
 
   const matches = [...grouped.values()].reduce((total, parts) => total + parts.length, 0)
 
@@ -60,7 +74,9 @@ export function LibraryPanel({
         />
       </div>
       <div className="panel__body">
-        {matches === 0 && <p className="panel__empty">No part matches “{query}”.</p>}
+        {matches === 0 && catalogue.length === 0 && (
+          <p className="panel__empty">No part matches “{query}”.</p>
+        )}
         {CATEGORY_ORDER.map((category) => {
           const parts = grouped.get(category)
           if (!parts || parts.length === 0) return null
@@ -97,9 +113,38 @@ export function LibraryPanel({
             </section>
           )
         })}
+
+        {catalogue.map((group) => (
+          <section className="library__group" key={group.title}>
+            <h3 className="library__group-title">{group.title}</h3>
+            <ul className="library__list">
+              {group.entries.map((entry) => (
+                <li key={entry.key} className="library__row">
+                  <button
+                    type="button"
+                    className="library__item"
+                    onClick={() => onPlaceCatalogueEntry(entry)}
+                  >
+                    <span className="library__designator">{entry.designator}</span>
+                    <span className="library__name">{entry.name}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="library__place"
+                    aria-label={`Add ${entry.name} to the board`}
+                    title={`Add ${entry.name} to the board`}
+                    onClick={() => onPlaceCatalogueEntry(entry)}
+                  >
+                    ＋
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
       </div>
       <p className="library__hint">
-        Click a part to inspect it, then drag on the canvas to arrange.
+        Click a board part to inspect it; click an expansion part to drop it on the canvas.
       </p>
     </aside>
   )

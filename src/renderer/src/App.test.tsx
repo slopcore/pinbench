@@ -304,10 +304,21 @@ describe('selection', () => {
     expect(project?.boardEdits).toEqual([{ kind: 'deletePart', partId: 'u2' }])
   })
 
+  it('adds a generic catalogue part to the canvas from the Library', async () => {
+    const { user } = await renderApp()
+    const library = screen.getByRole('complementary', { name: 'Library' })
+    expect(within(library).getByText('Expansion · generic')).toBeInTheDocument()
+    await user.click(within(library).getByRole('button', { name: 'Add LED to the board' }))
+    // The new part shows on the canvas and drives the totals up by one.
+    const canvas = screen.getByRole('application', { name: /diagram/i })
+    expect(within(canvas).getByText('LED')).toBeInTheDocument()
+    expect(screen.getAllByText(/10 parts · /).length).toBeGreaterThan(0)
+  })
+
   it('selects a part from the Library place affordance', async () => {
     const { user } = await renderApp()
     const library = screen.getByRole('complementary', { name: 'Library' })
-    expect(within(library).getByText(/Click a part to inspect it/)).toBeInTheDocument()
+    expect(within(library).getByText(/Click a board part to inspect it/)).toBeInTheDocument()
     const placeButtons = within(library).getAllByRole('button', { name: 'Place part on canvas' })
     await user.click(placeButtons[0]!)
     const inspector = screen.getByRole('complementary', { name: 'Inspector' })

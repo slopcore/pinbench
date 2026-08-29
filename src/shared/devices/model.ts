@@ -105,7 +105,7 @@ export interface DeviceContext {
   emit(event: DeviceEvent): void
   /**
    * Raise a diagnostic — an unimplemented command, a protocol violation, a
-   * value out of range. M8's rule ("make unimplemented commands raise a loud,
+   * value out of range. M7's rule, the radio ("make unimplemented commands raise a loud,
    * named diagnostic rather than silently returning zeros") is the standard
    * every model is held to; this is how they do it.
    */

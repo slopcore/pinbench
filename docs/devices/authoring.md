@@ -51,7 +51,7 @@ A model implements `DeviceModel`. Only the hooks your part actually has:
 | `detach()`             | Always. Release timers and handles.                                      |
 | `onBus(txn)`           | Only if the part sits on a bus. Whole transaction in, whole reply out.   |
 | `onSignal(edge)`       | Only if a digital line runs into the part (its GPIO, a reset, a strobe). |
-| `onCommand(cmd, args)` | Only if the part has an IN panel (wired from M7).                        |
+| `onCommand(cmd, args)` | Only if the part has an IN panel (wired from M7/M8).                     |
 | `snapshot()`           | Always. Structured-clonable state for the renderer.                      |
 | `meter(id)`            | Always. Current value of one declared meter.                             |
 
@@ -61,7 +61,7 @@ The `ctx` handed to `attach` lets you call back out:
   a BUSY line, a 1PPS strobe).
 - `ctx.emit(event)` — append a row to your OUT-panel event log.
 - `ctx.diagnose(severity, message)` — raise a diagnostic. **Do this for every
-  command or register you have not implemented.** M8's hard-won rule: an
+  command or register you have not implemented.** M7's hard-won rule (the radio): an
   unimplemented command that silently returns zeros costs days; one that raises
   a loud, named diagnostic costs minutes.
 
@@ -131,7 +131,7 @@ and offers `foo.signal(...)`, `foo.pulse(...)`, `foo.command(...)`,
 ## Sketching the API against the hard devices
 
 The M4 milestone's "watch for" is: do not design the interface around the LED.
-Here is the LR1110 (M8) and the ST7789 (M6) drawn against this interface, which
+Here is the LR1110 (M7) and the ST7789 (M6) drawn against this interface, which
 is how we know the transaction shape and the meter model hold up.
 
 ### LR1110 radio — `semtech.lr1110`, on SPI
@@ -150,7 +150,7 @@ is how we know the transaction shape and the meter model hold up.
 - **Meters.** `frequency` (Hz), `lastRssi` (dBm), `airtimeUsed` (%). Airtime is
   computed from the active BW/SF/CR the firmware programmed — the meter and any
   injected traffic stay consistent with LoRa reality.
-- **IN panel (M8).** `onCommand('inject', { kind: 'advert', addr, hops, rssi,
+- **IN panel (M7).** `onCommand('inject', { kind: 'advert', addr, hops, rssi,
 snr })` drops a frame into the RX buffer and asserts `IRQ`.
 - **What it stresses in the API that the LED does not:** a large `onBus`
   command surface; output lines with real timing (`BUSY`); a meter derived from

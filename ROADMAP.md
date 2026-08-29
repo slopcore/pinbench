@@ -130,7 +130,7 @@ Four findings that change later milestones:
 
 - **SPI2 and SPI3 do not exist in the fork.** Only SPI1 (flash/PSRAM) is
   modelled. Every M9 peripheral — LR1110, ST7789, microSD — is on SPI2/SPI3, so
-  writing those controllers is a prerequisite for M6 and M8, not a detail
+  writing those controllers is a prerequisite for M6 and M7 (the radio), not a detail
   inside them. This is the single largest piece of unplanned work the spike
   found.
 - **PSRAM is not a blocker.** 8 MB works, verified by allocation and read-back.
@@ -142,8 +142,8 @@ Four findings that change later milestones:
   this and explain it.
 - **MeshCore boots the SoC and stalls in peripheral bring-up**, blocked (not
   spinning) before its first serial output, waiting on the SPI peripherals that
-  do not yet exist. Exactly the expected failure, and it un-blocks as M6 and M8
-  land.
+  do not yet exist. Exactly the expected failure, and it un-blocks as M6 and M7
+  (the radio) land.
 
 ---
 
@@ -353,7 +353,7 @@ panel, the LED model has unit tests that run without QEMU, and the authoring doc
 is good enough for someone else to add a second device from it.
 
 **Watch for.** The temptation to design the API around the LED. Sketch the LR1110
-(M8) and ST7789 (M6) against the draft interface before committing — they are
+(M7) and ST7789 (M6) against the draft interface before committing — they are
 the two devices most likely to expose a missing concept, and finding that here
 costs a day rather than a refactor.
 
@@ -369,7 +369,7 @@ subject".
 - **`DeviceModel` is transaction-shaped from line one.**
   `src/shared/devices/model.ts`: lifecycle (`attach`/`reset`/`detach`),
   `onBus(txn) → BusResponse` taking and returning whole buffers, `onSignal` for
-  digital lines, `onCommand` for IN panels (M7), `snapshot()`, and declared
+  digital lines, `onCommand` for IN panels (M7/M8), `snapshot()`, and declared
   `meters`. There is no byte-level entry point to retrofit batching onto — the
   mistake [ADR 0001](docs/adr/0001-device-model-boundary.md) exists to prevent.
 - **The registry has no switch statement.** A model file exports a
@@ -386,7 +386,7 @@ subject".
   the host cannot preempt a real infinite loop without hanging itself, so the
   backstop for a hung guest is the C-side socket read timeout the SPI
   controller gets in M6. Host-side: a model that throws is quarantined (bus
-  replies become all-`0xFF`, never silent zeros — M8's rule — plus a named
+  replies become all-`0xFF`, never silent zeros — M7's rule (the radio) — plus a named
   `error` diagnostic) until `Reset`; a call over 50 ms raises a one-shot
   `warn`; a wrong-length reply is padded/truncated with a diagnostic.
 - **Wire protocol and framing overhead (ADR open question 3).**
@@ -508,8 +508,9 @@ referred to the M9 by name.
   M7–M11 — `LR_NRESET` (→ GPIO45), I2C1 SDA/SCL (→ 20/21), `KEY_INT` (→ 12),
   GNSS UART1 (→ 2/3), 1PPS (→ 4), `GPS_EN` (→ 11), `BAT_ADC` (→ 13) — plus
   three non-stated collisions moved to free pins (LCD `BL` → 10, `USB_DET` → 8,
-  `CHG_STAT` → 17). With the corrected map M7's deliberate `GPIO12` double-bind
-  and M11's "move LCD_CS to GPIO21, collide with the keyboard's SCL" demo both
+  `CHG_STAT` → 17). With the corrected map M8's deliberate `GPIO12` double-bind
+  (the keyboard) and M11's "move LCD_CS to GPIO21, collide with the keyboard's
+  SCL" demo both
   work as written. Provenance — stated vs invented — is recorded in
   `boards/README.md`, since JSON carries no comments.
 - **Totals now match the design.** `boardTotals` reads **9 parts · 12 nets · 31
@@ -538,13 +539,13 @@ referred to the M9 by name.
 
 ## M6 · The display: ST7789, and real firmware pixels — `XL` ✅ **done**
 
-> **Closed with one clause carried to M8.** M6.1–M6.4 all landed; the emulated
+> **Closed with one clause carried to M7 (the radio).** M6.1–M6.4 all landed; the emulated
 > panel draws real firmware pixels (`St7789Spi::display()` on an emulated
 > Xtensa core → GP-SPI2 → the socket bridge → the TS model → the OUT panel),
 > and editing the UI source and rebuilding changes what it draws. The one part
 > of M6.4's Done-when that cannot be reached without the radio — the *home
 > screen* (node name, clock, battery), which MeshCore paints only after
-> `radio_init()` succeeds — is an explicit **M8** Build item and Done-when
+> `radio_init()` succeeds — is an explicit **M7** (radio) Build item and Done-when
 > clause. Everything the display path needs for it is already in and proven
 > against the boot splash.
 
@@ -559,7 +560,7 @@ the output of `ui_home.cpp`'s `draw()` running on an emulated Xtensa core.
   SPI2 or SPI3, so those controllers do not exist yet and nothing on this board
   can talk until they do. Register-level models, feeding the bulk hook below.
   This is the largest piece of work in the milestone and it is infrastructure the
-  radio (M8) and microSD (M9) need too, so treat it as its own slice inside M6
+  radio (M7) and microSD (M9) need too, so treat it as its own slice inside M6
   and land it first.
 - **The bulk hook in `ssi_transfer()`.** ADR 0001's load-bearing consequence: a
   per-byte SSI API makes a display flush take seconds, so the C side needs a
@@ -579,8 +580,10 @@ the output of `ui_home.cpp`'s `draw()` running on an emulated Xtensa core.
   level *is* how a transaction is parsed), so the output/`W1TS`/`W1TC` registers
   plus an observation hook to the device host are on this milestone's critical
   path. Landing it here also retires M4's deferred "firmware toggling a GPIO
-  blinks the LED" and unblocks M7's `KEY_INT` wake line, M10's `VDD_PERIPH` and
-  buzzer, and M11's Probe-pin tool.
+  blinks the LED" and unblocks M10's `VDD_PERIPH` and buzzer and M11's Probe-pin
+  tool. (`KEY_INT` — an *external* device driving a line into the SoC — needs the
+  reverse direction, GPIO *input* / interrupt injection, which M6 does not do;
+  that is an M7 Build item.)
 - **ST7789 device model**: command/parameter state machine, `MADCTL` orientation,
   `CASET`/`RASET` window addressing, `RAMWR` streaming, 16bpp and 18bpp colour,
   the reset and DC/RS lines, and `BL_EN` backlight state.
@@ -631,7 +634,7 @@ hardware SPI select). That shaped every decision below. Firmware is
   a full command state machine (SWRESET/SLPOUT/DISPON/INVON, `COLMOD` 16/18bpp,
   `MADCTL`, `CASET`/`RASET` window, `RAMWR`/`RAMWRC` streaming with cursor wrap
   and MX/MY/MV scan order), a real 240×320 RGB565 GRAM, `RST`/`BL` lines with
-  configurable polarity, and — M8's rule, one milestone early — a loud named
+  configurable polarity, and — M7's rule (the radio), one milestone early — a loud named
   diagnostic for any unimplemented command rather than a silent accept.
   `st7789.test.ts` walks the real MeshCore init sequence, a windowed `RAMWR`,
   the MV fast-axis swap, a split-across-transactions pixel, and a hardware
@@ -714,14 +717,16 @@ into the fork; not yet exercised by a live guest):**
 
 **Carries forward:** the risk-register rows for the SPI controllers, the GPIO
 stub, the bulk hook and the unwired socket are addressed in code but stay open
-until the live boot confirms them. M7's `KEY_INT` wake line and M11's Probe-pin
-tool now have the GPIO-output plumbing they were waiting on.
+until the live boot confirms them. M11's Probe-pin tool now has the GPIO-output
+plumbing it was waiting on. (M8's `KEY_INT` wake line needs GPIO *input* /
+interrupt injection, a separate direction M6 did not build — now an M7 Build
+item.)
 
 ### Sub-milestones — all ✅
 
 When this section was written the TypeScript half was done and the QEMU C half
 only compiled. These four slices closed the gap, each strictly ordered before
-the next; all four have landed. M6.4 carries one clause (the home screen) to M8
+the next; all four have landed. M6.4 carries one clause (the home screen) to M7 (the radio)
 because it needs the radio.
 
 #### M6.1 · A firmware image boots again — `S` ✅ **done**
@@ -851,13 +856,13 @@ output", exactly as the Watch-for predicted.
 
 **Done-when — met in substance.** A `companion_radio_usb_` M9 image built from a
 MeshCore checkout boots and MeshCore's own code runs and prints on the serial
-dock. Two refinements are **carried to M8**, both because MeshCore's version /
+dock. Two refinements are **carried to M7 (the radio)**, both because MeshCore's version /
 advert banner prints only inside `the_mesh.begin()`, *after* `radio_init()`:
 (1) the run driven through the app's **Build & flash** button rather than `pio
 run` — the override `overrideConfigIni` generates for this project (all **591**
 envs pinned, incl. `[env:native]` and nRF52/RP2040 targets with no
 `memory_type` key) was verified to resolve and build the M9 env, so the config
-is identical, but the UI wiring itself is exercised for the first time in M8;
+is identical, but the UI wiring itself is exercised for the first time in M7;
 (2) seeing the actual banner text. USB-CDC was *not* the trap the Watch-for
 feared — `boards/thinknode_m9.json` sets `ARDUINO_USB_CDC_ON_BOOT=0`, so
 `Serial` is UART0 and the log comes out there.
@@ -924,7 +929,7 @@ patched `.qemu` with the real `DeviceHost` on `PINBENCH_DEVICE_SOCKET`; over
   that path stays untested here by design.)
 - **Contention bug found and fixed** (`src/main/devices.ts`). `DeviceHost.load`
   recognised only `signal === 'CS'` as a chip-select; the M9's LR1110 names its
-  select `NSS` (its datasheet name, and what M8 will want), so it fell to the
+  select `NSS` (its datasheet name, and what M7, the radio, will want), so it fell to the
   `csPin === null ⇒ csLow: true` "always addressable" default. On the shared
   `spi0`, that made *every* ST7789 transfer route to two devices and get
   dropped. Now a `SPI_SELECT_SIGNALS` set (`CS`/`NSS`/`SS`/`CSB`) is the
@@ -958,7 +963,7 @@ patched `.qemu` with the real `DeviceHost` on `PINBENCH_DEVICE_SOCKET`; over
 
 **Not done here:** pixels — that is M6.4, which followed.
 
-#### M6.4 · Real firmware pixels — `M` ✅ **done** (home-screen clause → M8)
+#### M6.4 · Real firmware pixels — `M` ✅ **done** (home-screen clause → M7, the radio)
 
 **Goal.** M6's original Done-when.
 
@@ -985,7 +990,7 @@ the risk register say.
 **Real firmware pixels render correctly in the OUT panel, and the
 edit→rebuild→pixels loop is live.** Everything the milestone owed that does not
 need the radio is done; only *the home screen content itself* is radio-gated, so
-that one Done-when clause is carried to **M8** (which is where the display path
+that one Done-when clause is carried to **M7** (the radio, which is where the display path
 gets a target with distinct corners to validate orientation against anyway).
 
 - **Pixels, and the panel shows them right.** Booting the M6.2 M9 image with
@@ -1049,53 +1054,45 @@ gets a target with distinct corners to validate orientation against anyway).
   change forces one full repaint. Live dirty rects are real subregions
   (`6×1 @ 112,135`-shaped), unit-tested.
 
-**Carried to M8** (all radio-gated — MeshCore reaches none of it until
+**Carried to M7 (the radio)** (all radio-gated — MeshCore reaches none of it until
 `radio_init()` succeeds):
 
 - **The home screen** — node name, clock, battery. It renders in
-  `the_mesh.begin()` / the UI loop, *after* `radio_init()`. M8 is where the
+  `the_mesh.begin()` / the UI loop, *after* `radio_init()`. M7 is where the
   ST7789 render path finally gets its real target — a screen with distinct
   corners is also the right thing to validate orientation against, where a
   near-symmetric "Loading…" is weak.
 - **The full app path exercised end to end** — the M6.2/M6.3/M6.4 work was
   driven from `pio run` + a standalone `DeviceHost` + decoded captures, all
   proven, but the running Electron app's **Build & flash** button and the OUT
-  panel in the live Inspector are first exercised together in M8's demo.
+  panel in the live Inspector are first exercised together in M7's demo.
 
-## M7 · The keyboard: closing the interaction loop — `L`
+## M7 · The radio: LR1110 — `XL`
 
-**Goal.** Click a key in PinBench; watch the emulated firmware react on the
-emulated screen. Input and output meet.
-
-**Build**
-
-- **ESP32-S2 keyboard coprocessor model** on I2C1 (`GPIO20/21`) with the
-  `KEY_INT`/wake line on `GPIO12`: the matrix scan, the event queue the main core
-  reads, and the wake assertion.
-- **IN panel**: the 4-row QWERTY matrix from the design — `QWERTYUIOP` /
-  `ASDFGHJKL⌫` / `⇧ZXCVBNM.⏎` / `SYM ␣ , / ⌥` — the 3×3 D-pad, the six dedicated
-  keys (HOME, BACK, MENU, CHAT, MAP, LOC), and the text buffer readout.
-- Real keyboard input focuses through to the emulated matrix when the panel has
-  focus.
-- **OUT panel**: key event log with row/column origin and scan code, plus event
-  count, bus and wake-line meters.
-
-**Done when.** You type on PinBench's on-screen keyboard and the characters
-appear on the emulated LCD, having travelled through the coprocessor model, the
-I2C bus, and MeshCore's real input handling.
-
-**Watch for.** `GPIO12` is deliberately double-bound on the M9 (`KEY_INT` and
-`ESP32_WAKEUP`). The pin-conflict checker in M10 must know this is intentional,
-so record the exception in the board definition here rather than special-casing
-it later.
-
-## M8 · The radio: LR1110 — `XL`
+> **Swapped ahead of the keyboard (was M8).** MeshCore `halt()`s in a tight
+> `while(1)` the moment `radio_init()` fails (see M6.2) — there is no main loop
+> until the radio is up, so nothing polls I2C, services `KEY_INT`, or redraws
+> the UI. The keyboard milestone's premise ("input and output meet on the
+> emulated screen") is unreachable before this one, and the radio also carries
+> M6.4's home-screen clause and the first end-to-end **Build & flash** run. See
+> the Sequencing notes.
 
 **Goal.** Inject a mesh frame from the IN panel and watch MeshCore receive it.
 This is the device the whole product exists for.
 
 **Build**
 
+- **GPIO input and pin-interrupt injection in the fork.** M6 gave
+  `esp32_gpio.c` output registers and a guest→host observer, but the reverse
+  direction does not exist: `esp32_gpio_read` returns the output drive for
+  `GPIO_IN`/`GPIO_IN1` ("no external inputs modelled"), and there is no
+  `GPIO_STATUS` / interrupt-enable / edge-config path at all. The LR1110's
+  `LR_BUSY` (41) readback and `DIO9`/IRQ (42) assertion both need a host→guest
+  line-drive plus a CPU-interrupt raise. New C with no upstream equivalent,
+  mirroring M6's output observer — treat it as its own slice inside M7 and land
+  it first. It also unblocks M8's `KEY_INT` wake line and M10's USB-detect /
+  charge-status input lines, so if M7's scope slips it is the one piece that
+  must still land here.
 - **LR1110 device model** on the shared SPI bus with `LR_NSS` (39), `LR_BUSY`
   (41), `DIO9`/IRQ (42) and `LR_NRESET` (45): the command set MeshCore actually
   uses — `SetPacketType`, `SetRfFrequency`, `SetModulationParams`, `SetTxParams`,
@@ -1131,6 +1128,46 @@ renders — closing M6.4.
 calls, driven by tracing real firmware traffic — and make unimplemented commands
 raise a loud, named diagnostic rather than silently returning zeros. Silent
 zeros will cost you days.
+
+## M8 · The keyboard: closing the interaction loop — `L`
+
+> **Follows the radio (was M7).** With `radio_init()` succeeding after M7,
+> MeshCore's main loop runs — I2C gets polled, `KEY_INT` gets serviced, and the
+> home screen is on the LCD for typed characters to land on. None of that is
+> true before M7.
+
+**Goal.** Click a key in PinBench; watch the emulated firmware react on the
+emulated screen. Input and output meet.
+
+**Build**
+
+- **I2C host controller, in C, in the fork.** The espressif fork models SPI1
+  only and **no I2C at all** — `qemu/hw/` has no `i2c/`, and M2's always-ACK
+  stubs are the current state. The ESP32-S3 has two I2C controllers; the
+  keyboard coprocessor is on I2C1 and M10's sensor cluster and RTC are on
+  I2C0/I2C1, so nothing on either bus can talk until this exists. Register-level
+  model feeding the device-host socket, the same shape and the same "its own
+  slice, land it first" treatment as M6's GP-SPI2/3. M7's GPIO-input work
+  delivers the `KEY_INT` line; if it slipped, it lands here too.
+- **ESP32-S2 keyboard coprocessor model** on I2C1 (`GPIO20/21`) with the
+  `KEY_INT`/wake line on `GPIO12`: the matrix scan, the event queue the main core
+  reads, and the wake assertion.
+- **IN panel**: the 4-row QWERTY matrix from the design — `QWERTYUIOP` /
+  `ASDFGHJKL⌫` / `⇧ZXCVBNM.⏎` / `SYM ␣ , / ⌥` — the 3×3 D-pad, the six dedicated
+  keys (HOME, BACK, MENU, CHAT, MAP, LOC), and the text buffer readout.
+- Real keyboard input focuses through to the emulated matrix when the panel has
+  focus.
+- **OUT panel**: key event log with row/column origin and scan code, plus event
+  count, bus and wake-line meters.
+
+**Done when.** You type on PinBench's on-screen keyboard and the characters
+appear on the emulated LCD, having travelled through the coprocessor model, the
+I2C bus, and MeshCore's real input handling.
+
+**Watch for.** `GPIO12` is deliberately double-bound on the M9 (`KEY_INT` and
+`ESP32_WAKEUP`). The pin-conflict checker in M10 must know this is intentional,
+so record the exception in the board definition here rather than special-casing
+it later.
 
 ## M9 · Storage and navigation: microSD and GNSS — `L`
 
@@ -1246,7 +1283,7 @@ is anything more than that, M4 and M5 were wrong and this is where you find out.
   class from the ST7789: partial vs full refresh, refresh latency, ghosting,
   and the long update times that make e-ink UI code distinctive.
 - **SX1262 radio model** — a different LoRa part from the LR1110, which is
-  precisely the test of whether M8's radio abstraction was really an abstraction.
+  precisely the test of whether M7's radio abstraction was really an abstraction.
 - Whatever else the board needs that the M9 did not exercise.
 
 **Done when.** Both boards are selectable from the board picker, each boots its
@@ -1312,7 +1349,9 @@ the M9, and lands a new device model as a PR — working only from the docs.
 | ~~The M4 device-host socket transport is unit-tested but not wired into the app~~ | — | — | **Retired in M6.** `DeviceHost.listen()` runs on a `userData` socket before any emulator spawn; `EmulatorSupervisor` passes the path as `PINBENCH_DEVICE_SOCKET`; `pinbench_host.c` connects during QEMU realize. Verified live in `src/main/live-bridge.test.ts` (Hello + ~1.7k GPIO + ~5.6k Xfer frames). |
 | ~~Firmware issues many small SPI transactions rather than few large ones~~ | — | — | **Measured in M6.3: not a problem.** The `txnPerFrame` meter reads 7–12 against real MeshCore traffic — the FIFO bulk hook batches `transferBytes` into ≤64-byte chunks and the flush is single-digit ms. No native-model rewrite indicated. |
 | M0's latency numbers were measured on Linux, not macOS | The per-transaction budget may be wrong on the target platform | Before M6 | Partly retired in M4: `scripts/bench-framing.mjs` clocks a standalone macOS Unix-socket round trip at ~5 µs, *faster* than Linux's ~50 µs. M6.3 confirmed the shape end to end (single-digit-ms frame flushes through the live bridge). Still owed for full closure: the in-guest `spike/run-bench.sh` table in ADR 0001. |
-| LR1110 command surface is larger than expected | M8 balloons | M8 | Implement only what MeshCore calls; make unimplemented commands raise loud named diagnostics. |
+| LR1110 command surface is larger than expected | M7 (the radio) balloons | M7 | Implement only what MeshCore calls; make unimplemented commands raise loud named diagnostics. |
+| The fork models no GPIO *input* or pin interrupt — `esp32_gpio_read` returns the output drive for `GPIO_IN`, and there is no `GPIO_STATUS` / int-enable path | `LR_BUSY` readback, `DIO9`/IRQ assertion and `KEY_INT` have no host→guest path | M7 (the radio) | Add input-drive + interrupt-raise to `esp32_gpio.c`, mirroring M6's output observer; land it before the LR1110 model as its own slice. Unblocks M8's `KEY_INT`. |
+| No I2C host controller in the fork — `qemu/hw/` has no `i2c/` at all; M2's always-ACK stubs are all that exists | The keyboard coprocessor and every I2C sensor/RTC | M8 (the keyboard) | Register-level model feeding the device-host socket, same shape as M6's GP-SPI2/3; land it first as its own slice. Also required by M10. |
 | Espressif's QEMU fork diverges or stalls | Maintenance burden | Ongoing | Pin the fork and tag from M0. Keep PinBench's patches minimal and documented. Budget for periodic rebases. |
 | No WiFi or BLE emulation | `companion_radio` and the weather-station fork cannot run fully | M13 | Named as a non-goal up front. Consider API-boundary stubs in M13 so display and UI code remains iterable. |
 | PlatformIO toolchain bootstrap on user machines | Bad first-run experience | M3 | Detect early, guide explicitly, manage a virtualenv rather than fighting system Python. Your MeshCore notes are the source material. |
@@ -1366,7 +1405,7 @@ the M9, and lands a new device model as a PR — working only from the docs.
   carries board id, PlatformIO dir + env and per-part config, with save,
   reopen-on-launch and recents. With the LED gone the M9 instantiates no device
   model until M6's ST7789.
-- **M6 is done**, with one clause of M6.4's Done-when carried to M8. Both
+- **M6 is done**, with one clause of M6.4's Done-when carried to M7 (the radio). Both
   halves are exercised against a live guest: the TypeScript models
   (`sitronix.st7789`, the framebuffer side channel, GPIO-selected SPI routing
   with the `CS`/`NSS` fix, the bus-contention diagnostic, real meters, the
@@ -1378,8 +1417,21 @@ the M9, and lands a new device model as a PR — working only from the docs.
   the boot splash — renders correctly in the OUT panel; editing the UI source
   and rebuilding changes it. The four risk-register carry-overs (SPI2/SPI3
   from M0; the bulk hook, GPIO output registers and the socket from M4) are
-  retired. **Open, at M8:** the home screen itself (radio-gated) and the first
-  end-to-end run through the Electron **Build & flash** button.
+  retired. **Open, at M7 (the radio):** the home screen itself (radio-gated) and
+  the first end-to-end run through the Electron **Build & flash** button.
+- **M7 and M8 were swapped** (radio before keyboard; they were the other way
+  round through M6). MeshCore `halt()`s in a tight `while(1)` when `radio_init()`
+  fails — confirmed against a full serial capture in M6.2 — so before the radio
+  there is *no main loop*: nothing polls I2C, services `KEY_INT`, or redraws the
+  UI. The keyboard milestone's premise ("input and output meet on the emulated
+  screen") is unreachable until the radio is up, and the radio also inherited
+  M6.4's home-screen clause and the first end-to-end **Build & flash** run.
+  Two fork gaps surfaced with the swap and are now owned: GPIO *input* /
+  pin-interrupt injection (M7, for `LR_BUSY`/`DIO9` and later `KEY_INT`) and an
+  I2C host controller (M8, for the coprocessor and all I2C sensors) — the fork
+  has neither today. Every M7/M8 cross-reference in this file now names the
+  milestone as well as the number, so the next reorder can't silently repoint
+  them.
 - **M9, M10 and M14 are parallelisable** once the device API is stable — they are
   independent devices against a fixed interface, which is exactly what the
   modular architecture was for.

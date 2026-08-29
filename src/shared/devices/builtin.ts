@@ -7,7 +7,7 @@
  * it.
  *
  * At M4 there is exactly one — the LED that proves the interface. M6 adds the
- * ST7789, M8 the LR1110, and so on; each is one import and one array entry.
+ * ST7789, M7 the LR1110, and so on; each is one import and one array entry.
  */
 
 import type { DeviceModelDescriptor } from './model'

@@ -190,7 +190,7 @@ So the boundary is drawn at the bus, not at the device:
 
 ## What else the spike found
 
-Recorded here because these are the facts that shape M2, M6 and M8, and they
+Recorded here because these are the facts that shape M2, M6 and M7 (the radio), and they
 were expensive to learn.
 
 **MeshCore boots the SoC and stalls in peripheral bring-up.** A
@@ -204,8 +204,8 @@ Everything before its first `Serial.print` is `board.begin()`,
 SPI). **The fork models SPI1 only** — the flash/PSRAM controller. SPI2 and SPI3,
 where every board peripheral actually lives, do not exist; writes to their
 registers land in the catch-all IO region and read back as zero. This is not a
-blocker, it is the work: SPI2/SPI3 controllers are prerequisites for M6 and M8
-and should be scheduled as such.
+blocker, it is the work: SPI2/SPI3 controllers are prerequisites for M6 and M7
+(the radio) and should be scheduled as such.
 
 **Flash mode matters, and the failure is misleading.** Built with the board
 default (QIO), MeshCore boot-loops with `assert failed: … startup.c:290` —
@@ -316,7 +316,7 @@ without hanging itself, so the real backstop for a hung guest is the C-side
 socket read timeout the SPI controller gets in M6 (after it, the guest sees
 0xFF and its controller raises a guest diagnostic). On the host side
 (`src/main/devices.ts`): a model that **throws** is quarantined — its bus
-replies become all-`0xFF` (never silent zeros, per M8's rule) and a named
+replies become all-`0xFF` (never silent zeros, per M7's rule — the radio) and a named
 `error` diagnostic is raised, until the next `Reset`; a call that **runs long**
 (> 50 ms) raises a one-shot `warn` naming the model; a reply of the wrong
 length is padded/truncated to the request length with a diagnostic.

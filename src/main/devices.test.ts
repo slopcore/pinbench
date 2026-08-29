@@ -363,7 +363,7 @@ describe('DeviceHost — M6 display routing', () => {
   it('routes by an NSS-named select as well as CS — either device, never both', () => {
     // The real M9: the LR1110 shares spi0 with the ST7789 but names its select
     // `NSS`, not `CS`. If NSS is not recognised, the radio is always "selected",
-    // every ST7789 transaction routes to two devices and is dropped, and M8's
+    // every ST7789 transaction routes to two devices and is dropped, and M7's
     // radio traffic can never be addressed. Both parts are ST7789 models here
     // only so the routed transaction has observable state on either end.
     const spiPanel = (

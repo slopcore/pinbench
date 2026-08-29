@@ -154,7 +154,7 @@ export interface PinBenchApi {
     onDiagnostic(listener: (row: Diagnostic) => void): () => void
     /** A display model produced a new framebuffer (M6). Off the snapshot path. */
     onFramebuffer(listener: (message: DeviceFramebufferMessage) => void): () => void
-    /** Send a command from an IN panel to a device model (wired from M7). */
+    /** Send a command from an IN panel to a device model (wired from M7/M8). */
     command(message: DeviceCommandMessage): void
   }
 }

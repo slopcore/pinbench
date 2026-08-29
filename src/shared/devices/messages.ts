@@ -35,7 +35,7 @@ export interface DeviceEventMessage {
   event: DeviceEvent & { t: number }
 }
 
-/** A command from an IN panel, renderer → host (wired from M7). */
+/** A command from an IN panel, renderer → host (wired from M7/M8). */
 export interface DeviceCommandMessage {
   partId: string
   command: string

@@ -20,18 +20,18 @@ describe('the M9 board definition', () => {
   it('carries the pin map the roadmap records', () => {
     const pinFor = (partId: string, signal: string): string | undefined =>
       findPart(M9_BOARD, partId)?.pins.find((b) => b.signal === signal)?.pin
-    // SPI0 and the three chip selects (M5, M6, M8, M9).
+    // SPI0 and the three chip selects (M5, M6, M7, M9).
     expect(pinFor('u2', 'SCK')).toBe('GPIO40')
     expect(pinFor('u2', 'MOSI')).toBe('GPIO47')
     expect(pinFor('u2', 'MISO')).toBe('GPIO38')
     expect(pinFor('u2', 'NSS')).toBe('GPIO39')
     expect(pinFor('u3', 'CS')).toBe('GPIO16')
     expect(pinFor('u4', 'CS')).toBe('GPIO48')
-    // LR1110 control lines (M8).
+    // LR1110 control lines (M7).
     expect(pinFor('u2', 'BUSY')).toBe('GPIO41')
     expect(pinFor('u2', 'IRQ')).toBe('GPIO42')
     expect(pinFor('u2', 'NRESET')).toBe('GPIO45')
-    // Keyboard on I2C1 with the double-bindable wake line (M7, M11).
+    // Keyboard on I2C1 with the double-bindable wake line (M8, M11).
     expect(pinFor('u8', 'SDA')).toBe('GPIO20')
     expect(pinFor('u8', 'SCL')).toBe('GPIO21')
     expect(pinFor('u8', 'KEY_INT')).toBe('GPIO12')

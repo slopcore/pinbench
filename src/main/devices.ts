@@ -17,7 +17,7 @@
  * diagnostic. What the host does on its side:
  *
  * - A model that **throws** is quarantined: its bus replies become all-`0xFF`
- *   (loud, never silent zeros — M8's rule) and a named `error` diagnostic is
+ *   (loud, never silent zeros — M7's rule, the radio) and a named `error` diagnostic is
  *   raised. It stays quarantined until the next `Reset`.
  * - A call that **runs long** (> `slowCallMs`, default 50) raises a one-shot
  *   `warn` naming the model, so a chatty or heavy model is visible before it

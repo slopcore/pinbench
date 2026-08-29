@@ -178,6 +178,11 @@ export class EmulatorSupervisor extends EventEmitter {
     this.child.stdin.write(text + '\n')
   }
 
+  /** The image most recently started, or null if the emulator has never run. */
+  lastFirmware(): string | null {
+    return this.lastFirmwarePath
+  }
+
   dispose(): void {
     if (this.pendingRestart) {
       this.removeListener('status', this.pendingRestart)

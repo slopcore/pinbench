@@ -1,5 +1,5 @@
-import { readdir, readFile, stat } from 'node:fs/promises'
-import { basename, join, relative, resolve, sep } from 'node:path'
+import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises'
+import { basename, dirname, join, relative, resolve, sep } from 'node:path'
 import { IGNORED_DIRS, sortNodes } from '../shared/files'
 import type { FileNode } from '../shared/files'
 
@@ -47,6 +47,13 @@ export class ProjectFiles {
       return `// PinBench: file is ${(info.size / 1024 / 1024).toFixed(1)} MB — too large to display.`
     }
     return readFile(abs, 'utf8')
+  }
+
+  /** Write a file inside the project, creating parent directories. Guarded like reads. */
+  async writeFile(path: string, content: string): Promise<void> {
+    const abs = this.guard(path)
+    await mkdir(dirname(abs), { recursive: true })
+    await writeFile(abs, content, 'utf8')
   }
 
   get name(): string {

@@ -2028,6 +2028,142 @@ the M9, and lands a new device model as a PR — working only from the docs.
 
 ---
 
+# Phase 8 — Hand it to an agent
+
+## M16 · Agent Client Protocol — `L`
+
+**Goal.** A stock coding agent — Zed's agent, Gemini CLI, Claude Code — can
+drive PinBench end to end: open a project, edit the canvas, verify, build &
+flash, boot the emulator, read serial, stimulate a device model. The same
+operations the UI drives, and no more.
+
+**Decision of record.** [ADR 0002](docs/adr/0002-acp-control-plane.md): PinBench
+is the ACP *Client*; the agent runs as a subprocess. PinBench's operation
+surface — the `PinBenchApi` interface plus the `BoardEdit` transforms — is
+handed to the agent as an in-process **MCP server** listed in `session/new`,
+so a stock agent's model sees each operation as a tool. Opt-in behind `--acp`
+/ `PINBENCH_ACP`; loopback / Unix-socket only; every operation carries a
+`read` / `write` / `exec` risk class and `exec` prompts by default.
+
+### M16.1 · The pure core — `S` ✅ **done**
+
+**Build.** `src/shared/acp/`, no Electron: JSON-RPC 2.0 framing + an ndjson
+buffer (`jsonrpc.ts`); the ACP/MCP method and version tables (`methods.ts`);
+the transport-agnostic request router (`dispatch.ts`); the operation catalogue
+with per-field validation, JSON-Schema emit and the risk/permission model
+(`operations.ts`); the MCP control-server core built from that catalogue
+(`mcp.ts`); the ACP session builders and version handshake (`session.ts`).
+
+**Done when.** `npm test` covers framing, routing, catalogue coverage of the
+`PinBenchApi` surface, param validation, the MCP `initialize` / `tools/list` /
+`tools/call` flow and the permission gate — with no agent and no emulator in
+the loop. **51 unit tests, on `main`.**
+
+### M16.2 · Binding and the loopback control server — `M` ✅ **done** (deferred ops landed in M16.3)
+
+**Build.** `src/main/acp/`, no Electron in the testable core:
+
+- `invoker.ts` — `createInvoker(deps)`, one switch mapping every `OPERATIONS`
+  entry onto an injected `PinBenchAcpDeps`. An exhaustiveness test asserts no
+  operation falls through, so the catalogue and the binding cannot drift
+  (the `commands.ts` "one list, two consumers" rule).
+- `httpServer.ts` — `startAcpControlServer`: the MCP server over loopback
+  HTTP. Binds `127.0.0.1` explicitly, requires `Authorization: Bearer
+  <token>`, refuses any non-loopback `Origin`, caps the body at 1 MiB, `403`
+  with no body on any failure.
+- `bridge.ts` — `acpRequested()` (the `--acp` / `PINBENCH_ACP` gate) and
+  `startAcpBridge(wiring)`: assembles the deps from the live
+  `EmulatorSupervisor` / `BuildRunner` / `DeviceHost` / `ProjectFiles` and the
+  main-held board, composes the permission gate (`read`/`write` auto,
+  `exec` → the host's `confirm`), buffers serial and device snapshots for the
+  read ops, and starts the server.
+- `src/main/index.ts` — caches the loaded board as the bridge's authority,
+  adds the dialog-free `openProjectAt(dir)`, starts the bridge in `whenReady`
+  when `--acp` is set (printing the URL + token to stderr), disposes it in
+  `before-quit`.
+
+Live now: `app_info`, `board_get` / `board_verify` / `pinmap_preview`,
+`project_open` / `project_tree` / `project_read_file`, `build_cancel` /
+`build_clean` / `build_status`, `emulator_start` / `stop` / `reset` /
+`status`, `serial_write` / `serial_read`, `device_snapshots` /
+`device_command`, `menu_command` (id checked against the command table).
+Deferred to M16.3 with an explicit "not available in this build" error:
+`build_start` and `pinmap_write` (need the renderer's build-request / header
+path) and `board_edit` / `board_undo` / `board_redo` (need the M11.3 history
+in the main process — ADR 0002).
+
+**Done when.** `npm test` covers the invoker exhaustiveness guard, every live
+operation against fakes, the loopback server's auth / origin / fail-closed
+behaviour end to end over real HTTP, and the permission prompt fired through
+`startAcpBridge` against a real server. **77 ACP unit tests across
+`src/shared/acp/` and `src/main/acp/`**; `npm run typecheck` and `npm run
+build` clean. The live end-to-end check with a real agent binary belongs to
+M16.3.
+
+**Watch for.** The MCP server must never bind a routable interface (the test
+asserts the `127.0.0.1` URL). The bridge must dispose with the app. No-path
+`emulator_start` and `menu_command('build.buildAndFlash')` are both refused,
+so neither becomes a silent no-op nor a bypass for a deferred operation.
+
+### M16.3 · The agent-side connection, and the deferred operations — `M` ✅ **done** (panel carried to M16.4)
+
+**Build.** `src/main/acp/`:
+
+- `connection.ts` — `AcpConnection`, a symmetric JSON-RPC 2.0 peer over a line
+  transport: outbound `request` / `notify` with response correlation, an
+  injected handler map for inbound, both directions interleaving.
+- `agent.ts` — `agentCommandFromEnv()` (`PINBENCH_AGENT_CMD` /
+  `PINBENCH_AGENT_ARGS`) and `spawnAgent()`, wrapping the child's stdio as a
+  transport with its stderr forwarded.
+- `agentSession.ts` — `AgentSession`: `initialize` → `session/new` (listing the
+  loopback MCP control server, so the agent's model calls PinBench's
+  operations as tools) → `session/prompt`; serves `fs/read_text_file`,
+  `fs/write_text_file` (both through `ProjectFiles.guard()`),
+  `session/request_permission`, and the `session/update` stream; `cancel()`
+  sends `session/cancel`.
+- `bridge.ts` — when an agent command is configured, spawns it, opens the
+  connection, drives the session, exposes `bridge.prompt(text)`, and kills the
+  child on dispose.
+
+Deferred operations landed: `board_edit` / `board_undo` / `board_redo` run
+against a `BoardHistory` the **main process** owns (ADR 0002 — every mutation
+re-`load`s the device host and calls `onBoardChanged`); `build_start` assembles
+the `BuildRequest` from the open project and the board's `emulator` target;
+pathless `emulator_start` reuses `EmulatorSupervisor.lastFirmware()`.
+`ProjectFiles` gained a guarded `writeFile`; `EmulatorSupervisor` a
+`lastFirmware()` accessor. Client capabilities now advertise `terminal: false`
+until a terminal provider is wired.
+
+**Done when.** `npm test` drives a full turn against a fake agent over an
+in-memory transport — `initialize`, `session/new` with the control server
+listed, `session/prompt`, `fs/*`, `session/request_permission`,
+`session/update`, `session/cancel` — plus `board_edit` round-tripping through
+the bridge's real history and re-syncing the device host. Two failure paths
+are covered: a real `spawnAgent` on a non-existent command resolves
+`startAcpBridge` fast, leaves `session` null and never leaks the child; a hung
+handshake rejects `start()` after `startTimeoutMs`. An `fs/read_text_file`
+with a `../` path that escapes the project root is refused by
+`ProjectFiles.guard()` — the one security claim ADR 0002 makes about the
+agent connection, now tested. **100 ACP unit tests across `src/shared/acp/`
+and `src/main/acp/`**; `npm run typecheck` / `npm run build` clean. Still
+owed: the live run against a real agent binary
+(`PINBENCH_AGENT_CMD=<agent> PINBENCH_ACP=1`).
+
+### M16.4 · The agent session panel, and stdio agents — `S`
+
+**Build.** A dock panel: the running turn, each tool call and result,
+permission prompts inline (allow / allow-for-session / deny), a stop button
+wired to `session.cancel()`, and the policy control (ask-everything / default
+/ trusted). Replace the stderr `onAgentUpdate` sink with an IPC channel to
+that panel. Ship the `pinbench-mcp` stdio→HTTP bridge executable for agents
+that only support the mandatory `Stdio` MCP transport. Wire `pinmap_write` to
+the M11.3 canvas header path. Advertise and implement `terminal/*`.
+
+**Done when.** You can watch an agent wire the LR1110's BUSY line to a GPIO,
+verify, and flash — from the panel, approving the `exec` steps as they come.
+
+---
+
 ## Risk register
 
 | Risk | Impact | Where it bites | Mitigation |
@@ -2046,6 +2182,7 @@ the M9, and lands a new device model as a PR — working only from the docs.
 | No WiFi or BLE emulation | `companion_radio` and the weather-station fork cannot run fully | M13 | Named as a non-goal up front. Consider API-boundary stubs in M13 so display and UI code remains iterable. |
 | PlatformIO toolchain bootstrap on user machines | Bad first-run experience | M3 | Detect early, guide explicitly, manage a virtualenv rather than fighting system Python. Your MeshCore notes are the source material. |
 | ~~The abstraction is wrong and M13 is a rewrite~~ — **not borne out** (M13.1–M13.3) | Large rework | M13 | The Heltec board is pure data and the UC8151 / SX1262 models are pure `src/shared/devices/*`; airtime reuses the LR1110's `loraToaMs` unchanged. The only forced change to the shared layer was one optional `format: 'rgb565' \| 'mono1'` field on `DeviceFramebufferMessage` for 1bpp e-ink. The board picker was always scoped into M13. Verdict: M4/M5 held. |
+| The agent control plane is a new remote-drive path into an app that spawns `pio` and QEMU | An agent (or a page that reaches the MCP port) runs builds / hardware ops unattended | M16 | Opt-in behind `--acp` only; MCP server on loopback / Unix socket with a per-session token, never a routable bind; every op risk-classed with `exec` prompting by default; all filesystem paths gated by `isOpenProject()`; scope frozen to the `PinBenchApi` + `BoardEdit` catalogue in `src/shared/acp/operations.ts`. |
 
 ## Sequencing notes
 

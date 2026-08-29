@@ -92,6 +92,8 @@ export interface AcpBridgeWiring {
   onAgentUpdate?(params: unknown): void
   /** The agent command; defaults to `PINBENCH_AGENT_CMD` / `PINBENCH_AGENT_ARGS`. */
   agent?: AgentCommand | null
+  /** Fail the agent handshake after this long (ms). Default 15000. */
+  agentStartTimeoutMs?: number
   /** How many trailing serial lines to keep for `serial_read`. */
   serialBufferLines?: number
 }
@@ -100,8 +102,10 @@ const DEFAULT_SERIAL_BUFFER = 2000
 
 export interface AcpBridge {
   readonly server: AcpControlServerHandle
-  /** The agent session, once `session/new` has resolved. Null when no agent is configured. */
+  /** The agent session, once `session/new` has resolved. Null until then / when no agent. */
   readonly session: AgentSession | null
+  /** Resolves once the agent handshake has finished (or failed — never rejects). */
+  readonly ready: Promise<void>
   /** Send a prompt to the agent. Rejects if no agent is running. */
   prompt(text: string): Promise<{ stopReason: string }>
   dispose(): Promise<void>
@@ -191,49 +195,64 @@ export async function startAcpBridge(wiring: AcpBridgeWiring): Promise<AcpBridge
   })
 
   // ── The agent, if one is configured ──────────────────────────────────────
+  // `spawned` is tracked in the closure so `dispose` can always kill the child,
+  // even if `session.start()` is still pending or has hung.
   let spawned: SpawnedAgent | null = null
   let session: AgentSession | null = null
+  let sessionReady: Promise<void> = Promise.resolve()
+
   // `agent: null` means "no agent, don't look at the env"; omitting it falls
   // back to PINBENCH_AGENT_CMD.
   const agentCommand = wiring.agent === undefined ? agentCommandFromEnv() : wiring.agent
   if (agentCommand) {
-    try {
-      const cwd = wiring.project.rootDir() ?? process.cwd()
-      spawned = spawnAgent(agentCommand, cwd)
-      const connection = new AcpConnection(spawned.transport)
-      const callbacks: SessionCallbacks = {
-        fs: {
-          readTextFile: (path) => wiring.project.readFile(path),
-          writeTextFile: (path, content) => wiring.project.writeFile(path, content)
-        },
-        requestPermission: (params) =>
-          wiring.requestAgentPermission
-            ? wiring.requestAgentPermission(params)
-            : Promise.resolve({ outcome: { outcome: 'cancelled' } }),
-        onUpdate: (params) => wiring.onAgentUpdate?.(params)
-      }
-      session = new AgentSession({
-        connection,
-        clientInfo: { name: 'PinBench', version: wiring.appVersion },
-        cwd,
-        mcpServerUrl: server.url,
-        mcpServerToken: server.token,
-        callbacks
-      })
-      await session.start()
-    } catch (error) {
-      process.stderr.write(`[pinbench] agent session failed to start: ${String(error)}\n`)
-      spawned?.kill()
-      spawned = null
-      session = null
+    const cwd = wiring.project.rootDir() ?? process.cwd()
+    spawned = spawnAgent(agentCommand, cwd)
+    const connection = new AcpConnection(spawned.transport)
+    const callbacks: SessionCallbacks = {
+      fs: {
+        readTextFile: (path) => wiring.project.readFile(path),
+        writeTextFile: (path, content) => wiring.project.writeFile(path, content)
+      },
+      requestPermission: (params) =>
+        wiring.requestAgentPermission
+          ? wiring.requestAgentPermission(params)
+          : Promise.resolve({ outcome: { outcome: 'cancelled' } }),
+      onUpdate: (params) => wiring.onAgentUpdate?.(params)
     }
+    const candidate = new AgentSession({
+      connection,
+      clientInfo: { name: 'PinBench', version: wiring.appVersion },
+      cwd,
+      mcpServerUrl: server.url,
+      mcpServerToken: server.token,
+      callbacks,
+      ...(wiring.agentStartTimeoutMs === undefined
+        ? {}
+        : { startTimeoutMs: wiring.agentStartTimeoutMs })
+    })
+    // Do NOT await here: a missing / hung / misconfigured agent must not stop
+    // `startAcpBridge` resolving, or `dispose` never gets a handle to kill it.
+    sessionReady = candidate
+      .start()
+      .then(() => {
+        session = candidate
+      })
+      .catch((error: unknown) => {
+        process.stderr.write(`[pinbench] agent session failed to start: ${String(error)}\n`)
+        spawned?.kill()
+        spawned = null
+      })
   }
 
   return {
     server,
-    session,
-    prompt: (text) => {
-      if (!session) return Promise.reject(new Error('no agent is running'))
+    get session() {
+      return session
+    },
+    ready: sessionReady,
+    prompt: async (text) => {
+      await sessionReady
+      if (!session) throw new Error('no agent is running')
       return session.prompt(text)
     },
     dispose: async () => {

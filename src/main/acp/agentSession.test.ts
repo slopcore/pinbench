@@ -1,8 +1,17 @@
-import { describe, expect, it, vi } from 'vitest'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ACP_PROTOCOL_VERSION } from '../../shared/acp/methods'
+import { ProjectFiles } from '../fileTree'
 import { AcpConnection } from './connection'
 import { AgentSession, type SessionCallbacks } from './agentSession'
 import { transportPair } from './testTransport'
+
+const tempRoots: string[] = []
+afterEach(() => {
+  while (tempRoots.length) rmSync(tempRoots.pop()!, { recursive: true, force: true })
+})
 
 /** A minimal scripted agent on the far end of the pair. */
 function fakeAgent(
@@ -132,6 +141,57 @@ describe('AgentSession', () => {
     expect(cbs.onUpdate).toHaveBeenCalledWith(
       expect.objectContaining({ update: { sessionUpdate: 'agent_message_chunk' } })
     )
+  })
+
+  it('start() rejects if the agent never completes the handshake', async () => {
+    const { a, b } = transportPair()
+    // Accepts the request but never answers it.
+    new AcpConnection(b, { initialize: () => new Promise(() => {}) })
+    const s = new AgentSession({
+      connection: new AcpConnection(a),
+      clientInfo: { name: 'PinBench', version: '0.1.0' },
+      cwd: '/p',
+      mcpServerUrl: 'http://127.0.0.1:1/mcp',
+      callbacks: callbacks(),
+      startTimeoutMs: 40
+    })
+    await expect(s.start()).rejects.toThrow(/handshake in 40ms/)
+  })
+
+  it('refuses an fs/read_text_file path that escapes the project root', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'pinbench-acp-'))
+    writeFileSync(join(root, 'inside.txt'), 'ok')
+    const files = new ProjectFiles(root)
+    tempRoots.push(root)
+
+    const { a, b } = transportPair()
+    const agentConn = new AcpConnection(b)
+    fakeAgent(agentConn, async (agent) => {
+      await expect(
+        agent.request('fs/read_text_file', { path: join(root, 'inside.txt') })
+      ).resolves.toEqual({
+        content: 'ok'
+      })
+      await expect(
+        agent.request('fs/read_text_file', { path: join(root, '..', '..', 'etc', 'passwd') })
+      ).rejects.toMatchObject({ message: expect.stringMatching(/escapes project root/) })
+    })
+    const s = new AgentSession({
+      connection: new AcpConnection(a),
+      clientInfo: { name: 'PinBench', version: '0.1.0' },
+      cwd: root,
+      mcpServerUrl: 'http://127.0.0.1:1/mcp',
+      callbacks: {
+        fs: {
+          readTextFile: (path) => files.readFile(path),
+          writeTextFile: (path, content) => files.writeFile(path, content)
+        },
+        requestPermission: async () => ({ outcome: { outcome: 'cancelled' } }),
+        onUpdate: vi.fn()
+      }
+    })
+    await s.start()
+    await s.prompt('read files')
   })
 
   it('sends session/cancel on cancel()', async () => {

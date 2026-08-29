@@ -45,7 +45,11 @@ export interface AgentSessionOptions {
   mcpServerUrl: string
   mcpServerToken?: string
   callbacks: SessionCallbacks
+  /** Fail `start()` if the agent has not answered `initialize` + `session/new` in this long. */
+  startTimeoutMs?: number
 }
+
+const DEFAULT_START_TIMEOUT_MS = 15_000
 
 export interface PromptResult {
   stopReason: string
@@ -67,8 +71,28 @@ export class AgentSession {
     return this.sessionId
   }
 
-  /** `initialize` then `session/new`; resolves once the session id is known. */
+  /**
+   * `initialize` then `session/new`; resolves once the session id is known.
+   * Rejects (and does not leave a half-open session) if the agent has not
+   * completed the handshake within `startTimeoutMs`.
+   */
   async start(): Promise<string> {
+    const timeoutMs = this.options.startTimeoutMs ?? DEFAULT_START_TIMEOUT_MS
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(
+        () => reject(new Error(`agent did not complete the handshake in ${timeoutMs}ms`)),
+        timeoutMs
+      )
+    })
+    try {
+      return await Promise.race([this.handshake(), timeout])
+    } finally {
+      if (timer) clearTimeout(timer)
+    }
+  }
+
+  private async handshake(): Promise<string> {
     const init = await this.conn.request<{ protocolVersion?: number }>(
       'initialize',
       initializeParams(this.options.clientInfo)

@@ -1901,9 +1901,15 @@ until a terminal provider is wired.
 in-memory transport — `initialize`, `session/new` with the control server
 listed, `session/prompt`, `fs/*`, `session/request_permission`,
 `session/update`, `session/cancel` — plus `board_edit` round-tripping through
-the bridge's real history and re-syncing the device host. **97 ACP unit tests
-across `src/shared/acp/` and `src/main/acp/`**; `npm run typecheck` / `npm run
-build` clean. Still owed: the live run against a real agent binary
+the bridge's real history and re-syncing the device host. Two failure paths
+are covered: a real `spawnAgent` on a non-existent command resolves
+`startAcpBridge` fast, leaves `session` null and never leaks the child; a hung
+handshake rejects `start()` after `startTimeoutMs`. An `fs/read_text_file`
+with a `../` path that escapes the project root is refused by
+`ProjectFiles.guard()` — the one security claim ADR 0002 makes about the
+agent connection, now tested. **100 ACP unit tests across `src/shared/acp/`
+and `src/main/acp/`**; `npm run typecheck` / `npm run build` clean. Still
+owed: the live run against a real agent binary
 (`PINBENCH_AGENT_CMD=<agent> PINBENCH_ACP=1`).
 
 ### M16.4 · The agent session panel, and stdio agents — `S`

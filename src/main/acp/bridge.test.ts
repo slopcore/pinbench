@@ -148,4 +148,19 @@ describe('startAcpBridge', () => {
     expect(out.result.isError).toBe(true)
     expect(w.onBoardChanged).not.toHaveBeenCalled()
   })
+
+  it('a bad agent command does not hang startup or leak the child', async () => {
+    const w = wiring({
+      agent: { command: 'pinbench-no-such-agent-binary-xyz', args: [] },
+      agentStartTimeoutMs: 500
+    })
+    // Resolves quickly despite the doomed spawn.
+    bridge = await startAcpBridge(w)
+    await bridge.ready
+    expect(bridge.session).toBeNull()
+    await expect(bridge.prompt('hi')).rejects.toThrow(/no agent is running/)
+    // dispose must not throw or hang.
+    await bridge.dispose()
+    bridge = null
+  })
 })

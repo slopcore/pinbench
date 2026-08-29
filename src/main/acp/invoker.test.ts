@@ -102,12 +102,12 @@ describe('createInvoker — behaviour', () => {
     expect(deps.build.clean).toHaveBeenCalled()
   })
 
-  it('emulator_start passes an optional firmware path through', async () => {
+  it('emulator_start boots a given image, and refuses a pathless call', async () => {
     const deps = fakeDeps()
     await run(deps, 'emulator_start', { firmwarePath: '/fw.bin' })
     expect(deps.emulator.start).toHaveBeenCalledWith('/fw.bin')
-    await run(deps, 'emulator_start', {})
-    expect(deps.emulator.start).toHaveBeenLastCalledWith(undefined)
+    await expect(run(deps, 'emulator_start', {})).rejects.toThrow(/not available in this build/)
+    expect(deps.emulator.start).toHaveBeenCalledTimes(1)
   })
 
   it('serial_read clamps the limit to a positive integer', async () => {
@@ -136,6 +136,14 @@ describe('createInvoker — behaviour', () => {
     const deps = fakeDeps()
     await run(deps, 'menu_command', { command: 'build.verifyPinMap' })
     expect(deps.menuCommand).toHaveBeenCalledWith('build.verifyPinMap')
+  })
+
+  it('menu_command cannot be a bypass for a deferred operation', async () => {
+    const deps = fakeDeps()
+    await expect(run(deps, 'menu_command', { command: 'build.buildAndFlash' })).rejects.toThrow(
+      /not available in this build/
+    )
+    expect(deps.menuCommand).not.toHaveBeenCalled()
   })
 
   it('board edits report as not available in this build', async () => {

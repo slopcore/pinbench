@@ -32,6 +32,7 @@ interface EmulatorLike {
   stop(): void
   writeSerial(text: string): void
   on(event: 'serial', listener: (lines: SerialLine[]) => void): unknown
+  off?(event: 'serial', listener: (lines: SerialLine[]) => void): unknown
 }
 
 interface BuildLike {
@@ -115,10 +116,7 @@ export async function startAcpBridge(wiring: AcpBridgeWiring): Promise<AcpBridge
       status: () => wiring.build.getStatus() as never
     },
     emulator: {
-      start: (firmwarePath) => {
-        if (firmwarePath) wiring.emulator.start(firmwarePath)
-        else wiring.emulator.reset()
-      },
+      start: (firmwarePath) => wiring.emulator.start(firmwarePath),
       stop: () => wiring.emulator.stop(),
       reset: () => wiring.emulator.reset(),
       status: () => wiring.emulator.getStatus() as never

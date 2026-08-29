@@ -1857,13 +1857,18 @@ in the main process — ADR 0002).
 
 **Done when.** `npm test` covers the invoker exhaustiveness guard, every live
 operation against fakes, the loopback server's auth / origin / fail-closed
-behaviour end to end over real HTTP, and the bridge's permission prompt. **76
-ACP unit tests across `src/shared/acp/` and `src/main/acp/`.** Manual:
-`PINBENCH_ACP=1 npm run dev`, POST
-`tools/call board_verify` with the printed token, findings come back.
+behaviour end to end over real HTTP, and the permission prompt fired through
+`startAcpBridge` against a real server. **77 ACP unit tests across
+`src/shared/acp/` and `src/main/acp/`**; `npm run typecheck` and `npm run
+build` clean. The live end-to-end check — launch `PINBENCH_ACP=1`, point a
+configured agent at the printed URL + token, watch a `board_verify` prompt
+round-trip — is **not yet performed**; it moves to M16.3's checklist, which
+lands the agent-side connection that makes it runnable.
 
 **Watch for.** The MCP server must never bind a routable interface (the test
-asserts the `127.0.0.1` URL). The bridge must dispose with the app.
+asserts the `127.0.0.1` URL). The bridge must dispose with the app. No-path
+`emulator_start` and `menu_command('build.buildAndFlash')` are both refused,
+so neither becomes a silent no-op nor a bypass for a deferred operation.
 
 ### M16.3 · The agent session, and the panel — `M`
 

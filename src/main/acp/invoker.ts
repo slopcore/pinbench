@@ -42,7 +42,8 @@ export interface PinBenchAcpDeps {
     status(): BuildStatus | Promise<BuildStatus>
   }
   emulator: {
-    start(firmwarePath?: string): void
+    /** Boot a specific image. Reusing the last-built one is M16.3 (needs the supervisor's path). */
+    start(firmwarePath: string): void
     stop(): void
     reset(): void
     status(): EmulatorStatus | Promise<EmulatorStatus>
@@ -61,6 +62,12 @@ export interface PinBenchAcpDeps {
 }
 
 const COMMAND_IDS = new Set<string>(COMMANDS)
+/**
+ * Menu commands `menu_command` refuses, so it cannot become a bypass for an
+ * operation deliberately deferred to M16.3. `build.buildAndFlash` is the
+ * deferred `build_start` under another name.
+ */
+const MENU_COMMAND_DENYLIST = new Set<string>(['build.buildAndFlash'])
 const SERIAL_DEFAULT_LIMIT = 200
 
 class NotAvailable extends Error {
@@ -129,7 +136,7 @@ export function createInvoker(deps: PinBenchAcpDeps): McpToolInvoker {
       case 'build_start':
         throw new NotAvailable(
           op.name,
-          'the build request needs the board’s emulator launch options assembled in the renderer (M16.3); trigger build.buildAndFlash via menu_command instead'
+          'the build request needs the board’s emulator launch options assembled in the renderer (M16.3)'
         )
 
       // ── Act ───────────────────────────────────────────────────────────────
@@ -146,9 +153,17 @@ export function createInvoker(deps: PinBenchAcpDeps): McpToolInvoker {
         deps.build.clean()
         return { cleaned: true }
 
-      case 'emulator_start':
-        deps.emulator.start(params['firmwarePath'] as string | undefined)
-        return { started: true }
+      case 'emulator_start': {
+        const firmwarePath = params['firmwarePath'] as string | undefined
+        if (!firmwarePath) {
+          throw new NotAvailable(
+            op.name,
+            'reusing the last-built image needs the supervisor’s firmware path exposed (M16.3) — pass firmwarePath'
+          )
+        }
+        deps.emulator.start(firmwarePath)
+        return { started: true, firmwarePath }
+      }
 
       case 'emulator_stop':
         deps.emulator.stop()
@@ -174,6 +189,12 @@ export function createInvoker(deps: PinBenchAcpDeps): McpToolInvoker {
         const command = params['command'] as string
         if (!COMMAND_IDS.has(command)) {
           throw new Error(`unknown menu command: ${command}`)
+        }
+        if (MENU_COMMAND_DENYLIST.has(command)) {
+          throw new NotAvailable(
+            'menu_command',
+            `"${command}" is gated — its dedicated operation lands in M16.3`
+          )
         }
         deps.menuCommand(command as CommandId)
         return { invoked: command }

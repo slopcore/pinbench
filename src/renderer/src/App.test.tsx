@@ -183,10 +183,23 @@ describe('menu handlers', () => {
     await waitFor(() => expect(bridge.saved.at(-1)?.canvas.busLabels).toBe(false))
   })
 
-  // Guards the `default: break` in runCommand — an enabled menu item with no
-  // handler (how help.shortcuts / help.about originally shipped dead) throws
-  // here or, worse, silently does nothing. Fires every enabled item once.
-  it('every enabled menu item runs without throwing', async () => {
+  it('toggles bus labels with the L key, but not while a text field has focus', async () => {
+    const { bridge, user } = await renderApp()
+    await user.keyboard('l')
+    await waitFor(() => expect(bridge.saved.at(-1)?.canvas.busLabels).toBe(false))
+
+    const filter = screen.getByRole('searchbox', { name: /Filter parts/ })
+    filter.focus()
+    await user.keyboard('l')
+    // Still false — the keystroke went to the filter box, not the toggle.
+    await new Promise((resolve) => setTimeout(resolve, 250))
+    expect(bridge.saved.at(-1)?.canvas.busLabels).toBe(false)
+  })
+
+  // Smoke test: click every enabled menu item once and assert nothing throws.
+  // The real "no enabled command without a handler" guard is the explicit list
+  // in commands.test.ts — a fallthrough throws nothing, so this can't catch it.
+  it('clicks every enabled menu item without throwing', async () => {
     const errors: unknown[] = []
     const onError = (event: ErrorEvent): void => void errors.push(event.error)
     window.addEventListener('error', onError)
@@ -203,7 +216,8 @@ describe('menu handlers', () => {
           const button = [
             ...openMenu.querySelectorAll<HTMLButtonElement>('button.menu__item')
           ].find((node) => node.querySelector('.menu__label')?.textContent === label)
-          if (button) await user.click(button)
+          expect(button, `no menu button for "${label}"`).toBeTruthy()
+          await user.click(button!)
         }
       }
     } finally {
@@ -248,17 +262,6 @@ describe('selection', () => {
     expect(within(inspector).getByText('Reference')).toBeInTheDocument()
     expect(within(inspector).getByText(/^Nets \(/)).toBeInTheDocument()
     expect(within(inspector).getByText('Lr1110Radio::begin()')).toBeInTheDocument()
-  })
-
-  it('reveals the firmware-hook source from the Inspector', async () => {
-    const { user } = await renderApp()
-    await user.click(screen.getByRole('button', { name: /2.4" LCD/ }))
-    const inspector = screen.getByRole('complementary', { name: 'Inspector' })
-    await user.click(within(inspector).getByRole('button', { name: 'Reveal in source' }))
-    expect(screen.getByRole('tabpanel', { name: 'Source' })).toBeInTheDocument()
-    expect(window.pinbench.project.readFile).toHaveBeenCalledWith(
-      expect.stringContaining('HomePage.cpp')
-    )
   })
 
   it('selects a part from the Library place affordance', async () => {

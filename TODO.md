@@ -56,9 +56,12 @@ only here.
       kind via shared `netColour()`. — `Inspector.tsx`, `shared/nets.ts`
 - [x] **Firmware hook card + "Reveal in source" button** — new optional
       `PartDefinition.firmwareHook { symbol, file?, line?, note? }`, validated by
-      `parseBoard`, populated for the radio/display/GNSS/keyboard parts in both
-      board JSONs; reveal reuses `App.openInSource`. — `Inspector.tsx`,
-      `shared/board.ts`
+      `parseBoard`, populated (symbol + note) for the radio/display/GNSS/keyboard
+      parts in both board JSONs. The card renders; **the "Reveal in source"
+      button appears only when a hook carries a `file`**, and none of the
+      shipped hooks do yet — the MeshCore source paths are not verified against a
+      checkout, so they were left out rather than guessed. Add `file`/`line` per
+      hook once a firmware tree is wired in. — `Inspector.tsx`, `shared/board.ts`
 - [ ] Per‑part IN panel is LR1110‑only (`InPanel.tsx` early‑returns for every
       other model). Design gives every part stimuli (resets/boot straps for the
       MCU, card insert/remove for SD, NMEA scenarios for GNSS, RTC/IMU/mag for

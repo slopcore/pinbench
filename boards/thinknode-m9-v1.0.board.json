@@ -333,8 +333,6 @@
       "category": "radio",
       "firmwareHook": {
         "symbol": "Lr1110Radio::begin()",
-        "file": "src/helpers/radio/Lr1110Radio.cpp",
-        "line": 34,
         "note": "Brings up the LR1110 over SPI0 and configures the LoRa modem."
       },
       "deviceModel": "semtech.lr1110",
@@ -418,8 +416,6 @@
       "category": "display",
       "firmwareHook": {
         "symbol": "HomePage::draw()",
-        "file": "src/ui/HomePage.cpp",
-        "line": 58,
         "note": "Renders the M9 home screen to the ST7789 after radio_init()."
       },
       "deviceModel": "sitronix.st7789",
@@ -588,7 +584,6 @@
       "category": "sensor",
       "firmwareHook": {
         "symbol": "NMEALocationProvider::loop()",
-        "file": "src/helpers/gps/NMEALocationProvider.cpp",
         "note": "Parses ATGM336H NMEA sentences from UART1."
       },
       "deviceModel": "zhongke.atgm336h",
@@ -705,8 +700,6 @@
       "category": "input",
       "firmwareHook": {
         "symbol": "KeyboardInput::poll()",
-        "file": "src/ui/KeyboardInput.cpp",
-        "line": 21,
         "note": "Reads the keyboard coprocessor key buffer over I2C."
       },
       "deviceModel": "pinbench.kbd-coprocessor",

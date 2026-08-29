@@ -195,7 +195,9 @@
 
 .canvas__card-body {
   flex: 1;
-  overflow: auto;
+  /* hidden, not auto: a scrollable body would swallow wheel-pan over a card
+     and the cards cover most of the board. The CFG list truncates instead. */
+  overflow: hidden;
   padding: 6px 8px;
 }
 

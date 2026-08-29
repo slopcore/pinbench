@@ -160,6 +160,50 @@ export function Canvas({
 
   const mcu = board.parts.find((part) => part.category === 'mcu')
 
+  // Net geometry, with label positions resolved once so that labels which would
+  // land on the same spot (e.g. every leg of one SPI bus ends at the same
+  // peripheral) stack upward instead of overprinting.
+  const netGeometry = (() => {
+    if (!mcu) return []
+    const hub = partCentre(mcu)
+    const placed: { x: number; y: number }[] = []
+    return board.nets.flatMap((net) => {
+      const ends = net.nodes
+        .filter((node) => node.includes(':'))
+        .map((node) => {
+          const partId = node.split(':')[0] ?? ''
+          const part = board.parts.find((candidate) => candidate.id === partId)
+          return part ? { node, end: partCentre(part) } : null
+        })
+        .filter((e): e is { node: string; end: { x: number; y: number } } => e !== null)
+      if (ends.length === 0) return []
+      const filterKind = netFilterKind(net.bus, board.buses)
+      const dimmed = filterKind !== null && hiddenBuses.includes(filterKind)
+      const furthest = ends.reduce((a, b) =>
+        Math.abs(b.end.x - hub.x) > Math.abs(a.end.x - hub.x) ? b : a
+      )
+      const labelX = (hub.x + furthest.end.x) / 2
+      let labelY = furthest.end.y - 8
+      if (!dimmed) {
+        while (placed.some((p) => Math.abs(p.x - labelX) < 90 && Math.abs(p.y - labelY) < 16)) {
+          labelY -= 18
+        }
+        placed.push({ x: labelX, y: labelY })
+      }
+      return [
+        {
+          net,
+          hub,
+          ends,
+          dimmed,
+          colour: netColour(net.bus, board.buses),
+          labelX,
+          labelY
+        }
+      ]
+    })
+  })()
+
   return (
     <div
       className="canvas"
@@ -217,62 +261,36 @@ export function Canvas({
             rx={12}
           />
 
-          {mcu &&
-            board.nets.map((net) => {
-              const hub = partCentre(mcu)
-              const colour = netColour(net.bus, board.buses)
-              const filterKind = netFilterKind(net.bus, board.buses)
-              const dimmed = filterKind !== null && hiddenBuses.includes(filterKind)
-              const ends = net.nodes
-                .filter((node) => node.includes(':'))
-                .map((node) => {
-                  const partId = node.split(':')[0] ?? ''
-                  const part = board.parts.find((candidate) => candidate.id === partId)
-                  return part ? { node, end: partCentre(part) } : null
-                })
-                .filter(
-                  (entry): entry is { node: string; end: { x: number; y: number } } =>
-                    entry !== null
+          {netGeometry.map(({ net, hub, ends, dimmed, colour, labelX, labelY }) => (
+            <g key={net.id} className="canvas__net-group" data-dimmed={dimmed || undefined}>
+              {ends.map(({ node, end }) => {
+                const midX = (hub.x + end.x) / 2
+                return (
+                  <polyline
+                    key={`${net.id}-${node}`}
+                    className="canvas__net"
+                    points={`${hub.x},${hub.y} ${midX},${hub.y} ${midX},${end.y} ${end.x},${end.y}`}
+                    stroke={colour}
+                  />
                 )
-              if (ends.length === 0) return null
-              // Put the label on the leg to the furthest peripheral, so it sits
-              // clear of the MCU card.
-              const furthest = ends.reduce((a, b) =>
-                Math.abs(b.end.x - hub.x) > Math.abs(a.end.x - hub.x) ? b : a
-              )
-              const labelX = (hub.x + furthest.end.x) / 2
-              const labelY = furthest.end.y - 8
-              return (
-                <g key={net.id} className="canvas__net-group" data-dimmed={dimmed || undefined}>
-                  {ends.map(({ node, end }) => {
-                    const midX = (hub.x + end.x) / 2
-                    return (
-                      <polyline
-                        key={`${net.id}-${node}`}
-                        className="canvas__net"
-                        points={`${hub.x},${hub.y} ${midX},${hub.y} ${midX},${end.y} ${end.x},${end.y}`}
-                        stroke={colour}
-                      />
-                    )
-                  })}
-                  {busLabels && !dimmed && (
-                    <g className="canvas__net-label" transform={`translate(${labelX} ${labelY})`}>
-                      <rect
-                        className="canvas__net-label-box"
-                        x={-net.label.length * 3.4 - 6}
-                        y={-9}
-                        width={net.label.length * 6.8 + 12}
-                        height={16}
-                        rx={8}
-                      />
-                      <text className="canvas__net-label-text" x={0} y={2} textAnchor="middle">
-                        {net.label}
-                      </text>
-                    </g>
-                  )}
+              })}
+              {busLabels && !dimmed && (
+                <g className="canvas__net-label" transform={`translate(${labelX} ${labelY})`}>
+                  <rect
+                    className="canvas__net-label-box"
+                    x={-net.label.length * 3.4 - 6}
+                    y={-9}
+                    width={net.label.length * 6.8 + 12}
+                    height={16}
+                    rx={8}
+                  />
+                  <text className="canvas__net-label-text" x={0} y={2} textAnchor="middle">
+                    {net.label}
+                  </text>
                 </g>
-              )
-            })}
+              )}
+            </g>
+          ))}
 
           {board.parts.map((part) => {
             const selected = workspace.selectedPartId === part.id

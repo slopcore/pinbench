@@ -164,7 +164,10 @@ export const MENUS: MenuSpec[] = [
       item('view.gridNone', 'No grid', { checkable: true }),
       item('view.snapToGrid', 'Snap to grid', { accelerator: 'CmdOrCtrl+G', checkable: true }),
       separator,
-      item('view.busLabels', 'Bus labels', { accelerator: 'L', checkable: true })
+      // No menu accelerator: a bare single-key Electron accelerator fires even
+      // while a text field has focus. The renderer binds `L` itself and bails
+      // when the event target is an input.
+      item('view.busLabels', 'Bus labels  (L)', { checkable: true })
     ]
   },
   {

@@ -65,9 +65,31 @@ export function App({
   // refreshes the same list when it opens.
   const refreshPorts = usbFlash.refreshPorts
   useEffect(() => {
-    void refreshPorts()
+    void refreshPorts().catch(() => {
+      /* no PlatformIO on this machine — the port label just stays "no port" */
+    })
   }, [refreshPorts])
   const activePort = usbFlash.ports[0]?.port ?? null
+
+  // `L` toggles bus labels. Bound here rather than as a menu accelerator so it
+  // cannot fire while a text field, the Library filter or a config input holds
+  // focus.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key !== 'l' && event.key !== 'L') return
+      if (event.metaKey || event.ctrlKey || event.altKey) return
+      const target = event.target as HTMLElement | null
+      if (
+        target &&
+        (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))
+      ) {
+        return
+      }
+      dispatch({ type: 'toggleBusLabels' })
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [dispatch])
   const selectedPart = workspace.selectedPartId
     ? findPart(board, workspace.selectedPartId)
     : undefined

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { overrideConfigIni, parseEnvNamesFromIni, parseProjectConfig } from './pio'
+import {
+  overrideConfigIni,
+  parseEnvNamesFromIni,
+  parseProjectConfig,
+  usbBuildOverrideIni
+} from './pio'
 
 describe('parseProjectConfig', () => {
   it('lists environments and merges [env] defaults into each', () => {
@@ -57,5 +62,19 @@ describe('overrideConfigIni', () => {
     })
     expect(ini).toContain('board_build.arduino.memory_type = dio_opi')
     expect(ini).not.toContain('dio_qspi')
+  })
+})
+
+describe('usbBuildOverrideIni', () => {
+  it('redirects build_dir and pins no flash mode', () => {
+    const ini = usbBuildOverrideIni({
+      userConfigPath: '/proj/platformio.ini',
+      buildDir: '/cache/usb-build/proj'
+    })
+    expect(ini).toContain('extra_configs = /proj/platformio.ini')
+    expect(ini).toContain('build_dir = /cache/usb-build/proj')
+    expect(ini).not.toContain('flash_mode')
+    expect(ini).not.toContain('memory_type')
+    expect(ini).not.toContain('[env:')
   })
 })

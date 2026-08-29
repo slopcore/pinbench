@@ -10,6 +10,7 @@ import type {
   OpenProjectResult,
   ProjectFileResult,
   ProjectSaveResult,
+  UsbFlashRequest,
   WindowState
 } from '../shared/ipc'
 import { DEFAULT_LAUNCH_OPTIONS, type EmulatorLaunchOptions } from '../shared/emulator'
@@ -20,10 +21,12 @@ import { normaliseWorkspace } from '../shared/workspace'
 import { normaliseProject } from '../shared/project'
 import { buildApplicationMenu } from './menu'
 import { isBuildRunning } from '../shared/build'
+import { isUsbFlashRunning } from '../shared/usb-flash'
 import { parseEnvNamesFromIni } from '../shared/pio'
 import { availableBoardIds, loadBoard } from './board'
 import { readProjectFile, writeProjectFile } from './projectFile'
 import { BuildRunner } from './build'
+import { UsbFlashRunner } from './usb-flash'
 import { DeviceHost } from './devices'
 import { EmulatorSupervisor } from './emulator'
 import { ProjectFiles } from './fileTree'
@@ -35,6 +38,7 @@ let mainWindow: BrowserWindow | null = null
 let store: SessionStore | null = null
 let emulator: EmulatorSupervisor | null = null
 let build: BuildRunner | null = null
+let usbFlash: UsbFlashRunner | null = null
 let devices: DeviceHost | null = null
 let project: ProjectFiles | null = null
 let projectWatcher: FSWatcher | null = null
@@ -54,6 +58,18 @@ const builder = (): BuildRunner => {
     )
   }
   return build
+}
+
+const flasher = (): UsbFlashRunner => {
+  if (!usbFlash) {
+    usbFlash = new UsbFlashRunner({
+      userDataDir: app.getPath('userData'),
+      cacheDir: cacheDir()
+    })
+    usbFlash.on('state', (status) => mainWindow?.webContents.send(IpcChannel.usbFlashState, status))
+    usbFlash.on('output', (line) => mainWindow?.webContents.send(IpcChannel.usbFlashOutput, line))
+  }
+  return usbFlash
 }
 
 const session = (): SessionStore => {
@@ -282,10 +298,13 @@ function registerIpc(): void {
 
   ipcMain.handle(IpcChannel.projectOpen, async (): Promise<OpenProjectResult | null> => {
     if (!mainWindow) return null
-    if (build && isBuildRunning(build.getStatus().state)) {
+    const busy =
+      (build && isBuildRunning(build.getStatus().state)) ||
+      (usbFlash && isUsbFlashRunning(usbFlash.getStatus().state))
+    if (busy) {
       await dialog.showMessageBox(mainWindow, {
         type: 'info',
-        message: 'A build is still running',
+        message: 'A build or flash is still running',
         detail: 'Wait for it to finish or cancel it before opening another project.'
       })
       return null
@@ -374,8 +393,36 @@ function registerIpc(): void {
 
   ipcMain.on(IpcChannel.buildCancel, () => build?.cancel())
 
+  ipcMain.handle(IpcChannel.usbFlashListPorts, () => flasher().listPorts())
+
+  ipcMain.on(IpcChannel.usbFlashStart, (_event, request: UsbFlashRequest) => {
+    if (!isOpenProject(request.projectDir)) return
+    if (request.mode !== 'flash' && request.mode !== 'erase-flash') return
+    if (typeof request.port !== 'string' || request.port.length === 0) return
+    void flasher()
+      .run(request)
+      .catch((error: unknown) => {
+        mainWindow?.webContents.send(IpcChannel.usbFlashState, {
+          state: 'failed',
+          error: String(error)
+        })
+      })
+  })
+
+  ipcMain.on(IpcChannel.usbFlashCancel, () => usbFlash?.cancel())
+
   ipcMain.on(IpcChannel.buildClean, (_event, projectDir: string) => {
     if (!isOpenProject(projectDir)) return
+    if (usbFlash && isUsbFlashRunning(usbFlash.getStatus().state)) {
+      mainWindow?.webContents.send(IpcChannel.buildDiagnostics, [
+        {
+          id: 'clean',
+          severity: 'warn',
+          message: 'A USB flash is running — not clearing the cache'
+        }
+      ])
+      return
+    }
     try {
       rmSync(join(projectDir, '.pio', 'build'), { recursive: true, force: true })
       rmSync(cacheDir(), { recursive: true, force: true })
@@ -571,6 +618,7 @@ if (!app.requestSingleInstanceLock()) {
   app.on('before-quit', () => {
     emulator?.dispose()
     build?.dispose()
+    usbFlash?.dispose()
     void devices?.dispose()
     void acpBridge?.dispose()
     projectWatcher?.close()

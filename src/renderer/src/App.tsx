@@ -15,11 +15,14 @@ import { SourceView } from './components/SourceView'
 import { StatusBar } from './components/StatusBar'
 import { TitleBar } from './components/TitleBar'
 import { Toolbar } from './components/Toolbar'
+import { UsbFlashDialog } from './components/UsbFlashDialog'
+import type { UsbFlashMode } from '@shared/usb-flash'
 import type { Diagnostic } from '@shared/diagnostics'
 import { findingsToDiagnostics, verifyBoard } from '@shared/verify'
 import { isBuildRunning } from '@shared/build'
 import { useMenuCommands } from './state/useCommands'
 import { useBuild } from './state/useBuild'
+import { useUsbFlash } from './state/useUsbFlash'
 import { useDevices } from './state/useDevices'
 import { useEmulator } from './state/useEmulator'
 import { useProject } from './state/useProject'
@@ -50,6 +53,8 @@ export function App({
   const emulator = useEmulator(board.emulator)
   const project = useProject()
   const build = useBuild((image) => emulator.start(image))
+  const usbFlash = useUsbFlash()
+  const [usbFlashOpen, setUsbFlashOpen] = useState(false)
   const devices = useDevices()
   const totals = useMemo(() => boardTotals(board), [board])
   const selectedPart = workspace.selectedPartId
@@ -157,6 +162,20 @@ export function App({
       emulator: board.emulator
     })
   }, [board.emulator, build, project])
+
+  const startUsbFlash = useCallback(
+    (port: string, mode: UsbFlashMode) => {
+      if (!project.info || !project.env) return
+      usbFlash.start({
+        projectDir: project.info.dir,
+        env: project.env,
+        port,
+        mode,
+        ...(board.emulator.machine ? { chip: board.emulator.machine } : {})
+      })
+    },
+    [board.emulator.machine, project.env, project.info, usbFlash]
+  )
 
   const onConfigChange = useCallback((partId: string, fieldId: string, value: PartConfigValue) => {
     setConfig((previous) => ({ ...previous, [`${partId}.${fieldId}`]: value }))
@@ -301,6 +320,9 @@ export function App({
         case 'build.buildAndFlash':
           buildAndFlash()
           break
+        case 'build.flashUsb':
+          setUsbFlashOpen(true)
+          break
         case 'build.verifyPinMap':
           setVerifyRows(findingsToDiagnostics(verifyBoard(board)))
           dispatch({ type: 'setDockTab', tab: 'diagnostics' })
@@ -395,6 +417,7 @@ export function App({
         hasFirmware={emulator.firmwarePath !== null}
         onBuildAndFlash={buildAndFlash}
         onCancelBuild={build.cancel}
+        onFlashUsb={() => setUsbFlashOpen(true)}
         onEmulatorStart={() =>
           emulator.firmwarePath ? emulator.start(emulator.firmwarePath) : emulator.openAndStart()
         }
@@ -520,6 +543,22 @@ export function App({
         totals={totals}
         emulator={emulator.state}
         version={appInfo.version}
+      />
+
+      <UsbFlashDialog
+        open={usbFlashOpen}
+        status={usbFlash.status}
+        log={usbFlash.log}
+        ports={usbFlash.ports}
+        projectName={project.info?.name ?? null}
+        env={project.env}
+        onRefreshPorts={usbFlash.refreshPorts}
+        onFlash={startUsbFlash}
+        onCancel={usbFlash.cancel}
+        onClose={() => {
+          setUsbFlashOpen(false)
+          usbFlash.reset()
+        }}
       />
     </div>
   )

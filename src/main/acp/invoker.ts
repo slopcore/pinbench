@@ -80,7 +80,7 @@ const COMMAND_IDS = new Set<string>(COMMANDS)
  * same ground and should be used instead — `build.buildAndFlash` → `build_start`.
  * Keeping the denylist also means the two paths can't diverge in behaviour.
  */
-const MENU_COMMAND_DENYLIST = new Set<string>(['build.buildAndFlash'])
+const MENU_COMMAND_DENYLIST = new Set<string>(['build.buildAndFlash', 'build.flashUsb'])
 const SERIAL_DEFAULT_LIMIT = 200
 
 class NotAvailable extends Error {

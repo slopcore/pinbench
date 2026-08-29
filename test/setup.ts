@@ -63,6 +63,13 @@ export function installBridge(initial: WorkspaceState = DEFAULT_WORKSPACE): Test
       onOutput: () => () => undefined,
       onDiagnostics: () => () => undefined
     },
+    usbFlash: {
+      listPorts: vi.fn(() => Promise.resolve([])),
+      start: vi.fn(),
+      cancel: vi.fn(),
+      onState: () => () => undefined,
+      onOutput: () => () => undefined
+    },
     devices: {
       onSnapshot: () => () => undefined,
       onEvent: () => () => undefined,

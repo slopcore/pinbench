@@ -9,22 +9,18 @@ console.
 First target board: **ThinkNode M9 V1.0** (ESP32-S3-R8) running MeshCore.
 Second: **Heltec Wireless Paper v1.1**.
 
-[`ROADMAP.md`](ROADMAP.md) is the plan of record; every milestone there is a
-vertical slice you can launch and look at.
+The [`docs/`](docs/index.md) vault documents what PinBench does, feature by
+feature. [`docs/status.md`](docs/status.md) tracks what is done, blocked and
+next.
 
 ## Where the project is
 
-**M0 is done** — the emulation bridge was measured, and
-[ADR 0001](docs/adr/0001-device-model-boundary.md) records the verdict: device
-models are TypeScript, and the axis that matters is per-byte versus batched, not
-C versus TypeScript.
-
-**M1 is done** — this repository is the application shell: the window, the
-Nocturne design system, the panels, the menus and the canvas, driven by fixture
-data with no emulator behind it. Nothing here executes firmware yet. Buttons
-whose milestone has not landed are drawn and disabled rather than omitted, so
-the shell can be read against the design without pretending to do more than it
-does.
+PinBench boots real firmware under emulation today: it builds a MeshCore image
+from a PlatformIO checkout, runs it on an emulated ESP32-S3, and draws the M9's
+real LCD output in a peripheral panel. The device-model plugin API, board
+definitions as data, pin-map verify/codegen, and an agent control plane are all
+in. The live radio demo is blocked on a QEMU-fork GPIO fault — see
+[`docs/status.md`](docs/status.md).
 
 ## Running it
 
@@ -58,7 +54,8 @@ src/shared/     Types and pure logic both processes use — board definitions,
                 workspace state, the command table, the IPC contract
 src/renderer/   React + Vite renderer: the shell, the panels, the canvas
 test/           Vitest setup and the fake preload bridge
-docs/adr/       Architecture decision records
+docs/           Feature docs (Obsidian vault), ADRs, device-authoring guide
+qemu/           PinBench's patches to the espressif/qemu fork
 spike/          The M0 emulation spike (QEMU devices, bench firmware, results)
 ```
 

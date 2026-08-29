@@ -38,6 +38,7 @@ export const COMMANDS = [
   'view.gridNone',
   'view.snapToGrid',
   'build.buildAndFlash',
+  'build.flashUsb',
   'build.verifyPinMap',
   'build.start',
   'build.stop',
@@ -163,6 +164,12 @@ export const MENUS: MenuSpec[] = [
       // behind ⌘B lands in M11.1.
       item('build.buildAndFlash', 'Build & flash', {
         accelerator: 'CmdOrCtrl+Shift+B',
+        enabled: true
+      }),
+      // The one path that writes real hardware — build board-native, then
+      // esptool over USB. See docs/adr/0003-usb-flashing.md.
+      item('build.flashUsb', 'Flash over USB…', {
+        accelerator: 'CmdOrCtrl+Shift+U',
         enabled: true
       }),
       item('build.verifyPinMap', 'Verify pin map', { accelerator: 'CmdOrCtrl+B', enabled: true }),

@@ -34,6 +34,7 @@ interface ToolbarProps {
   hasFirmware: boolean
   onBuildAndFlash: () => void
   onCancelBuild: () => void
+  onFlashUsb: () => void
   onEmulatorStart: () => void
   onEmulatorStop: () => void
   onEmulatorReset: () => void
@@ -53,6 +54,7 @@ export function Toolbar({
   hasFirmware,
   onBuildAndFlash,
   onCancelBuild,
+  onFlashUsb,
   onEmulatorStart,
   onEmulatorStop,
   onEmulatorReset,
@@ -79,6 +81,15 @@ export function Toolbar({
         title={building ? 'Cancel build' : 'Build the firmware and boot it'}
       >
         {building ? `${buildButtonLabel(buildState)} — cancel` : buildButtonLabel(buildState)}
+      </button>
+      <button
+        type="button"
+        className="toolbar__button toolbar__button--wide"
+        disabled={building}
+        onClick={onFlashUsb}
+        title="Flash the firmware to an attached board over USB (⌘⇧U)"
+      >
+        Flash USB…
       </button>
       <div className="toolbar__group" role="group" aria-label="Emulator">
         <button

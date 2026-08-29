@@ -12,7 +12,10 @@ import type { Diagnostic } from './diagnostics'
 import type { EmulatorLaunchOptions, EmulatorStatus } from './emulator'
 import type { FileNode } from './files'
 import type { SerialLine } from './serial'
+import type { SerialPortInfo, UsbFlashMode, UsbFlashStatus } from './usb-flash'
 import type { WorkspaceState } from './workspace'
+
+export type { SerialPortInfo, UsbFlashMode, UsbFlashStatus }
 
 export type { EmulatorLaunchOptions }
 
@@ -47,6 +50,11 @@ export const IpcChannel = {
   buildState: 'build:state',
   buildOutput: 'build:output',
   buildDiagnostics: 'build:diagnostics',
+  usbFlashListPorts: 'usbflash:list-ports',
+  usbFlashStart: 'usbflash:start',
+  usbFlashCancel: 'usbflash:cancel',
+  usbFlashState: 'usbflash:state',
+  usbFlashOutput: 'usbflash:output',
   deviceSnapshot: 'device:snapshot',
   deviceEvent: 'device:event',
   deviceDiagnostic: 'device:diagnostic',
@@ -93,6 +101,17 @@ export interface BuildRequest {
   env: string
   /** Emulator launch options for the board, forwarded to the merge/boot step. */
   emulator: EmulatorLaunchOptions
+}
+
+export interface UsbFlashRequest {
+  projectDir: string
+  env: string
+  /** Serial port to write, from `usbFlash.listPorts()`. */
+  port: string
+  /** `flash` writes the app regions; `erase-flash` wipes the chip first. */
+  mode: UsbFlashMode
+  /** esptool `--chip`; taken from the board's `emulator.machine`. */
+  chip?: string
 }
 
 export interface PinBenchApi {
@@ -147,6 +166,16 @@ export interface PinBenchApi {
     onState(listener: (status: BuildStatus) => void): () => void
     onOutput(listener: (line: BuildOutputLine) => void): () => void
     onDiagnostics(listener: (rows: Diagnostic[]) => void): () => void
+  }
+  /** Flash real hardware over USB — the one path that leaves the emulator. */
+  usbFlash: {
+    /** Serial ports `pio device list` can see right now. */
+    listPorts(): Promise<SerialPortInfo[]>
+    /** Rebuild the env board-native (no emulator override), then esptool it. */
+    start(request: UsbFlashRequest): void
+    cancel(): void
+    onState(listener: (status: UsbFlashStatus) => void): () => void
+    onOutput(listener: (line: BuildOutputLine) => void): () => void
   }
   devices: {
     /** A device model's observable state changed. */

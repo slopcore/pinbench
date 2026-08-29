@@ -2,7 +2,7 @@
 /**
  * M6.3 — the C bridge against a live guest. Skipped unless `PINBENCH_LIVE_QEMU=1`
  * and `PINBENCH_M9_IMAGE` points at a merged MeshCore M9 flash image (build one
- * with the DIO `dio_opi` override and a 16 M merge — see ROADMAP M6.2). It
+ * with the DIO `dio_opi` override and a 16 M merge — see docs/features/firmware-build.md). It
  * boots that image under the PinBench-patched `.qemu` with the real
  * `DeviceHost` on the other end of `PINBENCH_DEVICE_SOCKET` and asserts the
  * ST7789 model tracks MeshCore's display bring-up.

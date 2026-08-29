@@ -9,6 +9,9 @@ import type {
   PinBenchApi,
   ProjectFileResult,
   ProjectSaveResult,
+  SerialPortInfo,
+  UsbFlashRequest,
+  UsbFlashStatus,
   WindowState
 } from '../shared/ipc'
 import type { ProjectFile } from '../shared/project'
@@ -87,6 +90,13 @@ const api: PinBenchApi = {
     onState: (listener) => subscribe<BuildStatus>(IpcChannel.buildState, listener),
     onOutput: (listener) => subscribe<BuildOutputLine>(IpcChannel.buildOutput, listener),
     onDiagnostics: (listener) => subscribe<Diagnostic[]>(IpcChannel.buildDiagnostics, listener)
+  },
+  usbFlash: {
+    listPorts: () => ipcRenderer.invoke(IpcChannel.usbFlashListPorts) as Promise<SerialPortInfo[]>,
+    start: (request: UsbFlashRequest) => ipcRenderer.send(IpcChannel.usbFlashStart, request),
+    cancel: () => ipcRenderer.send(IpcChannel.usbFlashCancel),
+    onState: (listener) => subscribe<UsbFlashStatus>(IpcChannel.usbFlashState, listener),
+    onOutput: (listener) => subscribe<BuildOutputLine>(IpcChannel.usbFlashOutput, listener)
   },
   devices: {
     onSnapshot: (listener) => subscribe<DeviceSnapshotMessage>(IpcChannel.deviceSnapshot, listener),

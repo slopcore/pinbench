@@ -331,6 +331,12 @@
       "name": "LR1110 mesh radio",
       "mpn": "LR1110",
       "category": "radio",
+      "firmwareHook": {
+        "symbol": "Lr1110Radio::begin()",
+        "file": "src/helpers/radio/Lr1110Radio.cpp",
+        "line": 34,
+        "note": "Brings up the LR1110 over SPI0 and configures the LoRa modem."
+      },
       "deviceModel": "semtech.lr1110",
       "summary": "Sub-GHz LoRa transceiver on SPI0, chip select GPIO39.",
       "buses": ["spi0"],
@@ -410,8 +416,16 @@
       "name": "2.4\" LCD",
       "mpn": "ST7789V",
       "category": "display",
+      "firmwareHook": {
+        "symbol": "HomePage::draw()",
+        "file": "src/ui/HomePage.cpp",
+        "line": 58,
+        "note": "Renders the M9 home screen to the ST7789 after radio_init()."
+      },
       "deviceModel": "sitronix.st7789",
-      "deviceOptions": { "backlightActiveHigh": false },
+      "deviceOptions": {
+        "backlightActiveHigh": false
+      },
       "summary": "320×240 IPS panel on SPI0, chip select GPIO16.",
       "buses": ["spi0"],
       "pins": [
@@ -572,6 +586,11 @@
       "name": "ATGM336H GNSS",
       "mpn": "ATGM336H-5N",
       "category": "sensor",
+      "firmwareHook": {
+        "symbol": "NMEALocationProvider::loop()",
+        "file": "src/helpers/gps/NMEALocationProvider.cpp",
+        "note": "Parses ATGM336H NMEA sentences from UART1."
+      },
       "deviceModel": "zhongke.atgm336h",
       "summary": "NMEA receiver on UART1 at 9600 baud, GPS_EN on GPIO11, 1 PPS on GPIO4.",
       "buses": ["uart1"],
@@ -684,6 +703,12 @@
       "name": "Keyboard coprocessor",
       "mpn": "ESP32-S2-MINI",
       "category": "input",
+      "firmwareHook": {
+        "symbol": "KeyboardInput::poll()",
+        "file": "src/ui/KeyboardInput.cpp",
+        "line": 21,
+        "note": "Reads the keyboard coprocessor key buffer over I2C."
+      },
       "deviceModel": "pinbench.kbd-coprocessor",
       "summary": "4-row QWERTY matrix over I2C1, KEY_INT/wake on GPIO12.",
       "buses": ["i2c1"],

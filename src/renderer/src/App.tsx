@@ -562,6 +562,7 @@ export function App({
                     devices.sendCommand(selectedPart.id, command, args)
                 : undefined
             }
+            onRevealSource={openInSource}
           />
         )}
       </div>

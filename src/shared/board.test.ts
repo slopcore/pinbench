@@ -105,4 +105,29 @@ describe('parseBoard', () => {
     expect(() => parseBoard(null)).toThrow(BoardValidationError)
     expect(() => parseBoard('nope')).toThrow(/board: expected an object/)
   })
+
+  it('parses an optional firmwareHook and keeps its optional fields optional', () => {
+    const raw = validBoard()
+    ;(raw.parts as Record<string, unknown>[])[1]!.firmwareHook = {
+      symbol: 'Widget::begin()',
+      file: 'src/Widget.cpp',
+      line: 12,
+      note: 'brings the widget up'
+    }
+    ;(raw.parts as Record<string, unknown>[])[0]!.firmwareHook = { symbol: 'app_main()' }
+    const board = parseBoard(raw)
+    expect(board.parts[1]!.firmwareHook).toEqual({
+      symbol: 'Widget::begin()',
+      file: 'src/Widget.cpp',
+      line: 12,
+      note: 'brings the widget up'
+    })
+    expect(board.parts[0]!.firmwareHook).toEqual({ symbol: 'app_main()' })
+  })
+
+  it('rejects a firmwareHook with no symbol, naming the field', () => {
+    const raw = validBoard()
+    ;(raw.parts as Record<string, unknown>[])[1]!.firmwareHook = { file: 'src/x.cpp' }
+    expect(() => parseBoard(raw)).toThrow(/board\.parts\[1\]\.firmwareHook\.symbol/)
+  })
 })

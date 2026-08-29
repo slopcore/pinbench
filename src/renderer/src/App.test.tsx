@@ -240,6 +240,27 @@ describe('selection', () => {
     expect(within(inspector).getByText('GPIO39')).toBeInTheDocument()
   })
 
+  it('shows Identity, Nets and the firmware-hook card for a selected part', async () => {
+    const { user } = await renderApp()
+    await user.click(screen.getByRole('button', { name: /LR1110 mesh radio/ }))
+    const inspector = screen.getByRole('complementary', { name: 'Inspector' })
+    expect(within(inspector).getByText('Identity')).toBeInTheDocument()
+    expect(within(inspector).getByText('Reference')).toBeInTheDocument()
+    expect(within(inspector).getByText(/^Nets \(/)).toBeInTheDocument()
+    expect(within(inspector).getByText('Lr1110Radio::begin()')).toBeInTheDocument()
+  })
+
+  it('reveals the firmware-hook source from the Inspector', async () => {
+    const { user } = await renderApp()
+    await user.click(screen.getByRole('button', { name: /2.4" LCD/ }))
+    const inspector = screen.getByRole('complementary', { name: 'Inspector' })
+    await user.click(within(inspector).getByRole('button', { name: 'Reveal in source' }))
+    expect(screen.getByRole('tabpanel', { name: 'Source' })).toBeInTheDocument()
+    expect(window.pinbench.project.readFile).toHaveBeenCalledWith(
+      expect.stringContaining('HomePage.cpp')
+    )
+  })
+
   it('records an Inspector config change', async () => {
     const { user } = await renderApp()
     await user.click(screen.getByRole('button', { name: /LR1110 mesh radio/ }))

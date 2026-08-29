@@ -64,6 +64,22 @@ export type PartConfigField =
       unit?: string
     }
 
+/**
+ * Where the firmware talks to this part. Shown as the Inspector's "Firmware
+ * hook" card; `file`/`line` drive its "Reveal in source" jump. All fields but
+ * `symbol` are optional so a board can name a hook it cannot yet pin to a line.
+ */
+export interface FirmwareHook {
+  /** The call the firmware makes into this part, e.g. `Lr1110::begin()`. */
+  symbol: string
+  /** Source file for the reveal action, relative to the PlatformIO project root. */
+  file?: string
+  /** 1-based line within `file`, when known. */
+  line?: number
+  /** One line on what the hook does. */
+  note?: string
+}
+
 export interface PartDefinition {
   id: string
   /** Reference designator as drawn on the canvas, e.g. `U2`. */
@@ -72,6 +88,8 @@ export interface PartDefinition {
   /** Manufacturer part number, shown as the Inspector subtitle. */
   mpn?: string
   category: PartCategory
+  /** The firmware entry point for this part — Inspector "Firmware hook" card. */
+  firmwareHook?: FirmwareHook
   /** Device-model id resolved by the plugin registry from M4 onward. */
   deviceModel?: string
   /**
@@ -369,6 +387,16 @@ export function parseBoard(input: unknown): BoardDefinition {
     }
     if (p['deviceOptions'] !== undefined) {
       part.deviceOptions = obj(p['deviceOptions'], `board.parts[${i}].deviceOptions`)
+    }
+    if (p['firmwareHook'] !== undefined) {
+      const h = obj(p['firmwareHook'], `board.parts[${i}].firmwareHook`)
+      const hook: FirmwareHook = {
+        symbol: str(h['symbol'], `board.parts[${i}].firmwareHook.symbol`)
+      }
+      if (h['file'] !== undefined) hook.file = str(h['file'], `board.parts[${i}].firmwareHook.file`)
+      if (h['line'] !== undefined) hook.line = num(h['line'], `board.parts[${i}].firmwareHook.line`)
+      if (h['note'] !== undefined) hook.note = str(h['note'], `board.parts[${i}].firmwareHook.note`)
+      part.firmwareHook = hook
     }
     return part
   })

@@ -181,6 +181,12 @@
       "name": "SX1262 LoRa radio",
       "mpn": "SX1262",
       "category": "radio",
+      "firmwareHook": {
+        "symbol": "SX1262Radio::begin()",
+        "file": "src/helpers/radio/SX1262Radio.cpp",
+        "line": 29,
+        "note": "Brings up the SX1262 on its dedicated SPI bus."
+      },
       "deviceModel": "semtech.sx1262",
       "deviceOptions": { "dio2RfSwitch": true, "dio3TcxoVoltage": 1.8 },
       "summary": "Sub-GHz LoRa transceiver on its own SPI bus, chip select GPIO8, BUSY GPIO13, DIO1 IRQ GPIO14. No hardware reset line (RADIOLIB_NC).",
@@ -235,6 +241,12 @@
       "name": "2.13\" e-paper",
       "mpn": "UC8151",
       "category": "display",
+      "firmwareHook": {
+        "symbol": "EInkDisplay::update()",
+        "file": "src/helpers/ui/EInkDisplay.cpp",
+        "line": 72,
+        "note": "Full/partial refresh of the UC8151 e-paper panel."
+      },
       "deviceModel": "ultrachip.uc8151",
       "deviceOptions": { "busyActiveLow": true },
       "summary": "128×250 monochrome e-ink (heltec-eink-modules LCMEN2R13EFC1) on its own SPI bus, chip select GPIO4, D/C GPIO5, active-low BUSY GPIO7. Pixels latch on DRF (0x12), not as RAM streams.",

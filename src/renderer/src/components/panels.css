@@ -235,6 +235,67 @@
   font-size: var(--font-size-xs);
 }
 
+.inspector__section .inspector__facts {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.inspector__nets {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--font-size-sm);
+}
+
+.inspector__nets li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) 0;
+}
+
+.inspector__net-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-sm);
+  flex: none;
+}
+
+.inspector__net-label {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  color: var(--text-primary);
+}
+
+.inspector__hook-symbol {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  color: var(--text-accent);
+}
+
+.inspector__hook-note {
+  margin: var(--space-2) 0 0;
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+}
+
+.inspector__hook-reveal {
+  margin-top: var(--space-3);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+}
+
+.inspector__hook-reveal:hover {
+  color: var(--text-primary);
+  border-color: var(--accent-600);
+}
+
 .field {
   display: flex;
   align-items: center;

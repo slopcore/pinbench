@@ -1,5 +1,6 @@
 import { CATEGORY_LABELS } from '@shared/board'
 import type { BoardDefinition, PartConfigField, PartDefinition } from '@shared/board'
+import { netColour } from '@shared/nets'
 import { InPanel } from './InPanel'
 import { OutPanel } from './OutPanel'
 import type { PartDeviceView } from '../state/useDevices'
@@ -29,6 +30,13 @@ interface InspectorProps {
   onSetLevel?: ((signal: string, level: 0 | 1) => void) | undefined
   /** Send an IN-panel command to the selected part's model (`onCommand`). */
   onCommand?: ((command: string, args?: Record<string, unknown>) => void) | undefined
+  /** Open a firmware source file (the "Reveal in source" action). */
+  onRevealSource?: ((file: string, line?: number) => void) | undefined
+}
+
+/** Nets with an endpoint on this part — `partId:signal` in a net's `nodes`. */
+function partNets(board: BoardDefinition, part: PartDefinition): BoardDefinition['nets'] {
+  return board.nets.filter((net) => net.nodes.some((node) => node.startsWith(`${part.id}:`)))
 }
 
 /** UART rates read as baud; a clocked bus reads as a frequency. */
@@ -54,7 +62,8 @@ export function Inspector({
   onConfigChange,
   device,
   onSetLevel,
-  onCommand
+  onCommand,
+  onRevealSource
 }: InspectorProps): React.JSX.Element {
   /** Apply a config edit, and for the LR1110's live fields also poke the model. */
   const applyConfig = (partId: string, fieldId: string, value: string | number | boolean): void => {
@@ -92,6 +101,63 @@ export function Inspector({
               <p className="inspector__summary">{part.summary}</p>
               <span className="inspector__category">{CATEGORY_LABELS[part.category]}</span>
             </header>
+
+            <section className="inspector__section">
+              <h4 className="inspector__section-title">Identity</h4>
+              <dl className="inspector__facts">
+                <dt>Reference</dt>
+                <dd>{part.designator}</dd>
+                <dt>Class</dt>
+                <dd>{CATEGORY_LABELS[part.category]}</dd>
+                <dt>Position</dt>
+                <dd>
+                  {part.layout.x}, {part.layout.y}
+                </dd>
+              </dl>
+            </section>
+
+            {(() => {
+              const nets = partNets(board, part)
+              if (nets.length === 0) return null
+              return (
+                <section className="inspector__section">
+                  <h4 className="inspector__section-title">Nets ({nets.length})</h4>
+                  <ul className="inspector__nets">
+                    {nets.map((net) => (
+                      <li key={net.id}>
+                        <span
+                          className="inspector__net-swatch"
+                          style={{ background: netColour(net.bus, board.buses) }}
+                          aria-hidden="true"
+                        />
+                        <span className="inspector__net-label">{net.label}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )
+            })()}
+
+            {part.firmwareHook !== undefined && (
+              <section className="inspector__section">
+                <h4 className="inspector__section-title">Firmware hook</h4>
+                <p className="inspector__hook-symbol">{part.firmwareHook.symbol}</p>
+                {part.firmwareHook.note !== undefined && (
+                  <p className="inspector__hook-note">{part.firmwareHook.note}</p>
+                )}
+                {part.firmwareHook.file !== undefined && onRevealSource && (
+                  <button
+                    type="button"
+                    className="inspector__hook-reveal"
+                    onClick={() =>
+                      onRevealSource(part.firmwareHook!.file!, part.firmwareHook!.line)
+                    }
+                  >
+                    Reveal in source
+                  </button>
+                )}
+              </section>
+            )}
 
             {part.config.length > 0 && (
               <section className="inspector__section">

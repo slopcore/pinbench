@@ -1612,7 +1612,7 @@ appends.
   produces `warn … GPIO21 is bound to 2 signals: u3:CS + u8:SCL`. The
   rebuild-and-drive-the-new-pin half is M11.2 (codegen).
 
-#### M11.2 · Pin-map codegen — `M`
+#### M11.2 · Pin-map codegen — `M` ✅ **done** (Build-write → M11.3)
 
 **Goal.** The board definition emits `board_m9.h` and the `platformio.ini`
 `build_flags`, regenerated on build.
@@ -1635,6 +1635,32 @@ appends.
 **Done when.** `generatePinHeader` on the M9 matches a checked-in golden file;
 moving `LCD_CS` in the definition changes one `#define`; Build & flash writes
 it and a hand-edit is detected, not clobbered.
+
+### Outcome
+
+`src/shared/codegen.ts`, pure, 11 tests:
+
+- **`generatePinHeader(board)`** — deterministic, name-sorted C: `#define`s from
+  net labels (`LR_NSS 39`, `LCD_CS 16`, `SPI0_SCK 40`…), bus roles (`UART0_TX`
+  …) and per-part bindings (`U3_CS_PIN 16`, `U3_DC_PIN 15`…), under an include
+  guard, led by the `HEADER_SENTINEL` DO-NOT-EDIT line. Golden file at
+  `src/shared/__fixtures__/thinknode-m9-v1.0.pins.h`.
+- **`generateBuildFlags(board)`** — the same numbers as `-D NAME=value`.
+- **`headerFingerprint(text)`** — FNV-1a over the sorted `NAME=value` pairs,
+  comment/whitespace-insensitive, no crypto dep.
+- **`checkHeaderDivergence(onDisk, lastFingerprint)`** — M11's watch-for made
+  concrete: a file with no sentinel is `foreign`, a sentinel file whose
+  fingerprint moved is `diverged`, no file is neither. Build & flash consults
+  this before overwriting.
+
+Verified: moving `LCD_CS` in the definition changes exactly the `LCD_CS` and
+`U3_CS_PIN` lines; a hand-edit of the generated header trips the guard.
+
+**Carried to M11.3** (the "regenerated on build" / "firmware drives the new
+pin" half): `BuildRunner.run` takes the board, writes the header into the
+project through the `-c` override path (never over a user file blindly), calls
+`checkHeaderDivergence` first, and the firmware `#include`s it — the same
+integration as making the canvas authoritative.
 
 #### M11.3 · Canvas as editor, and Probe pin — `L`
 

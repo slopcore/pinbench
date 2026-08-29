@@ -4,12 +4,15 @@ import { MCP_PROTOCOL_VERSION } from './methods'
 import { mcpHandlers, type McpToolResult } from './mcp'
 import { OPERATIONS } from './operations'
 
+// Behaviour tests inject a permissive authorizer so they exercise the invoke
+// path; the fail-closed tests below build their own Dispatcher with none.
 const server = (over: Partial<Parameters<typeof mcpHandlers>[0]> = {}) =>
   new Dispatcher(
     mcpHandlers({
       serverName: 'pinbench',
       serverVersion: '0.1.0',
       invoke: async (op, params) => ({ ran: op.name, params }),
+      authorize: async () => true,
       ...over
     })
   )
@@ -100,5 +103,28 @@ describe('tools/call', () => {
     const result = await call(d, 'build_start', { env: 'm9' })
     expect(result.isError).toBeUndefined()
     expect(result.structuredContent).toMatchObject({ ran: 'build_start' })
+  })
+
+  it('fails closed: with no authorizer, an exec op is refused', async () => {
+    const invoke = vi.fn(async () => 'ran')
+    const d = new Dispatcher(
+      mcpHandlers({ serverName: 'pinbench', serverVersion: '0.1.0', invoke })
+    )
+    const result = await call(d, 'build_start', { env: 'm9' })
+    expect(invoke).not.toHaveBeenCalled()
+    expect(result.isError).toBe(true)
+    expect(result.content[0]!.text).toMatch(/Permission denied/)
+  })
+
+  it('with no authorizer, read and write ops still run', async () => {
+    const d = new Dispatcher(
+      mcpHandlers({
+        serverName: 'pinbench',
+        serverVersion: '0.1.0',
+        invoke: async (op) => op.name
+      })
+    )
+    expect((await call(d, 'board_get')).isError).toBeUndefined()
+    expect((await call(d, 'board_edit', { edit: { kind: 'noop' } })).isError).toBeUndefined()
   })
 })

@@ -31,6 +31,15 @@ Two channels can do that:
    `NewSessionRequest.mcpServers` hands the agent extra tool servers, and the
    agent's model then calls those tools during a prompt turn. Works with a
    **stock** agent — nothing about the agent needs to know it is PinBench.
+
+   One caveat this ADR is explicit about: an in-process server is reachable
+   over **HTTP**, and HTTP MCP is *agent-advertised* (`agentCapabilities.
+   mcpCapabilities.http`). An agent that supports only the mandatory `Stdio`
+   MCP transport cannot connect to a loopback URL. The fallback is a tiny
+   `pinbench-mcp` bridge executable shipped in the package — a Node script the
+   agent spawns as a `Stdio` server, which proxies stdin/stdout to PinBench's
+   loopback HTTP server (bearer token in the env). M16.2 ships the HTTP server;
+   the bridge script is M16.3 unless a stdio-only agent forces it sooner.
 2. **`_`-prefixed ACP extension methods** (`_pinbench/build`, …). Simpler on
    the wire (reuses the ACP connection), but only a **PinBench-aware** client
    would ever call them; a stock agent will not.
@@ -70,13 +79,29 @@ while unattended, allow-all in a trusted CI run).
 - **Opt-in only.** No agent bridge unless PinBench is started with `--acp` (or
   `PINBENCH_ACP=1`). A normal launch is unchanged.
 - **Loopback / local only.** The ACP link to the agent is stdio. The MCP
-  control server binds `127.0.0.1` on an ephemeral port (or a Unix domain
-  socket / `\\.\pipe\` name on Windows, following the `deviceSocketPath()`
-  pattern in `src/main/index.ts`), never a routable interface, and carries a
-  per-session bearer token.
+  control server binds `127.0.0.1` **explicitly** (never `::`, never an omitted
+  host) on an ephemeral port, never a routable interface. Every request must
+  carry the per-session bearer token *and* an `Origin` that is absent or
+  loopback — a browser page on the user's machine can otherwise POST to the
+  port. A rejected request gets `403`, no body.
 - **Same gating as the bridge.** Every filesystem path an operation touches is
-  checked with `isOpenProject()`, exactly as `build:start` and `project:*`
-  already are. The agent gets the project the user opened, nothing above it.
+  checked with `isOpenProject()` / `ProjectFiles.guard()`, exactly as
+  `build:start` and `project:*` already are. The agent gets the project the
+  user opened, nothing above it.
+
+### Board-document ownership
+
+`board_edit` / `board_undo` / `board_redo` mutate the board. Once M11.3's
+canvas UI lands, the renderer owns a `BoardHistory`; a second history in the
+main process would silently diverge from it (an agent edit and a canvas edit
+would each win locally). **Decision: the main process is the single authority
+on the board document while an agent session is active.** M11.3's canvas must
+read its history from main (over IPC) rather than hold its own, the same way
+the board *definition* already loads in main and is handed to `DeviceHost`
+without a renderer round-trip. Until that wiring exists (M16.3), the three
+board-mutation operations are in the catalogue but the M16.2 invoker answers
+them with a plain "not available in this build" error — `board_get`,
+`board_verify` and `pinmap_preview` (all reads) are live.
 
 ### No new runtime dependency
 

@@ -13,6 +13,9 @@ import type {
   WindowState
 } from '../shared/ipc'
 import type { EmulatorLaunchOptions } from '../shared/emulator'
+import type { BoardDefinition } from '../shared/board'
+import type { CommandId } from '../shared/commands'
+import { acpRequested, startAcpBridge, type AcpBridge } from './acp/bridge'
 import { normaliseWorkspace } from '../shared/workspace'
 import { normaliseProject } from '../shared/project'
 import { buildApplicationMenu } from './menu'
@@ -35,6 +38,9 @@ let build: BuildRunner | null = null
 let devices: DeviceHost | null = null
 let project: ProjectFiles | null = null
 let projectWatcher: FSWatcher | null = null
+/** Last board the renderer asked to load — the agent bridge's board authority (ADR 0002). */
+let currentBoard: BoardDefinition | null = null
+let acpBridge: AcpBridge | null = null
 
 const cacheDir = (): string => join(app.getPath('userData'), 'build-cache')
 
@@ -250,6 +256,7 @@ function registerIpc(): void {
     try {
       const board = loadBoard(typeof id === 'string' && id ? id : undefined)
       deviceHost().load(board)
+      currentBoard = board
       return { board }
     } catch (error) {
       return { error: error instanceof Error ? error.message : String(error) }
@@ -432,6 +439,66 @@ function readEnvNames(dir: string): string[] {
   }
 }
 
+/** Adopt a PlatformIO project by path — the agent bridge's dialog-free `project_open`. */
+function openProjectAt(rawDir: string): OpenProjectResult {
+  const dir = resolve(rawDir)
+  if (!existsSync(join(dir, 'platformio.ini'))) {
+    throw new Error(`no platformio.ini in ${dir}`)
+  }
+  return openProject(dir)
+}
+
+/**
+ * Stand up the agent control plane (roadmap M16.2). Opt-in: only when the app
+ * was started `--acp` / `PINBENCH_ACP=1`. Prints the loopback MCP URL and the
+ * per-session token to stderr for a client to pick up.
+ */
+async function startAgentBridge(): Promise<void> {
+  if (!acpRequested()) return
+  try {
+    acpBridge = await startAcpBridge({
+      appVersion: app.getVersion(),
+      platform: process.platform,
+      isDev,
+      emulator: emu(),
+      build: builder(),
+      devices: deviceHost(),
+      getBoard: () => currentBoard,
+      project: {
+        open: async (dir) => openProjectAt(dir),
+        readTree: (dir) =>
+          project ? project.readTree(dir) : Promise.reject(new Error('no project open')),
+        readFile: (path) =>
+          project ? project.readFile(path) : Promise.reject(new Error('no project open')),
+        clean: () => {
+          if (!project) throw new Error('no project open')
+          rmSync(join(project.rootDir, '.pio', 'build'), { recursive: true, force: true })
+          rmSync(cacheDir(), { recursive: true, force: true })
+        }
+      },
+      menuCommand: (command: CommandId) =>
+        mainWindow?.webContents.send(IpcChannel.menuCommand, command),
+      confirm: async (op) => {
+        if (!mainWindow) return false
+        const { response } = await dialog.showMessageBox(mainWindow, {
+          type: 'question',
+          buttons: ['Deny', 'Allow'],
+          defaultId: 0,
+          cancelId: 0,
+          message: `Agent request: ${op.title}`,
+          detail: op.summary
+        })
+        return response === 1
+      }
+    })
+    process.stderr.write(
+      `[pinbench] ACP control server on ${acpBridge.server.url}\n[pinbench] ACP token: ${acpBridge.server.token}\n`
+    )
+  } catch (error) {
+    process.stderr.write(`[pinbench] ACP bridge failed to start: ${String(error)}\n`)
+  }
+}
+
 if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
@@ -446,6 +513,7 @@ if (!app.requestSingleInstanceLock()) {
     registerIpc()
     Menu.setApplicationMenu(buildApplicationMenu(() => mainWindow))
     mainWindow = createWindow()
+    void startAgentBridge()
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) mainWindow = createWindow()
@@ -456,6 +524,7 @@ if (!app.requestSingleInstanceLock()) {
     emulator?.dispose()
     build?.dispose()
     void devices?.dispose()
+    void acpBridge?.dispose()
     projectWatcher?.close()
   })
 

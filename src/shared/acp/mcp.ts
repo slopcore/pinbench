@@ -48,10 +48,13 @@ export type McpToolInvoker = (
 
 /**
  * Consulted before an operation runs. Return `false` to refuse — the tool call
- * comes back as an error the agent can read. Defaults to
- * {@link defaultPermissionPolicy} (refuse nothing it would `allow`, ask the
- * host for the rest); a host with no interactive user can pass a stub that
- * resolves `ask` however it likes.
+ * comes back as an error the agent can read.
+ *
+ * With no authorizer supplied the server is **deny-by-default for anything the
+ * policy would not outright `allow`**: `read` and `write` ops run,
+ * `exec` ops (which {@link defaultPermissionPolicy} marks `ask`) are refused
+ * until the host wires a real gate. Failing closed is the point — a host that
+ * forgets to pass `authorize` must not silently grant build/emulator control.
  */
 export type McpAuthorizer = (
   op: OperationDescriptor,
@@ -86,7 +89,7 @@ function fail(message: string): McpToolResult {
 
 export function mcpHandlers(options: McpServerOptions): Record<string, RpcHandler> {
   const authorize: McpAuthorizer =
-    options.authorize ?? (async (op) => defaultPermissionPolicy(op) !== 'deny')
+    options.authorize ?? (async (op) => defaultPermissionPolicy(op) === 'allow')
 
   return {
     initialize: () => ({

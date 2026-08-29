@@ -1316,10 +1316,28 @@ home screen — closing M6.4's carried clause.
   region 'er', reason: rejected` immediately before the pin-227 error — a
   low-address (near-null + 0x10200C) read that is not any fork peripheral base.
   That points at a garbage pointer / uninitialised struct field in the guest,
-  read *before* the `-707`. gdb on the guest (`-s -S`, break on
-  `__pinMode`) is the next tool. Debug images built:
-  `MeshCore-m9-dev` env `ThinkNode_M9_companion_radio_usb_` with the
-  `dio_opi` override.
+  read *before* the `-707`. Debug images built: `MeshCore-m9-dev` env
+  `ThinkNode_M9_companion_radio_usb_` with the `dio_opi` override.
+- **Session note (M7.2b attempt 2 — gdb).**
+  `xtensa-esp32s3-elf-gdb` against `qemu … -S -gdb tcp::9123`, `firmware.elf`
+  for symbols. Findings, `radio.begin()` call stack:
+  `radio_init` → `LR1110::begin` → `LR11x0::begin` → `modSetup` → `findChip`
+  → `reset()` **passes** (BUSY read low, no timeout) → `getVersionInfo` →
+  `getVersion` → `SPIcommand(0x0101, read)` → `Module::SPItransferStream`
+  (`write=true, numBytes=0` — the opcode write). The **pre-transfer GPIO wait
+  passes** (execution reaches `spiBeginTransaction` at Module.cpp:~387, not a
+  `RADIOLIB_ERR_SPI_CMD_TIMEOUT` return). So `-707` and the pin-227
+  `__pinMode`/`__digitalWrite` are **after** the getVersion opcode write — the
+  next gdb pass should break there (`break Module.cpp:419`, `break
+  __digitalWrite if pin > 48`) *with the socket connected*, since `-707` only
+  reproduces with `PINBENCH_DEVICE_SOCKET` set (no-socket runs may fail `-2`
+  `CHIP_NOT_FOUND` instead — the MISO echo makes `device` read 0). The
+  `MicroNMEALocationProvider` global-ctor `__pinMode` hits gdb also shows
+  (`pin` reads as 136/garbage under `-O2`) are a **separate** pre-`setup()`
+  red herring, not the radio path. Tooling lesson: **conditional breakpoints on
+  hot functions** (`break __digitalWrite if pin > 48`) are unusably slow over
+  the gdb remote stub. Use an unconditional break inside `LR11x0::findChip` or
+  `SPItransferStream`'s post-transfer wait, or a hardware watchpoint.
 - Fix it where it belongs: most likely a range/validity check or a missing
   register in `qemu/hw/gpio/esp32_gpio.c` / `esp32s3_gpio.c` (the fork models a
   subset), or — if it is genuinely a MeshCore/RadioLib call with a bad pin — a

@@ -1137,7 +1137,7 @@ with an Outcome section. M7 follows the same shape. Each slice is landed on
 cannot get in-session is narrowed to its testable half and the rest carried
 forward, per the session goal.
 
-#### M7.1 · The LR1110 model, verified without QEMU — `L`
+#### M7.1 · The LR1110 model, verified without QEMU — `L` ✅ **done**
 
 **Goal.** The `semtech.lr1110` device model exists, is registered, and passes a
 harness test that walks MeshCore's real `radio_init()` SPI sequence — the
@@ -1173,6 +1173,48 @@ with no `unimplemented` diagnostics.
 **Watch for.** The `Stat1`/`Stat2` status-byte convention — RadioLib's
 `parseStatusCb` reads it on every command and a wrong value makes
 `SPIcheckStatus` return `RADIOLIB_ERR_SPI_CMD_FAILED` long before any timeout.
+
+### Outcome
+
+`src/shared/devices/lr1110.ts`, registered in `builtin.ts`, 10 harness tests
+green (242 total, typecheck + lint clean). The wire contract was read out of
+the M9 checkout's own `RadioLib` (`.pio/libdeps/ThinkNode_M9_companion_radio_usb_/…`),
+not guessed:
+
+- **The framing is `Module.cpp`'s `SPItransferStream`**, not the datasheet's.
+  16-bit big-endian opcode, one `NSS` group per `onBus` transaction. A *write*
+  is `[opHi, opLo, ...params]` and RadioLib ignores its MISO. A *read* is two
+  transactions — the opcode write, then an all-`0x00` transaction (`SPIcommand`
+  drops the command width to 0) whose reply is `[Stat1, ...data]`. A bare
+  six-`0x00` read is both `SPIcheckStatus` (looks at `buff[0]`) and
+  `getIrqStatus` (looks at `buff[2..5]`); one reply shape, `[Stat1, Stat2,
+  irq31..0]`, serves both. The model tracks a `pendingRead` set by a read
+  opcode and consumed by the next NOP transaction.
+- **`SPIparseStatus` is the gate**: `Stat1` bits 3:1 must be `CMD_OK` (`0b010`)
+  and the byte must be neither `0x00` nor `0xFF`. `GetVersion`'s device byte
+  must be `0x01` for `findChip()`. Both are covered by a test that transcribes
+  `SPIparseStatus` and asserts `'ok'`.
+- **`-707` (`RADIOLIB_ERR_SPI_CMD_TIMEOUT`) is a red herring at the model
+  level** — it only comes from RadioLib's `digitalRead(BUSY/DIO9)` *level*
+  polls in `SPItransferStream` / `transmit` / `receive` (confirmed: level, not
+  edge; `config()` also busy-waits after `calibrate`). Nothing an `onBus` reply
+  can fix. So M7.2's host→guest line read (BUSY held low) is what actually
+  unblocks `radio_init()`, and no CPU-interrupt raise is needed for M7 — the
+  IRQ path is polled, not an ISR.
+- Modelled meaningfully: `SetStandby`/`SetFs`/`SetSleep`, `SetPacketType`,
+  `SetRfFrequency` (BE32 Hz), `SetModulationParams` (SF / BW-reg→kHz / CR-reg→
+  4/x), `SetTxParams` (int8 dBm), `WriteBuffer`, `SetDioIrqParams` + `ClearIrq`,
+  and `SetTx` → `IRQ_TX_DONE` + `driveSignal('IRQ', 1)` + a Semtech-formula
+  airtime. `NRESET` low→high is a hardware reset. ~40 further opcodes are
+  recognised-but-unmodelled (accepted silently); anything else is one
+  `warn` diagnostic.
+- `loraToaMs()` is the SX126x §6.1.4 time-on-air, unit-tested against a known
+  point (SF7/BW125/CR4-5/20 B ≈ 56 ms) and for SF monotonicity.
+
+**Carried to M7.2:** BUSY/DIO9 as *guest-visible* lines (the model drives them
+via `driveSignal`; nothing conveys that into QEMU yet). **To M7.3:** `RX_DONE`
++ the IN-panel `onCommand` injection surface (`onCommand` today handles only
+the four Inspector fields).
 
 #### M7.2 · Host→guest line reads, and `radio_init()` succeeds — `L`
 

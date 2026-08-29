@@ -1750,6 +1750,157 @@ display and UI code run against canned weather data, which is most of what you
 would want to iterate on anyway — or to declare it out of scope and say so
 plainly in the docs.
 
+**WiFi decision (made here).** The Done-when build is
+`Heltec_Wireless_Paper_repeater` (MeshCore `simple_repeater`), which uses no
+WiFi and no BLE — it is a LoRa-only mesh repeater. The weather-station fork's
+WiFi fetch is therefore **out of scope for M13** and stays that way: no stub,
+no API-boundary shim. `docs/` says so plainly. If a WiFi-dependent Heltec build
+is ever wanted under PinBench, that is its own milestone.
+
+### Sub-milestones
+
+The pin map, read from the MeshCore checkout's own
+`variants/heltec_wireless_paper/platformio.ini` (authoritative, not invented):
+
+| Signal                                    | Pin           |
+| ----------------------------------------- | ------------- |
+| Radio SPI  SCLK / MOSI / MISO             | 9 / 10 / 11   |
+| SX1262  NSS / BUSY / DIO1 / RESET         | 8 / 13 / 14 / — (RADIOLIB_NC) |
+| SX1262  TX-LED                            | 18            |
+| Display SPI  SCLK / MOSI                  | 3 / 2 (no MISO) |
+| E-ink  CS / BUSY / DC / RST               | 4 / 7 / 5 / 6 |
+| USER_BTN                                  | 0             |
+| VEXT_EN (peripheral power, active-low)    | 45            |
+| VBAT_READ / ADC_CTRL                      | 20 / 19       |
+
+The radio and the display are on **separate SPI buses** — the M9 had every SPI
+peripheral on one shared bus, so this is the first two-SPI-bus board. SX1262
+`DIO2` is the RF switch and `DIO3` drives the TCXO (`SX126X_DIO2_AS_RF_SWITCH`,
+`SX126X_DIO3_TCXO_VOLTAGE=1.8`). MCU is a plain ESP32-S3 (`esp32-s3-devkitc-1`,
+8 MB flash, **no PSRAM**) — the emulator block drops `psramSize` / `psramOctal`
+and, like the M9, forces DIO flash mode for QEMU (ADR 0001's QIO-crash finding).
+
+Split the way M6/M7/M11 were — each slice its own commit + Outcome, the pure
+models testable without a live guest first, the live boot last.
+
+#### M13.1 · Board picker + the Heltec definition — `M`
+
+**Goal.** Two boards on disk, both selectable; `boards/heltec-wireless-paper-v1.1.board.json`
+authored and validating.
+
+**Build**
+
+- Board-id resolution stops being "first `*.board.json` alphabetically"
+  (`src/main/board.ts:11`): a `boardId` is resolved from the open project, then
+  a persisted last-used id (`store.ts`), then a named default
+  (`thinknode-m9-v1.0`), then the sole-file heuristic. Adding the Heltec file
+  must not silently flip the default board out from under the M9's tests.
+- Board picker in the UI: the `otherBoardId` dead-end in `App.tsx:102` becomes a
+  real switch — pick a board, the renderer re-requests `board.load(id)`, the
+  device host reloads. A menu item (`View → Board`) or a StatusBar control.
+- `boards/heltec-wireless-paper-v1.1.board.json`: two SPI buses, the SX1262 and
+  e-ink parts pointing at `deviceModel`s that M13.2/M13.3 add (the file
+  validates now; the models resolve later), power/button parts as computed
+  stand-ins, `emulator` block with `flashSize: "8M"` and no PSRAM keys.
+- `boards/README.md` gains a Heltec provenance table like the M9's, citing the
+  `platformio.ini` it was transcribed from.
+
+**Done when.** Both board ids appear in the picker; selecting Heltec loads and
+renders its canvas; `loadBoard()` with no id still resolves to the M9;
+`board.test.ts` and every M9-identity test stay green.
+
+#### M13.2 · The e-ink display model — `M`
+
+**Goal.** `sitronix.ssd1680` (or the controller the Heltec V1.1 panel actually
+uses) — a 250×122 1-bit e-paper model that is a genuinely different display
+class from the ST7789.
+
+**Build**
+
+- `src/shared/devices/ssd1680.ts`: SPI command state machine (`DC` low =
+  command, high = data, like the ST7789), the SSD1680 command set MeshCore's
+  driver issues via `heltec-eink-modules` (`EInkDisplay_WirelessPaperV1_1`) —
+  RAM window (0x44/0x45/0x4E/0x4F), `WRITE_RAM` (0x24) + `WRITE_RAM_RED` (0x26),
+  `DISPLAY_UPDATE_CONTROL_2` (0x22) + `MASTER_ACTIVATION` (0x20), LUT / fast
+  mode. 1bpp packed framebuffer, `width × height` = 250×122.
+- **`BUSY` is an `outputSignal`** the model drives — ADR 0001 records MeshCore
+  blocking in `display.begin()` on the e-ink BUSY line, so the model must hold
+  BUSY asserted during a modelled refresh and release it, or the guest hangs
+  forever (consumes M7.2's host→guest GPIO-read path, already live).
+- **Pixels appear on `MASTER_ACTIVATION`, not as RAM streams** — buffer RAM
+  writes, publish a frame only when the update completes, with modelled latency
+  (full refresh ~2 s vs partial/fast ~300 ms) and a meter for it. This is the
+  "long update times that make e-ink UI code distinctive" the roadmap wants.
+- Frame side channel: `DeviceFramebufferMessage` currently carries RGB565 +
+  `inverted` — add a `format` discriminator (`rgb565` | `mono1`) so the OUT
+  panel renders 1bpp. This is expected to be the one code change outside the
+  two board defs + new models; call it out in the Outcome.
+- OUT panel renders the mono framebuffer (black on white, optional ghosting
+  tint on partial refresh). Harness tests drive a begin + full-frame + refresh
+  and assert the frame and the BUSY pulse.
+
+**Done when.** The model, driven with a recorded/synthetic SSD1680 command
+stream, produces a 250×122 mono frame on `MASTER_ACTIVATION`, pulses `BUSY` for
+the modelled refresh duration, and reports a refresh-time meter. Unknown
+opcodes raise a named diagnostic (M7's rule).
+
+#### M13.3 · The SX1262 radio model — `M`
+
+**Goal.** `semtech.sx1262` — a different LoRa part from the LR1110, the real
+test of whether M7's radio abstraction abstracted anything.
+
+**Build**
+
+- `src/shared/devices/sx1262.ts` against RadioLib's `SX126x` / `SX1262`
+  (`RADIOLIB_STATIC_ONLY`, `CustomSX1262Wrapper`): 8-bit opcodes (not the
+  LR11x0's 16-bit), `GetStatus` / `SetStandby` / `SetPacketType` /
+  `SetRfFrequency` / `SetModulationParams` / `SetPacketParams` / `SetTxParams` /
+  `WriteBuffer` / `ReadBuffer` / `SetTx` / `SetRx` / `GetIrqStatus` /
+  `ClearIrqStatus` / `SetDioIrqParams`, `WriteRegister` / `ReadRegister`
+  (0x0D/0x1D), the `RADIOLIB_SX126X_CMD_*` set. Status byte in every SPI
+  response (chip mode + command status), not a separate poll like the LR1110.
+- `BUSY` line semantics: SX1262 holds BUSY high while processing a command;
+  RadioLib waits on it before each op. Drive it as an `outputSignal`; `DIO1` is
+  the IRQ line. Honour `SX126X_DIO2_AS_RF_SWITCH` / `DIO3_TCXO` writes (accept,
+  no-op) rather than diagnosing them.
+- **Reuse `loraToaMs` from `lr1110.ts`** — its comment already cites the SX126x
+  datasheet; duplicating the airtime maths is a failure signal for the
+  abstraction. Extract the shared radio helpers to a common module if that
+  reads cleaner than a cross-import.
+- IN panel: the same advert / channel-message / ack / noise stimuli the LR1110
+  IN panel offers, filling the RX buffer and pulsing `DIO1`.
+- Harness tests: RadioLib's real init sequence drives the model through the
+  `GetStatus` handshake to standby; a `SetTx` reports airtime equal to the
+  LR1110's for the same SF/BW/CR/length.
+
+**Done when.** The model answers RadioLib's `begin()` sequence without a
+diagnostic, reaches standby, and a TX of a known payload reports the same
+airtime the LR1110 model does. `outputSignals` covers `BUSY` and `DIO1`.
+
+#### M13.4 · Live boot — `M`
+
+**Goal.** `Heltec_Wireless_Paper_repeater` boots under PinBench end to end.
+
+**Build**
+
+- Build the env with the DIO / flash-size overrides (the `overrideConfigIni`
+  shape from M6.2), merge the image (`spike/bin/mkflash.sh`, `flash_size 8MB`,
+  no octal-PSRAM global).
+- Launch, and follow the boot: `board.begin()` → `display.begin()` (e-ink BUSY
+  handshake, model must satisfy it) → `radio_init()` (SX1262 over the radio
+  SPI bus) → `simple_repeater` `setup()` reaches its first serial line.
+- OUT panels: the e-ink shows the repeater's status screen; the radio panel
+  shows the SX1262 in RX.
+- Update `boards/README.md`, the M13 ROADMAP header, the risk register's
+  "abstraction is wrong / M13 is a rewrite" row with the honest verdict, and
+  list **every** file touched outside `boards/*.board.json` and
+  `src/shared/devices/*` — that list is M13's grade on M4/M5.
+
+**Done when.** Both boards are selectable from the picker and each boots its own
+MeshCore build to its first serial output. If a live boot hits the same
+pre-existing fork GPIO fault that blocks M7.2b, that is recorded as the blocker
+(not a Heltec bug) and M13.4 lands as far as the fault, like M7.2 did.
+
 ## M14 · Generic expansion parts — `M`
 
 **Goal.** PinBench stops being a two-board tool.

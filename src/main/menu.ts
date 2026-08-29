@@ -21,10 +21,23 @@ const MAIN_HANDLED: Partial<Record<CommandId, () => void>> = {
 }
 
 /**
+ * The runtime "auto-approve agent actions" switch, surfaced as a native menu
+ * checkbox. Only wired when the app was started `--acp` — it is a main-process
+ * toggle, not a renderer command, so it lives outside the shared menu spec.
+ */
+export interface AgentMenuState {
+  autoApprove: boolean
+  onToggle(next: boolean): void
+}
+
+/**
  * Build the native menu from the shared spec, so the accelerators work wherever
  * focus is and the in-window menu bar cannot drift from them.
  */
-export function buildApplicationMenu(getWindow: () => BrowserWindow | null): Menu {
+export function buildApplicationMenu(
+  getWindow: () => BrowserWindow | null,
+  agent?: AgentMenuState
+): Menu {
   const send = (command: CommandId): void => {
     const handled = MAIN_HANDLED[command]
     if (handled) {
@@ -46,6 +59,20 @@ export function buildApplicationMenu(getWindow: () => BrowserWindow | null): Men
       }
     })
   }))
+
+  if (agent) {
+    template.push({
+      label: 'Agent',
+      submenu: [
+        {
+          label: 'Auto-approve agent actions',
+          type: 'checkbox',
+          checked: agent.autoApprove,
+          click: (item) => agent.onToggle(item.checked)
+        }
+      ]
+    })
+  }
 
   if (process.platform === 'darwin') {
     template.unshift({

@@ -197,3 +197,66 @@
   background: var(--accent, #9184d9);
   color: var(--ground, #161826);
 }
+
+.inpanel__group {
+  margin-top: var(--space-3);
+}
+
+.inpanel__group-title {
+  display: block;
+  margin-top: var(--space-3);
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+}
+
+.kbd {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: var(--space-2);
+}
+
+.kbd__row,
+.kbd__dpad {
+  display: flex;
+  gap: 3px;
+  flex-wrap: wrap;
+}
+
+.kbd__dpad {
+  margin-top: var(--space-2);
+}
+
+.kbd__key {
+  font: inherit;
+  min-width: 22px;
+  padding: 4px 6px;
+  border-radius: 3px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+}
+
+.kbd__key[data-wide] {
+  flex: 1;
+}
+
+.kbd__key:hover {
+  border-color: var(--accent-500);
+  color: var(--text-primary);
+}
+
+.kbd__buffer {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  color: var(--text-primary);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 3px 6px;
+  min-height: 1.4em;
+}

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { PartDefinition } from '@shared/board'
+import { stimuliFor } from '@shared/stimuli'
 import './outpanel.css'
 
 interface InPanelProps {
@@ -9,16 +10,41 @@ interface InPanelProps {
 }
 
 /**
- * The input side of a device model — stimuli the operator injects. M7 wires the
- * LR1110's: a node advert, a channel message, a delivery ack, and a
- * noise-floor burst. Each carries the RSSI/SNR the OUT panel then reports.
+ * The input side of a device model — stimuli the operator injects.
  *
- * Generic models get nothing here; only ids with a known stimulus set render a
- * panel (the keyboard's matrix joins in M8).
+ * Three renderers: the LR1110 keeps its hand-built RSSI/SNR panel, the keyboard
+ * coprocessor gets a key matrix, and every other model with a stimulus set in
+ * `shared/stimuli.ts` gets a generic button panel. A model with none renders
+ * nothing.
  */
 export function InPanel({ part, onCommand }: InPanelProps): React.JSX.Element | null {
-  if (part.deviceModel !== 'semtech.lr1110') return null
-  return <Lr1110InPanel onCommand={onCommand} />
+  if (part.deviceModel === 'semtech.lr1110') return <Lr1110InPanel onCommand={onCommand} />
+  if (part.deviceModel === 'pinbench.kbd-coprocessor') {
+    return <KeyboardInPanel onCommand={onCommand} />
+  }
+  const groups = stimuliFor(part.deviceModel)
+  if (groups.length === 0) return null
+  return (
+    <section className="inspector__section outpanel" aria-label="Input">
+      <h4 className="inspector__section-title">Input</h4>
+      {groups.map((group) => (
+        <div className="inpanel__group" key={group.title}>
+          <span className="inpanel__group-title">{group.title}</span>
+          <div className="inpanel__buttons">
+            {group.buttons.map((button) => (
+              <button
+                key={button.label}
+                type="button"
+                onClick={() => onCommand(button.command, button.args)}
+              >
+                {button.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+    </section>
+  )
 }
 
 function Lr1110InPanel({ onCommand }: { onCommand: InPanelProps['onCommand'] }): React.JSX.Element {
@@ -91,6 +117,89 @@ function Lr1110InPanel({ onCommand }: { onCommand: InPanelProps['onCommand'] }):
           Noise burst
         </button>
       </div>
+    </section>
+  )
+}
+
+// The M9 keyboard: four QWERTY rows, a D-pad, the six shortcut keys, and a
+// readout of what the coprocessor has buffered. Every key sends `key`.
+const KEY_ROWS = [
+  ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'],
+  ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L'],
+  ['Z', 'X', 'C', 'V', 'B', 'N', 'M'],
+  ['SYM', 'SPACE', 'ENTER', 'BKSP']
+]
+const DPAD = ['UP', 'DOWN', 'LEFT', 'RIGHT', 'OK']
+const SHORTCUTS = ['HOME', 'BACK', 'MENU', 'CHAT', 'MAP', 'LOC']
+
+function KeyboardInPanel({
+  onCommand
+}: {
+  onCommand: InPanelProps['onCommand']
+}): React.JSX.Element {
+  const [buffer, setBuffer] = useState('')
+
+  const press = (key: string): void => {
+    onCommand('key', { key })
+    setBuffer((previous) => {
+      const next =
+        key === 'BKSP'
+          ? previous.slice(0, -1)
+          : key === 'SPACE'
+            ? `${previous} `
+            : key === 'ENTER'
+              ? `${previous}⏎`
+              : key.length === 1
+                ? previous + key
+                : previous
+      return next.slice(-32)
+    })
+  }
+
+  return (
+    <section className="inspector__section outpanel" aria-label="Input">
+      <h4 className="inspector__section-title">Input</h4>
+
+      <div className="kbd">
+        {KEY_ROWS.map((row, index) => (
+          <div className="kbd__row" key={index}>
+            {row.map((key) => (
+              <button
+                key={key}
+                type="button"
+                className="kbd__key"
+                data-wide={key.length > 1 || undefined}
+                onClick={() => press(key)}
+              >
+                {key}
+              </button>
+            ))}
+          </div>
+        ))}
+      </div>
+
+      <span className="inpanel__group-title">D-pad</span>
+      <div className="kbd__dpad">
+        {DPAD.map((key) => (
+          <button key={key} type="button" className="kbd__key" onClick={() => press(key)}>
+            {key}
+          </button>
+        ))}
+      </div>
+
+      <span className="inpanel__group-title">Shortcut keys</span>
+      <div className="inpanel__buttons">
+        {SHORTCUTS.map((key) => (
+          <button key={key} type="button" onClick={() => press(key)}>
+            {key}
+          </button>
+        ))}
+      </div>
+
+      <label className="inpanel__field">
+        <span>Key buffer</span>
+        <output className="kbd__buffer">{buffer || '—'}</output>
+      </label>
     </section>
   )
 }

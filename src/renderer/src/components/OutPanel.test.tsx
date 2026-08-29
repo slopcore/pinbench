@@ -109,4 +109,37 @@ describe('OutPanel', () => {
     )
     expect(screen.getByRole('status')).toHaveTextContent(/quarantined/i)
   })
+
+  it('renders the e-paper canvas for the SSD1680 model', () => {
+    const EINK_PART: PartDefinition = {
+      id: 'u3',
+      designator: 'U3',
+      name: '2.13" e-paper',
+      category: 'display',
+      deviceModel: 'solomon.ssd1680',
+      summary: 'demo',
+      buses: ['spi-disp'],
+      pins: [{ signal: 'CS', pin: 'GPIO4' }],
+      config: [
+        {
+          id: 'scale',
+          label: 'Panel zoom',
+          kind: 'segmented',
+          options: ['1×', '2×', '3×'],
+          value: '2×'
+        }
+      ],
+      layout: { x: 0, y: 0, width: 1, height: 1 }
+    }
+    render(
+      <OutPanel
+        part={EINK_PART}
+        view={{
+          snapshot: snapshot({ deviceModel: 'solomon.ssd1680', state: {}, meters: [] }),
+          events: []
+        }}
+      />
+    )
+    expect(screen.getByLabelText('E-paper panel output')).toBeInTheDocument()
+  })
 })

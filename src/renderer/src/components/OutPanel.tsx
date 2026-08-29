@@ -1,5 +1,6 @@
 import type { PartDefinition } from '@shared/board'
 import type { PartDeviceView } from '../state/useDevices'
+import { EInkScreen } from './EInkScreen'
 import { St7789Screen } from './St7789Screen'
 import './outpanel.css'
 
@@ -24,6 +25,7 @@ export function OutPanel({ part, view, onSetLevel }: OutPanelProps): React.JSX.E
   const snapshot = view?.snapshot
   const isLed = part.deviceModel === 'pinbench.led'
   const isPanel = part.deviceModel === 'sitronix.st7789'
+  const isEInk = part.deviceModel === 'solomon.ssd1680'
   const lit = snapshot?.state['lit'] === true
   const pinHigh = snapshot?.state['pin'] === 1
   const zoom = panelZoom(part)
@@ -67,6 +69,8 @@ export function OutPanel({ part, view, onSetLevel }: OutPanelProps): React.JSX.E
           )}
 
           {isPanel && <St7789Screen framebuffer={view?.framebuffer} zoom={zoom} />}
+
+          {isEInk && <EInkScreen framebuffer={view?.framebuffer} zoom={zoom} />}
 
           {snapshot.meters.length > 0 && (
             <dl className="outpanel__meters">

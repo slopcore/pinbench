@@ -128,6 +128,28 @@
   font-size: var(--font-size-xs);
 }
 
+/* M13 — the Heltec e-paper panel picture. */
+.eink {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) 0;
+}
+
+.eink__canvas {
+  image-rendering: pixelated;
+  border-radius: 3px;
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  background: #dfddd4;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4);
+}
+
+.eink__idle {
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+}
+
 /* LR1110 IN panel (M7.3) — injection stimuli. */
 .inpanel__field {
   display: flex;

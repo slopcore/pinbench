@@ -6,6 +6,8 @@ import { IpcChannel } from '../shared/ipc'
 
 const DOCS_URL = 'https://github.com/meatpaste/pinbench#readme'
 const ISSUES_URL = 'https://github.com/meatpaste/pinbench/issues'
+const WIKI_URL = 'https://github.com/meatpaste/pinbench/wiki'
+const USER_GUIDE_URL = 'https://github.com/meatpaste/pinbench/blob/main/docs/status.md'
 
 /**
  * Commands the main process answers itself. Everything else is forwarded to the
@@ -13,6 +15,8 @@ const ISSUES_URL = 'https://github.com/meatpaste/pinbench/issues'
  */
 const MAIN_HANDLED: Partial<Record<CommandId, () => void>> = {
   'help.documentation': () => void shell.openExternal(DOCS_URL),
+  'help.wiki': () => void shell.openExternal(WIKI_URL),
+  'help.userGuide': () => void shell.openExternal(USER_GUIDE_URL),
   'help.reportIssue': () => void shell.openExternal(ISSUES_URL)
 }
 

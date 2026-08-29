@@ -28,9 +28,13 @@ only here.
 
 ## A. Missing — in the design, not built
 
-> **Update (branch `usb-flash`):** every `[untracked]` item below is now built
-> and unit‑tested (tiers 1–4). The `[tracked]` items remain — they need the
-> canvas‑editing subsystem or new device‑model families, not a render change.
+> **Update (branch `usb-flash`):** every item in section A is now built and
+> unit‑tested (tiers 1–7). One sub‑item is deliberately partial — writing the
+> generated pin header into the PlatformIO build on Build & flash — because the
+> build pipeline does no pin‑header codegen today, so that is new build‑contract
+> work rather than a canvas change. Wiring each keyboard/stimulus command into
+> the QEMU‑side device model is also follow‑on (the panels render and send the
+> commands; a model consumes what it understands).
 
 ### Canvas
 
@@ -45,9 +49,14 @@ only here.
       `Canvas.tsx`
 - [x] **Bus‑labels visibility toggle** (View ▸ "Bus labels", key `L`). —
       `shared/commands.ts`, `shared/workspace.ts`, `Canvas.tsx`
-- [ ] Canvas editing: drag parts, Draw‑net tool, Probe‑pin tool, `⌘Z`, persist
-      edits, wire the generated header into the build. `[tracked]` (status.md
-      "Next"; `net`/`probe` tools ship disabled in `Toolbar.tsx`)
+- [x] Canvas editing: **drag parts** (Select tool, snap to grid), **Draw‑net
+      tool** (click two cards), **Probe‑pin tool** (selects), **`⌘Z`/`⇧⌘Z`**
+      undo/redo, **persist edits** in `ProjectFile.boardEdits` (replayed on
+      open, stale edits skipped). `useBoardEditor` folds the edits into the
+      board the canvas/Inspector/Library/Verify/export all read. — `Canvas.tsx`,
+      `state/useBoardEditor.ts`, `shared/boardEdit.ts`, `shared/project.ts`.
+      _Partial:_ writing the header into the PlatformIO build on Build & flash —
+      see the note above.
 
 ### Inspector
 
@@ -62,14 +71,15 @@ only here.
       shipped hooks do yet — the MeshCore source paths are not verified against a
       checkout, so they were left out rather than guessed. Add `file`/`line` per
       hook once a firmware tree is wired in. — `Inspector.tsx`, `shared/board.ts`
-- [ ] Per‑part IN panel is LR1110‑only (`InPanel.tsx` early‑returns for every
-      other model). Design gives every part stimuli (resets/boot straps for the
-      MCU, card insert/remove for SD, NMEA scenarios for GNSS, RTC/IMU/mag for
-      the sensor cluster, battery/charger/buzzer for power, console replay for
-      USB, full key matrix for the keyboard). `[tracked]` (device models +
-      general Inspector‑config mechanism on status.md "Next")
-- [ ] Keyboard IN panel: QWERTY matrix + D‑pad + HOME/BACK/MENU/CHAT/MAP/LOC
-      shortcut keys + a key buffer readout. Nothing rendered today. `[tracked]`
+- [x] Per‑part IN panel for every model — `shared/stimuli.ts` drives a generic
+      button panel (MCU reset/boot straps, SD card insert/remove + faults, GNSS
+      NMEA scenarios, sensor‑cluster RTC/IMU/magnetometer, power battery/charger/
+      buzzer, USB console replay, button press/hold). LR1110 keeps its rich
+      panel. — `InPanel.tsx`, `shared/stimuli.ts`. Consuming each command in the
+      QEMU model is follow‑on.
+- [x] Keyboard IN panel — QWERTY matrix + D‑pad + HOME/BACK/MENU/CHAT/MAP/LOC
+      shortcut keys + a live key‑buffer readout; every key sends `key`. —
+      `InPanel.tsx` (`KeyboardInPanel`)
 - [ ] LCD OUT panel: ½ / ¾ / 1:1 zoom buttons and a `BL ON/OFF` toggle on the
       panel itself. **Relocated**, see section B — not a true gap.
 
@@ -84,25 +94,29 @@ only here.
 - [x] **File ▸ Export pin header… (⌘⇧E).** New `board:export-pin-header` IPC
       writes `generatePinHeader()` to a path the user picks. — `shared/commands.ts`,
       `src/main/index.ts`, `App.tsx`
-- [ ] **Edit menu semantics.** Design: Undo move / Duplicate part / Delete part /
-      Auto‑arrange by bus. Delivered: generic Undo/Redo/Cut/Copy/Paste/Select‑all,
-      all `enabled: false`. `[tracked]` (canvas editing) — `shared/commands.ts`
+- [x] **Edit menu semantics.** Reworked to Undo / Redo / Duplicate part / Delete
+      part / Auto‑arrange by bus, all enabled and handled in `runCommand`
+      (`duplicatePart`, `autoArrangeByBus` in `shared/boardEdit.ts`).
+      Cut/Copy/Paste/Select‑all stay inert. — `shared/commands.ts`, `App.tsx`
 - [x] **Dead Help items.** `help.shortcuts` / `help.about` now open a `HelpSheet`
       (shortcut list built from the shared command table; About from `AppInfo`).
       A guard test fires every enabled menu item through `runCommand`. — `App.tsx`,
       `components/HelpSheet.tsx`
-- [ ] File ▸ "Import M9 pinout" and Help ▸ wiki / user‑guide links have no
-      delivered equivalent. `[untracked]` (low priority, deferred) —
-      `shared/commands.ts`
+- [x] Help ▸ **Project wiki** / **User guide** links added (main‑process
+      `shell.openExternal`, like Documentation). — `shared/commands.ts`,
+      `src/main/menu.ts`
+- [ ] File ▸ "Import M9 pinout" — no delivered equivalent, and no import format
+      is defined (the design mock's is fabricated). Needs a format decision
+      before it can be built. `[untracked]` (deferred) — `shared/commands.ts`
 
 ### Library
 
-- [ ] **"Expansion · generic" group** (LED, button, NeoPixel, DHT22, servo) and
-      **"Firmware modules" group** (MeshCore stack, Home page UI, Storage/FS).
-      Delivered lists only the board's own parts. `[tracked]` (generic expansion
-      parts on status.md "Next") — `components/LibraryPanel.tsx`
-- [x] **`＋` place affordance** on each row and the footer hint. Both select the
-      part; drag‑to‑place lands with canvas editing. — `LibraryPanel.tsx`
+- [x] **"Expansion · generic" group** (LED, button, NeoPixel, DHT22, servo) and
+      **"Firmware modules" group** (MeshCore stack, Home page UI, Storage/FS)
+      from `shared/catalogue.ts`. Clicking an entry adds it to the board via an
+      `addPart` canvas edit. — `LibraryPanel.tsx`, `shared/catalogue.ts`
+- [x] **`＋` place affordance** on each row and the footer hint. Board rows
+      select; catalogue rows drop the part on the canvas. — `LibraryPanel.tsx`
 
 ### Dock
 

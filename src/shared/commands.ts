@@ -49,6 +49,8 @@ export const COMMANDS = [
   'build.reset',
   'build.clean',
   'help.documentation',
+  'help.wiki',
+  'help.userGuide',
   'help.shortcuts',
   'help.reportIssue',
   'help.about'
@@ -204,6 +206,8 @@ export const MENUS: MenuSpec[] = [
     label: 'Help',
     entries: [
       item('help.documentation', 'Documentation'),
+      item('help.wiki', 'Project wiki'),
+      item('help.userGuide', 'User guide'),
       item('help.shortcuts', 'Keyboard shortcuts'),
       item('help.reportIssue', 'Report an issue'),
       separator,

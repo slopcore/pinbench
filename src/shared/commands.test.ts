@@ -91,6 +91,8 @@ describe('menu spec', () => {
         'build.stop',
         'build.reset',
         'help.documentation',
+        'help.wiki',
+        'help.userGuide',
         'help.shortcuts',
         'help.reportIssue',
         'help.about'

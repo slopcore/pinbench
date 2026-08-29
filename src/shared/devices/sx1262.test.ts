@@ -94,7 +94,8 @@ describe('Sx1262Model', () => {
 
     // A write frame split the same way still takes effect (on the NSS rising edge).
     h.signal('NSS', 0)
-    for (const b of [0x8a, 0x01]) h.bus({ bus: BUS, kind: 'spi', select: 'NSS', mosi: Uint8Array.of(b) })
+    for (const b of [0x8a, 0x01])
+      h.bus({ bus: BUS, kind: 'spi', select: 'NSS', mosi: Uint8Array.of(b) })
     h.signal('NSS', 1)
     expect(h.snapshot()['packetType']).toBe('LoRa')
     expect(h.diagnostics).toEqual([])

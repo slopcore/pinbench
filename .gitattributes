@@ -1,0 +1,5 @@
+# Normalise line endings to LF on checkout everywhere, so `prettier --check`
+# (endOfLine: lf) passes on the Windows CI runner, which checks out with
+# core.autocrlf=true by default.
+* text=auto eol=lf
+*.csv -text

@@ -18,8 +18,7 @@ every M9 peripheral needs. Scoped to the Arduino CPU-FIFO path:
 `SPI_CMD.USR`/`.UPDATE` (self-clearing), `SPI_MS_DLEN`, `SPI_USER*`,
 `SPI_W0..W15`. Offsets confirmed against the M9's own
 `framework-arduinoespressif32` `spi_reg.h` (`SPI_CMD` 0x0, `SPI_USER` 0x10,
-`SPI_MS_DLEN` 0x1C, `SPI_W0..W15` 0x98–0xD4, `SPI_USR` bit 24, `SPI_UPDATE` bit
-23) and exercised live — MeshCore's ST7789 init decodes byte-for-byte. Unknown
+`SPI_MS_DLEN` 0x1C, `SPI_W0..W15` 0x98–0xD4, `SPI_USR` bit 24, `SPI_UPDATE` bit 23) and exercised live — MeshCore's ST7789 init decodes byte-for-byte. Unknown
 registers are absorbed so clock/DMA/timing pokes read back and nothing faults.
 
 Mapped at `0x60024000` / `0x60025000` in
@@ -37,12 +36,12 @@ no DMA, so the FIFO path is the whole story.
 
 `qemu/hw/gpio/esp32_gpio.c` — a pinned replacement (`esp32_gpio_write` was `{ }`
 upstream). Models `OUT`/`OUT1`/`ENABLE` and their `W1TS`/`W1TC` aliases, and
-forwards every level *change* as an `Op.Gpio` frame. A write of 0 over a reset-0
+forwards every level _change_ as an `Op.Gpio` frame. A write of 0 over a reset-0
 `OUT` register is a no-change and is not forwarded on its own — but the moment a
 pin's `ENABLE` bit goes 0→1 (`pinMode(pin, OUTPUT)`) its current `OUT` level is
 forwarded unconditionally, even if that level is 0. That enable edge is the real
 electrical event ("the SoC now drives this line"), and a device model that
-*probes* a line it drives depends on seeing it: the heltec e-ink `detectEInk()`
+_probes_ a line it drives depends on seeing it: the heltec e-ink `detectEInk()`
 does `pinMode(RST, OUTPUT); digitalWrite(RST, LOW)` over a never-touched pin and
 reads BUSY to pick its driver — without the enable-edge forward the model never
 learns RST was asserted, feeds back a stale idle level, and the guest selects the
@@ -57,7 +56,7 @@ A guest `GPIO_IN` / `GPIO_IN1` read of a pin in the host's input mask issues an
 machinery, no CPU-interrupt raise (RadioLib level-polls BUSY and DIO9). The mask
 is an 8-byte LE bitmask of the input pins, delivered in the `Hello` reply;
 `esp32_gpio.c` overlays `pinbench_host_gpio_read()` onto `GPIO_IN`/`GPIO_IN1` for
-the masked bits only. On any socket failure it returns 0 — a *released* line,
+the masked bits only. On any socket failure it returns 0 — a _released_ line,
 never `0xFF`, because a stuck-high BUSY would hang the poll.
 
 ## The socket bridge
@@ -71,7 +70,7 @@ backstop for a hung device model.
 ## Not yet in the fork
 
 - **The pin-227 GPIO fault** — MeshCore's `radio_init()` hits `__pinMode():
-  Invalid pin selected` / `gpio_set_level(227)` before it clocks any radio SPI,
+Invalid pin selected` / `gpio_set_level(227)` before it clocks any radio SPI,
   and `halt()`s at `-707`. A bogus pin number reaching the fork's GPIO path from
   RadioLib's `Module` setup. Blocks the live radio demo. See [[status]].
 - **I2C host controller** — needed for the keyboard coprocessor and the M9's I2C

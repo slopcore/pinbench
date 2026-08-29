@@ -630,9 +630,7 @@ export class DeviceHost extends EventEmitter {
   }
 
   private spiDevices(): LoadedDevice[] {
-    return [...this.devices.values()].filter((d) =>
-      d.part.buses.some((b) => this.spiBusIds.has(b))
-    )
+    return [...this.devices.values()].filter((d) => d.part.buses.some((b) => this.spiBusIds.has(b)))
   }
 
   /**

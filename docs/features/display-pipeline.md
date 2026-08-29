@@ -2,7 +2,7 @@
 title: Display pipeline
 area: display
 status: done
-status_note: "home-screen content is radio-gated — see [[status]]"
+status_note: 'home-screen content is radio-gated — see [[status]]'
 ---
 
 # Display pipeline
@@ -31,8 +31,7 @@ JSON-stringifies every snapshot to dedupe it, which is the exact failure
 
 The panel renders landscape from a portrait GRAM. `MADCTL.MV` maps the column
 address to GRAM Y and the row address to GRAM X; `CASET`/`RASET` clamp bounds
-swap with MV so a per-row `setAddrWindow` addressing `0..319` is not clipped to
-239. `INVON` is applied at scan-out (the model keeps raw pixels, the renderer
+swap with MV so a per-row `setAddrWindow` addressing `0..319` is not clipped to 239. `INVON` is applied at scan-out (the model keeps raw pixels, the renderer
 XORs the `inverted` flag) so a mid-frame toggle survives.
 
 ## SPI routing and bus contention

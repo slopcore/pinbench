@@ -2,7 +2,7 @@
 title: Pin-map verify and codegen
 area: canvas
 status: partial
-status_note: "verify + codegen done; canvas editing UI (M11.3) in progress — see [[status]]"
+status_note: 'verify + codegen done; canvas editing UI (M11.3) in progress — see [[status]]'
 ---
 
 # Pin-map verify and codegen
@@ -32,7 +32,8 @@ and merges rows into the Diagnostics dock.
 The shipped M9 verifies **clean**: only `[note] GPIO3 is a strapping pin driving
 u6:TXD` (real — GNSS UART1) and `[ok] SPI0: 3 chip-selects, each on its own pin`.
 Moving `LCD_CS` to `GPIO21` produces `warn … GPIO21 is bound to 2 signals: u3:CS
-+ u8:SCL`. The Heltec board verifies clean bar three real strapping-pin notes.
+
+- u8:SCL`. The Heltec board verifies clean bar three real strapping-pin notes.
 
 ## Codegen
 

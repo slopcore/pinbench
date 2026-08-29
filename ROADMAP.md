@@ -1328,7 +1328,7 @@ has no I2C controller in the fork until M8, so a hang there (rather than at the
 radio) would be a *different* blocker. Check the failing call is the radio's,
 not the RTC's.
 
-#### M7.3 · Injection, airtime, and the panels — `L`
+#### M7.3 · Injection, airtime, and the panels — `L` ✅ **done** (code half; live demo → M7.4)
 
 **Goal.** Inject a mesh frame from the IN panel and watch MeshCore receive it.
 
@@ -1352,6 +1352,36 @@ land (the M7.1 standard — no live guest needed). The full live demo — inject
 `#public "trailhead in 20"`, see it in the serial log **and** on the emulated
 LCD's channel list with an unread dot — depends on M7.2b clearing `radio_init()`
 first; if M7.2b is still open, that clause is verified in M7.4.
+
+### Outcome
+
+The code half is in (246 unit tests green, typecheck + lint + build clean);
+the live channel-list demo is carried to M7.4 behind M7.2b.
+
+- **`onCommand('inject', { kind })`** — `advert` (from an address at N hops),
+  `channel` (`text`), `ack`, `noise` (floor only). A packet builds a
+  plausible-shaped mesh frame (`[type, src(4), hops, body]`), fills the RX
+  buffer, raises `IRQ_RX_DONE`, and pulses DIO9 via `driveSignal('IRQ', 1)`;
+  `GET_RX_BUFFER_STATUS` / `READ_BUFFER` / `GET_PACKET_STATUS` then read it
+  back. `noise` only moves `noiseFloorDbm`. Each carries the `rssi`/`snr` the
+  OUT panel reports; `airtime` is `loraToaMs()` for the frame at the live
+  SF/BW/CR.
+- **`DeviceHost.command(partId, command, args)`** → `model.onCommand`, guarded
+  like any model call. The `deviceCommand` IPC routes every non-`signal`
+  command through it; `useDevices.sendCommand` exposes it to the renderer.
+- **`InPanel.tsx`** — the LR1110 IN panel (channel-message text, RSSI/SNR
+  fields, Advert / Channel / Ack / Noise buttons), rendered above the OUT
+  panel in the Inspector for any model with `onCommand` wired. The OUT panel
+  needed no bespoke component: its generic meter + event-log rendering already
+  covers Frequency / Last RSSI / Airtime and the TX/RX log.
+- The four Inspector config fields (`bw`/`sf`/`cr`/`txPower`) now also poke the
+  model via `setParam` on edit — four fields by hand; the general mechanism is
+  still M12.
+- 5 harness tests: injection → RX_DONE + DIO9 + buffer readback, advert & ack,
+  noise floor without IRQ, airtime tracks the modulation.
+
+**Carried to M7.4:** the live channel-list-with-unread-dot demo — it needs
+MeshCore's UI loop running, which needs M7.2b.
 
 #### M7.4 · The end-to-end app path — `M`
 

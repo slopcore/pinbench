@@ -23,6 +23,11 @@ title: Status — done, blocked, next
 - Agent control plane: pure core, loopback MCP control server, agent-side
   connection, deferred operations — [[agent-control-plane]]
 - QEMU fork patches: GP-SPI2/3, GPIO in/out, the device-host socket bridge — [[qemu-fork]]
+- Design-parity pass (see `TODO.md`): rich canvas node cards (CFG/IN/OUT), net
+  labels + bus-labels toggle + bus-filter chips, canvas stats chip and
+  shared-SPI toast, Inspector Identity/Nets/firmware-hook sections, Verify
+  button + port label, Export pin header, Help sheet, Dock meta line + collapse
+  chevron, Library place affordance
 
 ## Blocked
 

@@ -28,39 +28,37 @@ only here.
 
 ## A. Missing — in the design, not built
 
+> **Update (branch `usb-flash`):** every `[untracked]` item below is now built
+> and unit‑tested (tiers 1–4). The `[tracked]` items remain — they need the
+> canvas‑editing subsystem or new device‑model families, not a render change.
+
 ### Canvas
 
-- [ ] **Rich node cards with a CFG / IN / OUT tab strip.** Design node = an HTML
-      card: header (glyph, title, class badge), a `CFG|IN|OUT` segmented strip,
-      and a body that switches between pin rows, stimuli, and a log/screen.
-      Delivered node = a plain SVG `<rect>` with designator, name, "N pins".
-      `[untracked]` (distinct from "canvas editing") — `components/Canvas.tsx`
-- [ ] **Net labels on the canvas.** Design draws pill‑boxed midpoint labels
-      (`SPI0 · NSS39`, `IRQ/BUSY`, `UART1`, `I2C0`, …). Delivered nets are bare
-      polylines, no labels. `[untracked]` — `components/Canvas.tsx`,
-      `components/canvas.css`
-- [ ] **Dismissible "Shared SPI bus" toast** (top‑right of the canvas). The
-      SPI‑contention *diagnostic* ships in the Dock; the canvas toast does not.
-      `[untracked]` — `components/Canvas.tsx`
-- [ ] **Canvas stats overlay chip** ("9 parts · 12 nets · 31 GPIO assigned",
-      bottom‑left). Delivered shows totals only in the status bar. `[untracked]`
-      / partly `[tracked]` as a relocation — `components/Canvas.tsx`
-- [ ] **Bus‑labels visibility toggle** (design: View ▸ "Bus labels", key `L`),
-      gates the net labels above. `[untracked]` — `shared/commands.ts`,
-      `state/useWorkspace.ts`
+- [x] **Rich node cards with a CFG / IN / OUT tab strip.** `foreignObject` HTML
+      card: header (glyph, designator + name, class badge), `CFG|IN|OUT` strip,
+      body switches pin rows / stimulus note / pin+bus summary. — `Canvas.tsx`
+- [x] **Net labels on the canvas.** Pill‑boxed midpoint labels from
+      `NetDefinition.label`. — `Canvas.tsx`, `canvas.css`
+- [x] **Dismissible "Shared SPI bus" toast** (top‑right), shown when an SPI bus
+      carries more than one peripheral. — `Canvas.tsx`
+- [x] **Canvas stats overlay chip** (bottom‑left), reuses `boardTotals`. —
+      `Canvas.tsx`
+- [x] **Bus‑labels visibility toggle** (View ▸ "Bus labels", key `L`). —
+      `shared/commands.ts`, `shared/workspace.ts`, `Canvas.tsx`
 - [ ] Canvas editing: drag parts, Draw‑net tool, Probe‑pin tool, `⌘Z`, persist
       edits, wire the generated header into the build. `[tracked]` (status.md
       "Next"; `net`/`probe` tools ship disabled in `Toolbar.tsx`)
 
 ### Inspector
 
-- [ ] **Identity section** — Reference / Class / Position rows. `[untracked]` —
-      `components/Inspector.tsx`
-- [ ] **Nets (N) section** — one row per connected net, value coloured by bus
-      kind. `[untracked]` — `components/Inspector.tsx`
-- [ ] **Firmware hook card + "Reveal in source" button** — per‑part hook symbol
-      (`Lr1110::begin()`, `HomePage::draw()`, …) with a note and a jump‑to‑source
-      action. `[untracked]` — `components/Inspector.tsx`, `state/useProject.ts`
+- [x] **Identity section** — Reference / Class / Position rows. — `Inspector.tsx`
+- [x] **Nets (N) section** — one row per connected net, swatch coloured by bus
+      kind via shared `netColour()`. — `Inspector.tsx`, `shared/nets.ts`
+- [x] **Firmware hook card + "Reveal in source" button** — new optional
+      `PartDefinition.firmwareHook { symbol, file?, line?, note? }`, validated by
+      `parseBoard`, populated for the radio/display/GNSS/keyboard parts in both
+      board JSONs; reveal reuses `App.openInSource`. — `Inspector.tsx`,
+      `shared/board.ts`
 - [ ] Per‑part IN panel is LR1110‑only (`InPanel.tsx` early‑returns for every
       other model). Design gives every part stimuli (resets/boot straps for the
       MCU, card insert/remove for SD, NMEA scenarios for GNSS, RTC/IMU/mag for
@@ -74,26 +72,25 @@ only here.
 
 ### Toolbar & menus
 
-- [ ] **Bus filter chips** (SPI / I2C / UART / GPIO toggles) in the toolbar's
-      second row — dim/hide nets of a bus. No equivalent anywhere in the repo.
-      `[untracked]` — `components/Toolbar.tsx`, `components/Canvas.tsx`,
-      `state/useWorkspace.ts`
-- [ ] **Top‑bar "Verify" button** and **port label** (`/dev/cu.usbserial-M9`).
-      Verify exists only as Build ▸ Verify pin map; there is no always‑visible
-      button and no port readout. `[untracked]` — `components/Toolbar.tsx` /
-      `components/StatusBar.tsx`
-- [ ] **File ▸ Export board_m9.h.** `generatePinHeader()` /
-      `generateBuildFlags()` exist (`shared/codegen.ts`) but are reachable only
-      through the ACP invoker — no menu item, no button. `[untracked]` —
-      `shared/commands.ts`, `src/main/menu.ts`, `App.tsx`
+- [x] **Bus filter chips** (SPI / I2C / UART / GPIO toggles) in the toolbar —
+      dim nets of a bus via `canvas.hiddenBuses`. — `Toolbar.tsx`, `Canvas.tsx`,
+      `shared/workspace.ts`
+- [x] **"Verify" button** and **port label** — always‑visible Verify button;
+      status‑bar port label from `pio device list`. — `Toolbar.tsx`,
+      `StatusBar.tsx`, `App.tsx`
+- [x] **File ▸ Export pin header… (⌘⇧E).** New `board:export-pin-header` IPC
+      writes `generatePinHeader()` to a path the user picks. — `shared/commands.ts`,
+      `src/main/index.ts`, `App.tsx`
 - [ ] **Edit menu semantics.** Design: Undo move / Duplicate part / Delete part /
       Auto‑arrange by bus. Delivered: generic Undo/Redo/Cut/Copy/Paste/Select‑all,
       all `enabled: false`. `[tracked]` (canvas editing) — `shared/commands.ts`
-- [ ] **Dead Help items.** `help.shortcuts` and `help.about` fall through to
-      `break` in `runCommand` (`App.tsx`) — menu entries with no handler.
-      `[untracked]`
+- [x] **Dead Help items.** `help.shortcuts` / `help.about` now open a `HelpSheet`
+      (shortcut list built from the shared command table; About from `AppInfo`).
+      A guard test fires every enabled menu item through `runCommand`. — `App.tsx`,
+      `components/HelpSheet.tsx`
 - [ ] File ▸ "Import M9 pinout" and Help ▸ wiki / user‑guide links have no
-      delivered equivalent. `[untracked]` (low priority) — `shared/commands.ts`
+      delivered equivalent. `[untracked]` (low priority, deferred) —
+      `shared/commands.ts`
 
 ### Library
 
@@ -101,32 +98,30 @@ only here.
       **"Firmware modules" group** (MeshCore stack, Home page UI, Storage/FS).
       Delivered lists only the board's own parts. `[tracked]` (generic expansion
       parts on status.md "Next") — `components/LibraryPanel.tsx`
-- [ ] **`＋` place affordance** on each row and the footer hint ("Click a part to
-      place it, then drag on the canvas to arrange"). Delivered rows only select.
-      `[untracked]` (pairs with canvas editing) — `components/LibraryPanel.tsx`
+- [x] **`＋` place affordance** on each row and the footer hint. Both select the
+      part; drag‑to‑place lands with canvas editing. — `LibraryPanel.tsx`
 
 ### Dock
 
-- [ ] **Dock meta line** (`115200 8N1 · CH340K` on Serial, `N messages` on
-      Diagnostics) in the tab strip. `[untracked]` — `components/Dock.tsx`
-- [ ] **Collapse chevron.** Design collapses the dock to a 30px strip via a
-      chevron; delivered has an `×` that hides it entirely (reopened from the
-      toolbar/menu). Minor behaviour difference. `[untracked]` —
-      `components/Dock.tsx`
+- [x] **Dock meta line** (`115200 8N1` on Serial, `N messages` on Diagnostics)
+      in the tab strip. — `components/Dock.tsx`
+- [x] **Collapse chevron** — collapses the dock to its tab strip via
+      `workspace.dockCollapsed`; the `×` still hides it entirely. —
+      `components/Dock.tsx`, `shared/workspace.ts`
 
 ---
 
 ## B. Relocated — built, different home (confirm these are deliberate)
 
-| Design location | Delivered location |
-| --- | --- |
-| IN / OUT tabs inside the canvas node | Inspector sections (`InPanel` / `OutPanel`) |
-| Board chip in the top bar | Status‑bar `<select>` picker (`StatusBar.tsx`) |
-| Canvas overlay: parts · nets · GPIO totals | Status bar totals (`boardTotals`) |
-| ST7789 ½/¾/1:1 buttons on the OUT screen | `scale` segmented config field (`Inspector`, `panelZoom`) |
-| `BL ON/OFF` toggle on the OUT screen | `backlight` toggle config field |
-| CFG pin rows in the canvas node | Inspector "Pin map" table |
-| Node "class" badge / glyph | Inspector heading (`designator`, `category`) |
+| Design location                            | Delivered location                                        |
+| ------------------------------------------ | --------------------------------------------------------- |
+| IN / OUT tabs inside the canvas node       | Inspector sections (`InPanel` / `OutPanel`)               |
+| Board chip in the top bar                  | Status‑bar `<select>` picker (`StatusBar.tsx`)            |
+| Canvas overlay: parts · nets · GPIO totals | Status bar totals (`boardTotals`)                         |
+| ST7789 ½/¾/1:1 buttons on the OUT screen   | `scale` segmented config field (`Inspector`, `panelZoom`) |
+| `BL ON/OFF` toggle on the OUT screen       | `backlight` toggle config field                           |
+| CFG pin rows in the canvas node            | Inspector "Pin map" table                                 |
+| Node "class" badge / glyph                 | Inspector heading (`designator`, `category`)              |
 
 The build‑button label progression (`Compiling… → Linking… → Flashed ✓`) **does
 match** the design — `BUTTON_LABELS` in `shared/build.ts`. Not a gap.

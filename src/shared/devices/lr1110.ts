@@ -633,9 +633,10 @@ function isAllZero(a: Uint8Array): boolean {
  * A plausible-shaped mesh frame for an IN-panel stimulus. MeshCore parses its
  * own wire format from the RX buffer; the model only needs the length right for
  * airtime and a leading type byte so a trace is legible. `[type, ...src(4),
- * hops, ...payload]`.
+ * hops, ...payload]`. Shared with the SX1262 model, whose IN panel offers the
+ * same stimuli.
  */
-function buildMeshFrame(kind: string, args: Record<string, unknown>): Uint8Array {
+export function buildMeshFrame(kind: string, args: Record<string, unknown>): Uint8Array {
   const from = (num(args['from']) ?? 0x0a1b2c3d) >>> 0
   const hops = Math.max(0, Math.min(7, num(args['hops']) ?? 0))
   const src = [from >>> 24, (from >>> 16) & 0xff, (from >>> 8) & 0xff, from & 0xff]

@@ -1216,7 +1216,7 @@ via `driveSignal`; nothing conveys that into QEMU yet). **To M7.3:** `RX_DONE`
 + the IN-panel `onCommand` injection surface (`onCommand` today handles only
 the four Inspector fields).
 
-#### M7.2 · Host→guest line reads, and `radio_init()` succeeds — `L`
+#### M7.2 · Host→guest line reads — `L` ✅ **done** (radio_init → M7.2b)
 
 **Goal.** `radio_init()` returns `RADIOLIB_ERR_NONE` against the live bridge, so
 MeshCore reaches `the_mesh.begin()` and the UI loop — which is where M6.4's
@@ -1249,6 +1249,85 @@ the ST7789 OUT panel draws the home screen — node name, clock, battery —
 Confirm a `qemu/hw/**` edit actually relinks `.qemu/build/qemu-system-xtensa`
 before trusting a live run.
 
+### Outcome
+
+The host→guest line-read plumbing is in and **proven against a live guest**;
+`radio_init()` succeeding is split out to **M7.2b** because it is blocked by a
+fork bug that predates M7.
+
+- **`Op.GpioRead` (0x06).** A guest `GPIO_IN`/`GPIO_IN1` read of a pin in the
+  host's input mask issues a synchronous request/reply frame — the same shape
+  as `Op.Xfer`, no async machinery, no CPU-interrupt raise (RadioLib
+  level-polls BUSY and DIO9; `LR11x0::transmit`/`receive` and
+  `Module::SPItransferStream` confirmed). `DeviceHost` answers from a
+  `pinLevels` map fed by `DeviceContext.driveSignal`, keyed through a new
+  per-device `outPinBySignal` built from the model's optional
+  `outputSignals` declaration (`semtech.lr1110` → `['BUSY','IRQ']`).
+- **The mask travels in the Hello reply.** Its payload is now an 8-byte LE
+  bitmask of the input pins the host will answer for; `pinbench_host.c` reads
+  it (tolerating any other length), and `esp32_gpio.c` overlays
+  `pinbench_host_gpio_read()` onto `GPIO_IN`/`GPIO_IN1` for the masked bits
+  only — unmasked pins still read the guest's own drive-back.
+- **`pinbench_host_gpio_read()`** blocks the vCPU on the reply and returns 0 on
+  any socket failure — a *released* line, never `0xFF`, because a stuck-high
+  BUSY would hang RadioLib's poll.
+- **Live verification** (rebuilt `.qemu` — incremental `ninja` after
+  `qemu/apply.sh`, ~1 s; M9 `companion_radio_usb_` image built through the
+  `dio_opi` `-c` override, 16 M merge): the Hello reply delivers
+  `input mask 0x0000060000000000` (bits 41, 42) and BUSY (41) / DIO9 (42)
+  reads round-trip over `Op.GpioRead`. `src/main/live-bridge.test.ts` gains a
+  `PINBENCH_LIVE_QEMU`-gated "M7.2" block asserting exactly that; the
+  radio_init-success assertion is `it.skip` pending M7.2b.
+- Unit tests: `DeviceHost` Hello-mask + `Op.GpioRead` round trip against a live
+  socket, `outputSignals` resolution, and the "board binds no such pin"
+  diagnostic (`devices.test.ts`).
+
+**Blocker carried to M7.2b.** With the bridge live, MeshCore's `radio_init()`
+still returns `-707` **before it clocks a single SPI byte to the radio** — the
+LR1110 model gets zero `Op.Xfer` and zero signal edges. The serial log shows
+`[E] __pinMode(): Invalid pin selected` then `gpio: gpio_set_level(227): GPIO
+output gpio_num error` immediately before the `-707`. This is the same fault
+M6.2's Outcome flagged ("a bogus pin number reaching the GPIO path —
+investigate in M6.3") and M6.3 left as "cosmetic"; it is not cosmetic for the
+radio. Pin 227 is not any LR1110 line (39/41/42/45) — it enters through
+RadioLib's `Module` SPI/pin setup under the fork's GPIO model. **It is upstream
+of M7.1/M7.2 code.**
+
+#### M7.2b · Fix the fork's pin-227 GPIO fault, and `radio_init()` succeeds — `M`
+
+**Goal.** Clear the `-707`: MeshCore's `radio_init()` returns
+`RADIOLIB_ERR_NONE`, reaches `the_mesh.begin()`, and the UI loop draws the real
+home screen — closing M6.4's carried clause.
+
+**Build**
+
+- Trace where pin **227** enters the GPIO path. Boot the M9 image with
+  `-d guest_errors` and/or a MeshCore build with `-D RADIOLIB_DEBUG_BASIC`, and
+  find which `pinMode` / `digitalWrite` / `SPI.begin` call passes it. Candidates:
+  a `SPIClass::begin()` default-SS on ESP32-S3 that the fork's `esp32s3_gpio.c`
+  rejects, an uninitialised `Module` pin, or an `LR11X0_DIO_AS_RF_SWITCH` /
+  TCXO path. `pins_arduino.h` for `thinknode_m9` sets `SS = LORA_CS = 39`, so
+  the default-SS theory needs checking against what Arduino-ESP32 actually does
+  for `SPI` (FSPI/SPI2) on this SoC.
+- Fix it where it belongs: most likely a range/validity check or a missing
+  register in `qemu/hw/gpio/esp32_gpio.c` / `esp32s3_gpio.c` (the fork models a
+  subset), or — if it is genuinely a MeshCore/RadioLib call with a bad pin — a
+  narrow guest-side note and a fork tolerance for it. Keep the fork patch
+  minimal and documented, per the risk register.
+- Re-enable the `it.skip`ped `live-bridge.test.ts` assertion: no
+  `radio init failed` on the console, the LR1110 model reaches
+  `mode: 'standby'` with a guest-set frequency, and the ST7789 model takes a
+  post-`radio_init` framebuffer.
+
+**Done when.** The `PINBENCH_LIVE_QEMU` suite shows MeshCore past `radio_init()`
+and the ST7789 OUT panel draws the home screen — node name, clock, battery.
+**Closes M6.4's carried clause.**
+
+**Watch for.** `radio_init()` also runs `rtc_clock.begin(Wire)` first — the M9
+has no I2C controller in the fork until M8, so a hang there (rather than at the
+radio) would be a *different* blocker. Check the failing call is the radio's,
+not the RTC's.
+
 #### M7.3 · Injection, airtime, and the panels — `L`
 
 **Goal.** Inject a mesh frame from the IN panel and watch MeshCore receive it.
@@ -1268,9 +1347,11 @@ before trusting a live run.
   mechanism is M12; this is four fields, hand-wired.
 - Harness tests for injection → IRQ, and an airtime calculation cross-check.
 
-**Done when.** With MeshCore running, inject `#public "trailhead in 20"` from the
-IN panel and see it in the serial log **and** on the emulated LCD's channel list
-with an unread dot.
+**Done when.** The model/panel/airtime/injection code and its harness tests
+land (the M7.1 standard — no live guest needed). The full live demo — inject
+`#public "trailhead in 20"`, see it in the serial log **and** on the emulated
+LCD's channel list with an unread dot — depends on M7.2b clearing `radio_init()`
+first; if M7.2b is still open, that clause is verified in M7.4.
 
 #### M7.4 · The end-to-end app path — `M`
 

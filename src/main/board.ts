@@ -8,8 +8,11 @@
  * process; the renderer asks for a board over IPC and the host also hands the
  * parsed definition straight to `DeviceHost` without a renderer round trip.
  *
- * No board id is hardcoded here: `loadBoard()` with no id discovers the sole
- * `*.board.json` on disk. M13 adds a board picker and this heuristic goes away.
+ * `loadBoard()` with no id resolves one deterministically: the caller's id (the
+ * open project's `boardId`) wins, then the named default {@link DEFAULT_BOARD_ID},
+ * then — only when neither is on disk — the sole `*.board.json`. Before M13 this
+ * was "first file alphabetically", which meant dropping a second board in
+ * `boards/` silently flipped the default out from under the M9.
  */
 
 import { readdirSync, readFileSync } from 'node:fs'
@@ -18,6 +21,13 @@ import { app } from 'electron'
 import { parseBoard, type BoardDefinition } from '../shared/board'
 
 const SUFFIX = '.board.json'
+
+/**
+ * The board loaded when nothing else names one — the first target board, and
+ * the identity every M9 test and the M1 shell assume. Adding another
+ * `*.board.json` must not change what an id-less `loadBoard()` returns.
+ */
+export const DEFAULT_BOARD_ID = 'thinknode-m9-v1.0'
 
 /** Where `<id>.board.json` files live: the repo root in dev, resources when packaged. */
 export function boardsDir(): string {
@@ -34,7 +44,8 @@ export function availableBoardIds(): string[] {
 
 /**
  * Read, parse and fully validate a board definition. With no id (or an empty
- * one) the single definition on disk is used. Throws `BoardValidationError`
+ * one) the resolution order is {@link DEFAULT_BOARD_ID} if it is on disk, else
+ * the single definition present, else an error. Throws `BoardValidationError`
  * (with the offending field path) on a malformed file, or a plain `Error` if
  * the file is missing or not JSON.
  */
@@ -43,7 +54,7 @@ export function loadBoard(id?: string): BoardDefinition {
   if (!boardId) {
     const ids = availableBoardIds()
     if (ids.length === 0) throw new Error(`no board definitions in ${boardsDir()}`)
-    boardId = ids[0]!
+    boardId = ids.includes(DEFAULT_BOARD_ID) ? DEFAULT_BOARD_ID : ids[0]!
   }
   if (!/^[a-z0-9][a-z0-9._-]*$/i.test(boardId)) {
     throw new Error(`invalid board id "${boardId}"`)

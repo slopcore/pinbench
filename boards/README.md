@@ -44,3 +44,44 @@ collide: the LCD's `DC` (15), `RST` (14), `BL` (10) and `TE` (46); the sensor
 cluster's shared `INT` (5); the CH340K's `BOOT` (0); the power block's
 `USB_DET` (8) and `CHG_STAT` (17). Treat these as placeholders until the
 matching device milestone (M6, M9, M10) transcribes the real schematic.
+
+## `heltec-wireless-paper-v1.1` — pin map provenance
+
+Transcribed from the MeshCore checkout's own
+`variants/heltec_wireless_paper/platformio.ini` (`[Heltec_Wireless_Paper_base]`
+`build_flags`) — every pin below is a `-D` in that file, not a guess:
+
+| Signal                                | Pin              |
+| ------------------------------------- | ---------------- |
+| Radio SPI  SCLK / MOSI / MISO         | 9 / 10 / 11      |
+| SX1262  NSS / BUSY / DIO1 / RESET     | 8 / 13 / 14 / —  |
+| SX1262  TX-LED                        | 18               |
+| Display SPI  SCLK / MOSI              | 3 / 2            |
+| E-ink  CS / BUSY / DC / RST           | 4 / 7 / 5 / 6    |
+| USER_BTN                              | 0                |
+| VEXT_EN (peripheral power, active-low)| 45               |
+| VBAT_READ / ADC_CTRL                  | 20 / 19          |
+
+`RESET` is `RADIOLIB_NC` — the SX1262 has no wired hardware reset on this board,
+so `u2` has no `NRESET` binding and the model resets only on power-on and the
+RadioLib soft path. The radio and the e-ink panel sit on **separate SPI buses**
+(`spi-radio`, `spi-disp`) — the M9 put every SPI peripheral on one shared bus,
+so this is the first board that exercises two. The e-ink bus has no `miso`
+signal: the panel is write-only. `GPIO0` doubles as the boot strapping pin and
+the user button — real Heltec hardware, and a genuine target for M11's
+strapping-pin rule.
+
+SX1262 build flags carried into `u2.deviceOptions`: `dio2RfSwitch`
+(`SX126X_DIO2_AS_RF_SWITCH=true`) and `dio3TcxoVoltage` 1.8 V
+(`SX126X_DIO3_TCXO_VOLTAGE=1.8`). The e-ink `u3.deviceOptions.busyActiveHigh`
+records that the Heltec Wireless Paper V1.1 panel's Solomon-Systech controller
+signals busy HIGH (the `heltec-eink-modules` `detectEInk()` probe).
+
+The MCU is a plain ESP32-S3 (`esp32-s3-devkitc-1`, 8 MB flash, **no PSRAM**), so
+`emulator` carries only `machine` and `flashSize: "8M"` — no `psramSize` /
+`psramOctal`. Flash mode is DIO for the same reason as the M9 (ADR 0001's
+QIO-crash finding); the board default is QIO and the emulator build overrides it.
+
+The `esp32s3.soc`, `pinbench.power` and `pinbench.button` model ids are
+referenced but not yet registered — a visible no-op in the device registry, the
+same as the M9's unimplemented parts before their milestones.

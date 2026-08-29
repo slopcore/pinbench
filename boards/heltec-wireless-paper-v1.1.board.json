@@ -1,0 +1,361 @@
+{
+  "schema": 1,
+  "id": "heltec-wireless-paper-v1.1",
+  "name": "Heltec Wireless Paper v1.1",
+  "mcu": "ESP32-S3",
+  "vendor": "Heltec",
+  "pins": [
+    { "id": "GPIO0", "label": "IO0", "capabilities": ["gpio", "spi", "i2c", "uart", "strapping"] },
+    { "id": "GPIO1", "label": "IO1", "capabilities": ["gpio", "spi", "i2c", "uart", "adc", "touch"] },
+    { "id": "GPIO2", "label": "IO2", "capabilities": ["gpio", "spi", "i2c", "uart", "adc", "touch"] },
+    { "id": "GPIO3", "label": "IO3", "capabilities": ["gpio", "spi", "i2c", "uart", "adc", "touch", "strapping"] },
+    { "id": "GPIO4", "label": "IO4", "capabilities": ["gpio", "spi", "i2c", "uart", "adc", "touch"] },
+    { "id": "GPIO5", "label": "IO5", "capabilities": ["gpio", "spi", "i2c", "uart", "adc", "touch"] },
+    { "id": "GPIO6", "label": "IO6", "capabilities": ["gpio", "spi", "i2c", "uart", "adc", "touch"] },
+    { "id": "GPIO7", "label": "IO7", "capabilities": ["gpio", "spi", "i2c", "uart", "adc", "touch"] },
+    { "id": "GPIO8", "label": "IO8", "capabilities": ["gpio", "spi", "i2c", "uart", "adc", "touch"] },
+    { "id": "GPIO9", "label": "IO9", "capabilities": ["gpio", "spi", "i2c", "uart", "adc", "touch"] },
+    { "id": "GPIO10", "label": "IO10", "capabilities": ["gpio", "spi", "i2c", "uart", "adc", "touch"] },
+    { "id": "GPIO11", "label": "IO11", "capabilities": ["gpio", "spi", "i2c", "uart", "adc", "touch"] },
+    { "id": "GPIO12", "label": "IO12", "capabilities": ["gpio", "spi", "i2c", "uart", "adc", "touch"] },
+    { "id": "GPIO13", "label": "IO13", "capabilities": ["gpio", "spi", "i2c", "uart", "adc", "touch"] },
+    { "id": "GPIO14", "label": "IO14", "capabilities": ["gpio", "spi", "i2c", "uart", "adc", "touch"] },
+    { "id": "GPIO15", "label": "IO15", "capabilities": ["gpio", "spi", "i2c", "uart", "adc"] },
+    { "id": "GPIO16", "label": "IO16", "capabilities": ["gpio", "spi", "i2c", "uart", "adc"] },
+    { "id": "GPIO17", "label": "IO17", "capabilities": ["gpio", "spi", "i2c", "uart", "adc"] },
+    { "id": "GPIO18", "label": "IO18", "capabilities": ["gpio", "spi", "i2c", "uart", "adc"] },
+    { "id": "GPIO19", "label": "IO19", "capabilities": ["gpio", "spi", "i2c", "uart", "adc", "usb"] },
+    { "id": "GPIO20", "label": "IO20", "capabilities": ["gpio", "spi", "i2c", "uart", "adc", "usb"] },
+    { "id": "GPIO21", "label": "IO21", "capabilities": ["gpio", "spi", "i2c", "uart"] },
+    { "id": "GPIO33", "label": "IO33", "capabilities": ["gpio", "spi", "i2c", "uart"] },
+    { "id": "GPIO34", "label": "IO34", "capabilities": ["gpio", "spi", "i2c", "uart"] },
+    { "id": "GPIO35", "label": "IO35", "capabilities": ["gpio", "spi", "i2c", "uart"] },
+    { "id": "GPIO36", "label": "IO36", "capabilities": ["gpio", "spi", "i2c", "uart"] },
+    { "id": "GPIO37", "label": "IO37", "capabilities": ["gpio", "spi", "i2c", "uart"] },
+    { "id": "GPIO38", "label": "IO38", "capabilities": ["gpio", "spi", "i2c", "uart"] },
+    { "id": "GPIO39", "label": "IO39", "capabilities": ["gpio", "spi", "i2c", "uart"] },
+    { "id": "GPIO40", "label": "IO40", "capabilities": ["gpio", "spi", "i2c", "uart"] },
+    { "id": "GPIO41", "label": "IO41", "capabilities": ["gpio", "spi", "i2c", "uart"] },
+    { "id": "GPIO42", "label": "IO42", "capabilities": ["gpio", "spi", "i2c", "uart"] },
+    { "id": "GPIO43", "label": "IO43", "capabilities": ["gpio", "spi", "i2c", "uart"] },
+    { "id": "GPIO44", "label": "IO44", "capabilities": ["gpio", "spi", "i2c", "uart"] },
+    { "id": "GPIO45", "label": "IO45", "capabilities": ["gpio", "spi", "i2c", "uart", "strapping"] },
+    { "id": "GPIO46", "label": "IO46", "capabilities": ["gpio", "spi", "i2c", "uart", "strapping"] },
+    { "id": "GPIO47", "label": "IO47", "capabilities": ["gpio", "spi", "i2c", "uart"] },
+    { "id": "GPIO48", "label": "IO48", "capabilities": ["gpio", "spi", "i2c", "uart"] }
+  ],
+  "buses": [
+    {
+      "id": "spi-radio",
+      "kind": "spi",
+      "label": "SPI · SX1262",
+      "signals": { "sck": "GPIO9", "mosi": "GPIO10", "miso": "GPIO11" },
+      "clockHz": 8000000
+    },
+    {
+      "id": "spi-disp",
+      "kind": "spi",
+      "label": "SPI · e-ink",
+      "signals": { "sck": "GPIO3", "mosi": "GPIO2" },
+      "clockHz": 4000000
+    },
+    {
+      "id": "uart0",
+      "kind": "uart",
+      "label": "UART0 · console",
+      "signals": { "tx": "GPIO43", "rx": "GPIO44" },
+      "clockHz": 115200
+    }
+  ],
+  "parts": [
+    {
+      "id": "u1",
+      "designator": "U1",
+      "name": "ESP32-S3",
+      "mpn": "ESP32-S3-WROOM-1-N8",
+      "category": "mcu",
+      "deviceModel": "esp32s3.soc",
+      "summary": "Dual-core Xtensa LX7, 8 MB flash, no PSRAM. Two SPI buses: the SX1262 and the e-ink panel do not share one.",
+      "buses": ["spi-radio", "spi-disp", "uart0"],
+      "pins": [],
+      "config": [
+        {
+          "id": "psram",
+          "label": "PSRAM",
+          "kind": "segmented",
+          "options": ["Off", "2 MB", "8 MB"],
+          "value": "Off"
+        },
+        {
+          "id": "flashMode",
+          "label": "Flash mode",
+          "kind": "segmented",
+          "options": ["DIO", "QIO"],
+          "value": "DIO"
+        },
+        {
+          "id": "cpuFreq",
+          "label": "CPU clock",
+          "kind": "segmented",
+          "options": ["80", "160", "240"],
+          "value": "240"
+        }
+      ],
+      "layout": { "x": 320, "y": 210, "width": 200, "height": 150 }
+    },
+    {
+      "id": "u2",
+      "designator": "U2",
+      "name": "SX1262 LoRa radio",
+      "mpn": "SX1262",
+      "category": "radio",
+      "deviceModel": "semtech.sx1262",
+      "deviceOptions": { "dio2RfSwitch": true, "dio3TcxoVoltage": 1.8 },
+      "summary": "Sub-GHz LoRa transceiver on its own SPI bus, chip select GPIO8, BUSY GPIO13, DIO1 IRQ GPIO14. No hardware reset line (RADIOLIB_NC).",
+      "buses": ["spi-radio"],
+      "pins": [
+        { "signal": "SCK", "pin": "GPIO9" },
+        { "signal": "MOSI", "pin": "GPIO10" },
+        { "signal": "MISO", "pin": "GPIO11" },
+        { "signal": "NSS", "pin": "GPIO8" },
+        { "signal": "BUSY", "pin": "GPIO13" },
+        { "signal": "DIO1", "pin": "GPIO14" },
+        { "signal": "TX_LED", "pin": "GPIO18" }
+      ],
+      "config": [
+        {
+          "id": "bw",
+          "label": "Bandwidth",
+          "kind": "segmented",
+          "options": ["125", "250", "500"],
+          "value": "250"
+        },
+        {
+          "id": "sf",
+          "label": "Spreading factor",
+          "kind": "segmented",
+          "options": ["7", "9", "11"],
+          "value": "11"
+        },
+        {
+          "id": "cr",
+          "label": "Coding rate",
+          "kind": "segmented",
+          "options": ["5", "6", "8"],
+          "value": "5"
+        },
+        {
+          "id": "txPower",
+          "label": "TX power",
+          "kind": "number",
+          "value": 22,
+          "min": -9,
+          "max": 22,
+          "step": 1,
+          "unit": "dBm"
+        }
+      ],
+      "layout": { "x": 60, "y": 200, "width": 180, "height": 130 }
+    },
+    {
+      "id": "u3",
+      "designator": "U3",
+      "name": "2.13\" e-paper",
+      "mpn": "SSD1680",
+      "category": "display",
+      "deviceModel": "sitronix.ssd1680",
+      "deviceOptions": { "busyActiveHigh": true },
+      "summary": "250×122 monochrome e-ink on its own SPI bus, chip select GPIO4, D/C GPIO5, BUSY GPIO7. Pixels latch on MASTER_ACTIVATION, not as RAM streams.",
+      "buses": ["spi-disp"],
+      "pins": [
+        { "signal": "SCK", "pin": "GPIO3" },
+        { "signal": "MOSI", "pin": "GPIO2" },
+        { "signal": "CS", "pin": "GPIO4" },
+        { "signal": "DC", "pin": "GPIO5" },
+        { "signal": "RST", "pin": "GPIO6" },
+        { "signal": "BUSY", "pin": "GPIO7" }
+      ],
+      "config": [
+        {
+          "id": "refresh",
+          "label": "Refresh",
+          "kind": "segmented",
+          "options": ["Full", "Fast", "Partial"],
+          "value": "Fast"
+        },
+        {
+          "id": "rotation",
+          "label": "Rotation",
+          "kind": "segmented",
+          "options": ["0°", "90°", "180°", "270°"],
+          "value": "270°"
+        },
+        {
+          "id": "scale",
+          "label": "Panel zoom",
+          "kind": "segmented",
+          "options": ["1×", "2×", "3×"],
+          "value": "2×"
+        },
+        {
+          "id": "ghosting",
+          "label": "Show ghosting",
+          "kind": "toggle",
+          "value": true
+        }
+      ],
+      "layout": { "x": 580, "y": 60, "width": 210, "height": 150 }
+    },
+    {
+      "id": "u4",
+      "designator": "U4",
+      "name": "Power & VEXT rail",
+      "category": "power",
+      "deviceModel": "pinbench.power",
+      "summary": "Peripheral power rail on GPIO45 (VEXT_EN, active-low), battery sense on GPIO20 gated by ADC_CTRL GPIO19, radio TX LED on GPIO18.",
+      "buses": [],
+      "pins": [
+        { "signal": "VEXT_EN", "pin": "GPIO45" },
+        { "signal": "BAT_ADC", "pin": "GPIO20" },
+        { "signal": "ADC_CTRL", "pin": "GPIO19" },
+        { "signal": "TX_LED", "pin": "GPIO18" }
+      ],
+      "config": [
+        {
+          "id": "battery",
+          "label": "Battery",
+          "kind": "number",
+          "value": 72,
+          "min": 0,
+          "max": 100,
+          "step": 1,
+          "unit": "%"
+        },
+        {
+          "id": "usb",
+          "label": "USB-C connected",
+          "kind": "toggle",
+          "value": true
+        },
+        {
+          "id": "rail",
+          "label": "VEXT rail",
+          "kind": "toggle",
+          "value": true
+        }
+      ],
+      "layout": { "x": 60, "y": 60, "width": 180, "height": 110 }
+    },
+    {
+      "id": "u5",
+      "designator": "SW1",
+      "name": "User button",
+      "category": "input",
+      "deviceModel": "pinbench.button",
+      "summary": "Momentary button on GPIO0 (also the boot strap), active-low, 1 s long-press in firmware.",
+      "buses": [],
+      "pins": [{ "signal": "BTN", "pin": "GPIO0" }],
+      "config": [
+        {
+          "id": "pressed",
+          "label": "Pressed",
+          "kind": "toggle",
+          "value": false
+        }
+      ],
+      "layout": { "x": 320, "y": 410, "width": 180, "height": 90 }
+    }
+  ],
+  "nets": [
+    {
+      "id": "net-radio-sck",
+      "label": "RADIO_SCK",
+      "bus": "spi-radio",
+      "nodes": ["GPIO9", "u2:SCK"]
+    },
+    {
+      "id": "net-radio-mosi",
+      "label": "RADIO_MOSI",
+      "bus": "spi-radio",
+      "nodes": ["GPIO10", "u2:MOSI"]
+    },
+    {
+      "id": "net-radio-miso",
+      "label": "RADIO_MISO",
+      "bus": "spi-radio",
+      "nodes": ["GPIO11", "u2:MISO"]
+    },
+    {
+      "id": "net-radio-nss",
+      "label": "RADIO_NSS",
+      "bus": "spi-radio",
+      "nodes": ["GPIO8", "u2:NSS"]
+    },
+    {
+      "id": "net-radio-busy",
+      "label": "RADIO_BUSY",
+      "nodes": ["GPIO13", "u2:BUSY"]
+    },
+    {
+      "id": "net-radio-dio1",
+      "label": "RADIO_DIO1",
+      "nodes": ["GPIO14", "u2:DIO1"]
+    },
+    {
+      "id": "net-disp-sck",
+      "label": "DISP_SCK",
+      "bus": "spi-disp",
+      "nodes": ["GPIO3", "u3:SCK"]
+    },
+    {
+      "id": "net-disp-mosi",
+      "label": "DISP_MOSI",
+      "bus": "spi-disp",
+      "nodes": ["GPIO2", "u3:MOSI"]
+    },
+    {
+      "id": "net-disp-cs",
+      "label": "DISP_CS",
+      "bus": "spi-disp",
+      "nodes": ["GPIO4", "u3:CS"]
+    },
+    {
+      "id": "net-disp-dc",
+      "label": "DISP_DC",
+      "nodes": ["GPIO5", "u3:DC"]
+    },
+    {
+      "id": "net-disp-rst",
+      "label": "DISP_RST",
+      "nodes": ["GPIO6", "u3:RST"]
+    },
+    {
+      "id": "net-disp-busy",
+      "label": "DISP_BUSY",
+      "nodes": ["GPIO7", "u3:BUSY"]
+    },
+    {
+      "id": "net-vext",
+      "label": "VEXT_EN",
+      "nodes": ["GPIO45", "u4:VEXT_EN"]
+    },
+    {
+      "id": "net-tx-led",
+      "label": "RADIO_TX_LED",
+      "nodes": ["GPIO18", "u2:TX_LED", "u4:TX_LED"]
+    },
+    {
+      "id": "net-user-btn",
+      "label": "USER_BTN",
+      "nodes": ["GPIO0", "u5:BTN"]
+    }
+  ],
+  "emulator": {
+    "machine": "esp32s3",
+    "flashSize": "8M"
+  },
+  "canvas": {
+    "width": 850,
+    "height": 560
+  }
+}

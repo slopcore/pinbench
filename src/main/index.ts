@@ -18,7 +18,7 @@ import { normaliseProject } from '../shared/project'
 import { buildApplicationMenu } from './menu'
 import { isBuildRunning } from '../shared/build'
 import { parseEnvNamesFromIni } from '../shared/pio'
-import { loadBoard } from './board'
+import { availableBoardIds, loadBoard } from './board'
 import { readProjectFile, writeProjectFile } from './projectFile'
 import { BuildRunner } from './build'
 import { DeviceHost } from './devices'
@@ -255,6 +255,8 @@ function registerIpc(): void {
       return { error: error instanceof Error ? error.message : String(error) }
     }
   })
+
+  ipcMain.handle(IpcChannel.boardList, (): string[] => availableBoardIds())
 
   ipcMain.on(
     IpcChannel.deviceCommand,

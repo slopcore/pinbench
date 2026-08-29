@@ -41,7 +41,8 @@ const api: PinBenchApi = {
     save: (state: WorkspaceState) => ipcRenderer.send(IpcChannel.workspaceSave, state)
   },
   board: {
-    load: (id?: string) => ipcRenderer.invoke(IpcChannel.boardLoad, id) as Promise<BoardLoadResult>
+    load: (id?: string) => ipcRenderer.invoke(IpcChannel.boardLoad, id) as Promise<BoardLoadResult>,
+    list: () => ipcRenderer.invoke(IpcChannel.boardList) as Promise<string[]>
   },
   projectFile: {
     open: () => ipcRenderer.invoke(IpcChannel.projectFileOpen) as Promise<ProjectFileResult | null>,

@@ -1,6 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { DEFAULT_WORKSPACE } from '@shared/workspace'
 import type { WorkspaceState } from '@shared/workspace'
 import { App } from './App'
@@ -16,7 +16,14 @@ async function renderApp(
   const bridge = installBridge(initial)
   const user = userEvent.setup()
   render(
-    <App appInfo={APP_INFO} windowState={WINDOW_STATE} board={M9_BOARD} initialProject={null} />
+    <App
+      appInfo={APP_INFO}
+      windowState={WINDOW_STATE}
+      board={M9_BOARD}
+      availableBoards={[M9_BOARD.id]}
+      onSelectBoard={() => {}}
+      initialProject={null}
+    />
   )
   // The status bar is always present; waiting on it lets the restore land
   // before a test starts clicking.
@@ -31,6 +38,26 @@ describe('the shell', () => {
     expect(screen.getByRole('complementary', { name: 'Inspector' })).toBeInTheDocument()
     expect(screen.getByRole('region', { name: 'Dock' })).toBeInTheDocument()
     expect(screen.getByRole('application', { name: /diagram/i })).toBeInTheDocument()
+  })
+
+  it('offers a board picker when more than one board is on disk', async () => {
+    installBridge(DEFAULT_WORKSPACE)
+    const user = userEvent.setup()
+    const onSelectBoard = vi.fn()
+    render(
+      <App
+        appInfo={APP_INFO}
+        windowState={WINDOW_STATE}
+        board={M9_BOARD}
+        availableBoards={[M9_BOARD.id, 'heltec-wireless-paper-v1.1']}
+        onSelectBoard={onSelectBoard}
+        initialProject={null}
+      />
+    )
+    const picker = await screen.findByRole('combobox', { name: 'Board' })
+    expect(picker).toHaveValue(M9_BOARD.id)
+    await user.selectOptions(picker, 'heltec-wireless-paper-v1.1')
+    expect(onSelectBoard).toHaveBeenCalledWith('heltec-wireless-paper-v1.1')
   })
 
   it('shows counts computed from the board definition', async () => {

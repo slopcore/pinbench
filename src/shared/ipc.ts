@@ -37,6 +37,7 @@ export const IpcChannel = {
   projectReadFile: 'project:read-file',
   projectFileChanged: 'project:file-changed',
   boardLoad: 'board:load',
+  boardList: 'board:list',
   projectFileOpen: 'projectfile:open',
   projectFileSave: 'projectfile:save',
   projectFileRecent: 'projectfile:recent',
@@ -103,6 +104,8 @@ export interface PinBenchApi {
   board: {
     /** Load and validate a board definition by id; the host also feeds it to the device host. */
     load(id?: string): Promise<BoardLoadResult>
+    /** Board ids available on disk, sorted — for the board picker. */
+    list(): Promise<string[]>
   }
   projectFile: {
     /** Prompt for a `.pinbench` file and open it, re-adopting its PlatformIO project. */

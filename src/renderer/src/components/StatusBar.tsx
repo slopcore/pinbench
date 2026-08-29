@@ -14,15 +14,40 @@ const EMULATOR_LABELS: Record<EmulatorState, string> = {
 
 interface StatusBarProps {
   board: BoardDefinition
+  /** Board ids on disk; a picker is shown when there is more than one. */
+  availableBoards: string[]
+  onSelectBoard: (id: string) => void
   totals: BoardTotals
   emulator: EmulatorState
   version: string
 }
 
-export function StatusBar({ board, totals, emulator, version }: StatusBarProps): React.JSX.Element {
+export function StatusBar({
+  board,
+  availableBoards,
+  onSelectBoard,
+  totals,
+  emulator,
+  version
+}: StatusBarProps): React.JSX.Element {
   return (
     <footer className="statusbar">
-      <span className="statusbar__board">{board.name}</span>
+      {availableBoards.length > 1 ? (
+        <select
+          className="statusbar__board statusbar__board-picker"
+          aria-label="Board"
+          value={board.id}
+          onChange={(event) => onSelectBoard(event.target.value)}
+        >
+          {availableBoards.map((id) => (
+            <option key={id} value={id}>
+              {id === board.id ? board.name : id}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <span className="statusbar__board">{board.name}</span>
+      )}
       <span className="statusbar__mcu">{board.mcu}</span>
       <span className="statusbar__spacer" />
       {/* Computed from the board definition, never written down. */}

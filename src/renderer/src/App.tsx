@@ -30,11 +30,22 @@ interface AppProps {
   appInfo: AppInfo
   windowState: WindowState
   board: BoardDefinition
+  /** Board ids on disk, for the status-bar picker. */
+  availableBoards: string[]
+  /** Switch to another board — `Root` reloads the definition and remounts. */
+  onSelectBoard: (id: string) => void
   /** The `.pinbench` file reopened on launch, if any — resolved by `Root`. */
   initialProject: ProjectFileResult | null
 }
 
-export function App({ appInfo, windowState, board, initialProject }: AppProps): React.JSX.Element {
+export function App({
+  appInfo,
+  windowState,
+  board,
+  availableBoards,
+  onSelectBoard,
+  initialProject
+}: AppProps): React.JSX.Element {
   const { workspace, dispatch, restored } = useWorkspace()
   const emulator = useEmulator(board.emulator)
   const project = useProject()
@@ -103,7 +114,7 @@ export function App({ appInfo, windowState, board, initialProject }: AppProps): 
       rows.push({
         id: 'other-board',
         severity: 'warn',
-        message: `This project targets board "${otherBoardId}" — restart PinBench to load it (board switching is M13)`
+        message: `This project targets board "${otherBoardId}" — pick it in the status-bar board selector to switch`
       })
     }
     if (emulator.state === 'crashed' && emulator.error) {
@@ -504,6 +515,8 @@ export function App({ appInfo, windowState, board, initialProject }: AppProps): 
 
       <StatusBar
         board={board}
+        availableBoards={availableBoards}
+        onSelectBoard={onSelectBoard}
         totals={totals}
         emulator={emulator.state}
         version={appInfo.version}

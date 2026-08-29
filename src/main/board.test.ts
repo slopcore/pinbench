@@ -22,10 +22,12 @@ describe('loadBoard', () => {
     expect(board.id).toBe('heltec-wireless-paper-v1.1')
     expect(board.vendor).toBe('Heltec')
     // Two SPI buses — the radio and the e-ink panel do not share one.
-    expect(board.buses.filter((b) => b.kind === 'spi').map((b) => b.id).sort()).toEqual([
-      'spi-disp',
-      'spi-radio'
-    ])
+    expect(
+      board.buses
+        .filter((b) => b.kind === 'spi')
+        .map((b) => b.id)
+        .sort()
+    ).toEqual(['spi-disp', 'spi-radio'])
     // No PSRAM on this part.
     expect(board.emulator.psramSize).toBeUndefined()
     expect(board.emulator.flashSize).toBe('8M')

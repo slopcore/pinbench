@@ -16,6 +16,23 @@
   font-weight: var(--weight-medium);
 }
 
+.statusbar__board-picker {
+  appearance: none;
+  margin: 0;
+  padding: 2px 6px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-2, 4px);
+  color: var(--text-secondary);
+  font: inherit;
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+}
+
+.statusbar__board-picker:hover {
+  border-color: var(--accent, var(--border-strong));
+}
+
 .statusbar__mcu {
   font-family: var(--font-mono);
 }

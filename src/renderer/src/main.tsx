@@ -1,4 +1,4 @@
-import { StrictMode, useEffect, useState } from 'react'
+import { StrictMode, useCallback, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import type { AppInfo, ProjectFileResult, WindowState } from '@shared/ipc'
 import type { BoardDefinition } from '@shared/board'
@@ -18,11 +18,13 @@ function Root(): React.JSX.Element | null {
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null)
   const [windowState, setWindowState] = useState<WindowState>(INITIAL_WINDOW_STATE)
   const [board, setBoard] = useState<BoardDefinition | null>(null)
+  const [availableBoards, setAvailableBoards] = useState<string[]>([])
   const [initialProject, setInitialProject] = useState<ProjectFileResult | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     void window.pinbench.appInfo().then(setAppInfo)
+    void window.pinbench.board.list().then(setAvailableBoards)
     void (async () => {
       const project = await window.pinbench.projectFile.recent()
       setInitialProject(project)
@@ -32,6 +34,19 @@ function Root(): React.JSX.Element | null {
     })()
     return window.pinbench.window.onStateChange(setWindowState)
   }, [])
+
+  // Switch boards without a restart: the main process reloads the definition
+  // and re-feeds the device host; `key={board.id}` on <App> gives a clean
+  // remount so no per-board state (selection, verify rows) leaks across.
+  const selectBoard = useCallback(
+    async (id: string): Promise<void> => {
+      if (id === board?.id) return
+      const result = await window.pinbench.board.load(id)
+      if ('board' in result) setBoard(result.board)
+      else setError(result.error)
+    },
+    [board?.id]
+  )
 
   if (error) {
     return (
@@ -44,9 +59,12 @@ function Root(): React.JSX.Element | null {
   if (!appInfo || !board) return null
   return (
     <App
+      key={board.id}
       appInfo={appInfo}
       windowState={windowState}
       board={board}
+      availableBoards={availableBoards}
+      onSelectBoard={selectBoard}
       initialProject={initialProject}
     />
   )

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import { fireEvent } from '@testing-library/dom'
 import { describe, expect, it, vi } from 'vitest'
 import { DEFAULT_WORKSPACE } from '@shared/workspace'
@@ -97,5 +97,29 @@ describe('Canvas', () => {
   it('draws no grid at all when the grid is off', () => {
     const { surface } = renderCanvas({ grid: 'none' })
     expect(surface.querySelector('rect[fill^="url(#grid"]')).toBeNull()
+  })
+
+  it('gives each node card a CFG/IN/OUT strip that switches its body', async () => {
+    const { onSelectPart } = renderCanvas()
+    const radioCard = screen.getByText('LR1110 mesh radio').closest('.canvas__card') as HTMLElement
+    // CFG is the default body — a pin row is visible.
+    expect(radioCard.querySelector('.canvas__card-pins')).not.toBeNull()
+    fireEvent.click(within(radioCard).getByRole('tab', { name: 'IN' }))
+    await waitFor(() => expect(onSelectPart).toHaveBeenCalledWith('u2'))
+    expect(radioCard.querySelector('.canvas__card-pins')).toBeNull()
+    expect(within(radioCard).getByText(/Stimuli available/)).toBeInTheDocument()
+  })
+
+  it('labels nets on the canvas and hides the labels when bus labels are off', () => {
+    const { surface } = renderCanvas({ busLabels: true })
+    expect(surface.querySelector('.canvas__net-label')).not.toBeNull()
+    cleanup()
+    const off = renderCanvas({ busLabels: false })
+    expect(off.surface.querySelector('.canvas__net-label')).toBeNull()
+  })
+
+  it('dims the nets of a filtered-out bus', () => {
+    const { surface } = renderCanvas({ hiddenBuses: ['spi'] })
+    expect(surface.querySelector('.canvas__net-group[data-dimmed]')).not.toBeNull()
   })
 })

@@ -1,13 +1,28 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { MAX_ZOOM, MIN_ZOOM, clamp, fitViewport } from '@shared/workspace'
 import type { ViewportState, WorkspaceState } from '@shared/workspace'
-import { boardTotals } from '@shared/board'
-import type { BoardDefinition, PartDefinition } from '@shared/board'
+import { CATEGORY_LABELS, boardTotals } from '@shared/board'
+import type { BoardDefinition, PartCategory, PartDefinition } from '@shared/board'
 import { netColour, netFilterKind } from '@shared/nets'
 import './canvas.css'
 
 const GRID_SPACING = 20
 const ZOOM_STEP = 1.15
+
+type CardTab = 'cfg' | 'in' | 'out'
+const CARD_TABS: CardTab[] = ['cfg', 'in', 'out']
+
+/** A glyph per part class for the node-card header. */
+const CATEGORY_GLYPH: Record<PartCategory, string> = {
+  mcu: '▦',
+  radio: '((•))',
+  display: '▢',
+  storage: '▤',
+  sensor: '◈',
+  input: '⌨',
+  power: '⚡',
+  interface: '⇄'
+}
 
 interface CanvasProps {
   board: BoardDefinition
@@ -51,6 +66,7 @@ export function Canvas({
   const spaceHeldRef = useRef(false)
   const { viewport, grid, tool, busLabels, hiddenBuses } = workspace.canvas
   const [spiToastDismissed, setSpiToastDismissed] = useState(false)
+  const [cardTabs, setCardTabs] = useState<Record<string, CardTab>>({})
   const sharedSpi = sharedSpiBuses(board)
   const totals = boardTotals(board)
 
@@ -260,32 +276,86 @@ export function Canvas({
 
           {board.parts.map((part) => {
             const selected = workspace.selectedPartId === part.id
+            const tab: CardTab = cardTabs[part.id] ?? 'cfg'
+            const partBuses = part.buses
+              .map((id) => board.buses.find((bus) => bus.id === id)?.label ?? id)
+              .join(', ')
             return (
               <g
                 key={part.id}
                 className="canvas__part"
                 data-selected={selected || undefined}
                 transform={`translate(${part.layout.x} ${part.layout.y})`}
-                onClick={(event) => {
-                  event.stopPropagation()
-                  onSelectPart(part.id)
-                }}
               >
-                <rect
-                  className="canvas__part-body"
-                  width={part.layout.width}
-                  height={part.layout.height}
-                  rx={8}
-                />
-                <text className="canvas__part-designator" x={12} y={22}>
-                  {part.designator}
-                </text>
-                <text className="canvas__part-name" x={12} y={40}>
-                  {part.name}
-                </text>
-                <text className="canvas__part-meta" x={12} y={part.layout.height - 14}>
-                  {part.pins.length} pins
-                </text>
+                <foreignObject width={part.layout.width} height={part.layout.height}>
+                  <div
+                    className="canvas__card"
+                    data-selected={selected || undefined}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      onSelectPart(part.id)
+                    }}
+                  >
+                    <div className="canvas__card-head">
+                      <span className="canvas__card-glyph" aria-hidden="true">
+                        {CATEGORY_GLYPH[part.category]}
+                      </span>
+                      <span className="canvas__card-title">
+                        <span className="canvas__card-designator">{part.designator}</span>
+                        <span className="canvas__card-name">{part.name}</span>
+                      </span>
+                      <span className="canvas__card-badge">{CATEGORY_LABELS[part.category]}</span>
+                    </div>
+                    <div className="canvas__card-strip" role="tablist">
+                      {CARD_TABS.map((id) => (
+                        <button
+                          key={id}
+                          type="button"
+                          role="tab"
+                          className="canvas__card-tab"
+                          aria-selected={tab === id}
+                          data-active={tab === id || undefined}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            onSelectPart(part.id)
+                            setCardTabs((previous) => ({ ...previous, [part.id]: id }))
+                          }}
+                        >
+                          {id.toUpperCase()}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="canvas__card-body">
+                      {tab === 'cfg' && (
+                        <ul className="canvas__card-pins">
+                          {part.pins.length === 0 && <li className="canvas__card-dim">No pins</li>}
+                          {part.pins.slice(0, 6).map((binding) => (
+                            <li key={binding.signal}>
+                              <span>{binding.signal}</span>
+                              <span className="canvas__card-pin">{binding.pin}</span>
+                            </li>
+                          ))}
+                          {part.pins.length > 6 && (
+                            <li className="canvas__card-dim">+{part.pins.length - 6} more</li>
+                          )}
+                        </ul>
+                      )}
+                      {tab === 'in' && (
+                        <p className="canvas__card-note">
+                          {part.deviceModel
+                            ? 'Stimuli available in the Inspector IN panel.'
+                            : 'No stimuli for this part.'}
+                        </p>
+                      )}
+                      {tab === 'out' && (
+                        <p className="canvas__card-note">
+                          {part.pins.length} pins
+                          {partBuses ? ` · ${partBuses}` : ''}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </foreignObject>
               </g>
             )
           })}

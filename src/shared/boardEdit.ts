@@ -85,6 +85,60 @@ export function applyEdit(board: BoardDefinition, edit: BoardEdit): BoardDefinit
   }
 }
 
+/**
+ * A fresh part id / designator that does not collide with anything on the
+ * board — `u3` → `u3-copy`, then `u3-copy-2`, … and `U3` → `U3'`.
+ */
+export function duplicatePart(source: PartDefinition, board: BoardDefinition): PartDefinition {
+  const taken = new Set(board.parts.map((p) => p.id))
+  let id = `${source.id}-copy`
+  for (let n = 2; taken.has(id); n += 1) id = `${source.id}-copy-${n}`
+  return {
+    ...source,
+    id,
+    designator: `${source.designator}'`,
+    // Nudge it clear of the original so both are visible.
+    layout: { ...source.layout, x: source.layout.x + 24, y: source.layout.y + 24 },
+    // A copy carries no net endpoints and no device model — it is a fresh
+    // placement the user then wires up.
+    pins: source.pins.map((b) => ({ ...b }))
+  }
+}
+
+/**
+ * Lay every non-MCU part out in bus-grouped columns around the MCU. Returns one
+ * `moveParty` edit per part that needs to move — feed them to {@link BoardHistory}.
+ */
+export function autoArrangeByBus(board: BoardDefinition): BoardEdit[] {
+  const mcu = board.parts.find((p) => p.category === 'mcu')
+  if (!mcu) return []
+  const others = board.parts.filter((p) => p.id !== mcu.id)
+  // Group by the part's first bus, then everything else.
+  const groups = new Map<string, PartDefinition[]>()
+  for (const part of others) {
+    const key = part.buses[0] ?? '—'
+    const bucket = groups.get(key)
+    if (bucket) bucket.push(part)
+    else groups.set(key, [part])
+  }
+  const colGap = 220
+  const rowGap = 150
+  const startX = mcu.layout.x + mcu.layout.width + 120
+  const edits: BoardEdit[] = []
+  let col = 0
+  for (const bucket of groups.values()) {
+    bucket.forEach((part, row) => {
+      const x = startX + col * colGap
+      const y = mcu.layout.y + row * rowGap
+      if (part.layout.x !== x || part.layout.y !== y) {
+        edits.push({ kind: 'moveParty', partId: part.id, x, y })
+      }
+    })
+    col += 1
+  }
+  return edits
+}
+
 function mapPart(
   board: BoardDefinition,
   partId: string,

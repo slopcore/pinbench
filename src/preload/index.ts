@@ -46,7 +46,8 @@ const api: PinBenchApi = {
   board: {
     load: (id?: string) => ipcRenderer.invoke(IpcChannel.boardLoad, id) as Promise<BoardLoadResult>,
     list: () => ipcRenderer.invoke(IpcChannel.boardList) as Promise<string[]>,
-    exportPinHeader: () => ipcRenderer.invoke(IpcChannel.exportPinHeader) as Promise<string | null>
+    exportPinHeader: (edits) =>
+      ipcRenderer.invoke(IpcChannel.exportPinHeader, edits) as Promise<string | null>
   },
   projectFile: {
     open: () => ipcRenderer.invoke(IpcChannel.projectFileOpen) as Promise<ProjectFileResult | null>,

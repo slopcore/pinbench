@@ -14,7 +14,19 @@
  * those fail loud (`parseBoard`).
  */
 
+import type { BoardEdit } from './boardEdit'
+
 export type PartConfigValue = string | number | boolean
+
+const BOARD_EDIT_KINDS = new Set([
+  'moveParty',
+  'resizeParty',
+  'rebindPin',
+  'addPart',
+  'deletePart',
+  'addNet',
+  'deleteNet'
+])
 
 export interface ProjectFile {
   /** Bumped when a field is removed or its meaning changes. */
@@ -33,6 +45,11 @@ export interface ProjectFile {
   partConfig: Record<string, PartConfigValue>
   /** The part shown in the Inspector when the file was saved. */
   selectedPartId: string | null
+  /**
+   * Canvas edits, oldest first, replayed over the board definition on open. A
+   * stale edit (part since removed from the definition) is skipped on replay.
+   */
+  boardEdits: BoardEdit[]
 }
 
 export const DEFAULT_PROJECT: ProjectFile = {
@@ -41,7 +58,8 @@ export const DEFAULT_PROJECT: ProjectFile = {
   platformioDir: null,
   env: null,
   partConfig: {},
-  selectedPartId: null
+  selectedPartId: null,
+  boardEdits: []
 }
 
 /** Coerce whatever is on disk into a usable project; never throw at the caller. */
@@ -59,13 +77,23 @@ export function normaliseProject(input: unknown): ProjectFile {
     }
   }
 
+  const boardEdits = Array.isArray(raw.boardEdits)
+    ? (raw.boardEdits.filter(
+        (edit): edit is BoardEdit =>
+          typeof edit === 'object' &&
+          edit !== null &&
+          BOARD_EDIT_KINDS.has((edit as { kind?: unknown }).kind as string)
+      ) as BoardEdit[])
+    : []
+
   return {
     version: 1,
     boardId: typeof raw.boardId === 'string' ? raw.boardId : '',
     platformioDir: typeof raw.platformioDir === 'string' ? raw.platformioDir : null,
     env: typeof raw.env === 'string' ? raw.env : null,
     partConfig,
-    selectedPartId: typeof raw.selectedPartId === 'string' ? raw.selectedPartId : null
+    selectedPartId: typeof raw.selectedPartId === 'string' ? raw.selectedPartId : null,
+    boardEdits
   }
 }
 

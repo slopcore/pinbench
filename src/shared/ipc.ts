@@ -1,6 +1,7 @@
 import type { BuildOutputLine, BuildStatus } from './build'
 import type { CommandId } from './commands'
 import type { BoardDefinition } from './board'
+import type { BoardEdit } from './boardEdit'
 import type { ProjectFile } from './project'
 import type {
   DeviceCommandMessage,
@@ -128,9 +129,10 @@ export interface PinBenchApi {
     list(): Promise<string[]>
     /**
      * Write the pin-map C header for the loaded board to a path the user picks.
-     * Resolves to the written path, or null if the save dialog was cancelled.
+     * `edits` are the canvas edits to fold in first (empty for the pristine
+     * board). Resolves to the written path, or null if the dialog was cancelled.
      */
-    exportPinHeader(): Promise<string | null>
+    exportPinHeader(edits?: BoardEdit[]): Promise<string | null>
   }
   projectFile: {
     /** Prompt for a `.pinbench` file and open it, re-adopting its PlatformIO project. */

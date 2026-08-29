@@ -604,7 +604,10 @@ export class St7789Model implements DeviceModel {
     this.txnsThisFrame = 0
     if (this.frameFlushStartT >= 0) {
       // Whole-frame pixel-streaming span, ms with 2 decimals.
-      this.lastFlushMs = Math.max(0, Math.round((this.lastPixelT - this.frameFlushStartT) / 1e4) / 100)
+      this.lastFlushMs = Math.max(
+        0,
+        Math.round((this.lastPixelT - this.frameFlushStartT) / 1e4) / 100
+      )
       this.frameFlushStartT = -1
     }
     return frame

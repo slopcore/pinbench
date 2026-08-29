@@ -63,11 +63,7 @@ export function St7789Screen({ framebuffer, zoom }: St7789ScreenProps): React.JS
 
     const s = stateRef.current
     const fullRepaint =
-      !imageRef.current ||
-      s.dispW !== dispW ||
-      s.dispH !== dispH ||
-      s.dim !== dim ||
-      s.inv !== inv
+      !imageRef.current || s.dispW !== dispW || s.dispH !== dispH || s.dim !== dim || s.inv !== inv
     if (!imageRef.current || s.dispW !== dispW || s.dispH !== dispH) {
       imageRef.current = ctx.createImageData(dispW, dispH)
     }

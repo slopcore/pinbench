@@ -9,10 +9,24 @@ describe('normaliseProject', () => {
       platformioDir: '/home/me/meshcore',
       env: 'env-a',
       partConfig: { 'u2.sf': '7', 'u3.backlight': true, 'u7.temperature': 21 },
-      selectedPartId: 'u2'
+      selectedPartId: 'u2',
+      boardEdits: [{ kind: 'moveParty' as const, partId: 'u3', x: 10, y: 20 }]
     }
     expect(normaliseProject(project)).toEqual(project)
     expect(normaliseProject(JSON.parse(serialiseProject(project)))).toEqual(project)
+  })
+
+  it('keeps well-formed board edits and drops junk ones', () => {
+    const result = normaliseProject({
+      version: 1,
+      boardEdits: [
+        { kind: 'moveParty', partId: 'u3', x: 1, y: 2 },
+        { kind: 'not-a-kind', partId: 'u3' },
+        'nope',
+        null
+      ]
+    })
+    expect(result.boardEdits).toEqual([{ kind: 'moveParty', partId: 'u3', x: 1, y: 2 }])
   })
 
   it('falls back to defaults for a non-object or wrong version', () => {

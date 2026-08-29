@@ -112,6 +112,19 @@
   border-color: var(--accent-600);
 }
 
+.canvas__card[data-draggable] {
+  cursor: grab;
+}
+
+.canvas__card[data-draggable]:active {
+  cursor: grabbing;
+}
+
+.canvas__part[data-net-from] .canvas__card {
+  border-color: var(--accent-400);
+  box-shadow: 0 0 0 2px var(--accent-700);
+}
+
 .canvas__card[data-selected] {
   border-color: var(--accent-400);
   border-width: 2px;

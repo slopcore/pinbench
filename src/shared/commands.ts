@@ -20,10 +20,12 @@ export const COMMANDS = [
   'file.closeProject',
   'edit.undo',
   'edit.redo',
+  'edit.duplicate',
+  'edit.delete',
+  'edit.autoArrange',
   'edit.cut',
   'edit.copy',
   'edit.paste',
-  'edit.delete',
   'edit.selectAll',
   'view.toggleLibrary',
   'view.toggleInspector',
@@ -125,15 +127,18 @@ export const MENUS: MenuSpec[] = [
     id: 'edit',
     label: 'Edit',
     entries: [
-      // Canvas editing is M11; these are the design's items, inert until then.
-      item('edit.undo', 'Undo', { accelerator: 'CmdOrCtrl+Z', enabled: false }),
-      item('edit.redo', 'Redo', { accelerator: 'CmdOrCtrl+Shift+Z', enabled: false }),
+      // Canvas editing (M11.3): undo/redo over BoardEdit history, plus the
+      // design's part operations. Cut/Copy/Paste/Select-all stay inert.
+      item('edit.undo', 'Undo', { accelerator: 'CmdOrCtrl+Z', enabled: true }),
+      item('edit.redo', 'Redo', { accelerator: 'CmdOrCtrl+Shift+Z', enabled: true }),
+      separator,
+      item('edit.duplicate', 'Duplicate part', { accelerator: 'CmdOrCtrl+D', enabled: true }),
+      item('edit.delete', 'Delete part', { accelerator: 'Delete', enabled: true }),
+      item('edit.autoArrange', 'Auto-arrange by bus', { enabled: true }),
       separator,
       item('edit.cut', 'Cut', { accelerator: 'CmdOrCtrl+X', enabled: false }),
       item('edit.copy', 'Copy', { accelerator: 'CmdOrCtrl+C', enabled: false }),
       item('edit.paste', 'Paste', { accelerator: 'CmdOrCtrl+V', enabled: false }),
-      item('edit.delete', 'Delete', { accelerator: 'Delete', enabled: false }),
-      separator,
       item('edit.selectAll', 'Select all', { accelerator: 'CmdOrCtrl+A', enabled: false })
     ]
   },

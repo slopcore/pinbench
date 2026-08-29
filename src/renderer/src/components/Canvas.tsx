@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { MAX_ZOOM, MIN_ZOOM, clamp, fitViewport } from '@shared/workspace'
 import type { ViewportState, WorkspaceState } from '@shared/workspace'
 import { CATEGORY_LABELS, boardTotals } from '@shared/board'
-import type { BoardDefinition, PartCategory, PartDefinition } from '@shared/board'
+import type { BoardDefinition, NetDefinition, PartCategory, PartDefinition } from '@shared/board'
 import { netColour, netFilterKind } from '@shared/nets'
 import './canvas.css'
 
@@ -30,6 +30,10 @@ interface CanvasProps {
   onViewport: (viewport: ViewportState) => void
   onZoomAt: (zoom: number, origin: { x: number; y: number }) => void
   onSelectPart: (partId: string | null) => void
+  /** Commit a part drag (Select tool) — board-definition units. */
+  onMovePart: (partId: string, x: number, y: number) => void
+  /** Add a net between two parts (Draw-net tool). */
+  onAddNet: (net: NetDefinition) => void
   /** Told the viewport size so the Fit command can be driven from the menu. */
   onMeasure: (size: { width: number; height: number }) => void
   /**
@@ -58,17 +62,38 @@ export function Canvas({
   onViewport,
   onZoomAt,
   onSelectPart,
+  onMovePart,
+  onAddNet,
   onMeasure,
   ready
 }: CanvasProps): React.JSX.Element {
   const hostRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<{ pointerId: number; x: number; y: number } | null>(null)
   const spaceHeldRef = useRef(false)
-  const { viewport, grid, tool, busLabels, hiddenBuses } = workspace.canvas
+  const { viewport, grid, tool, snapToGrid, busLabels, hiddenBuses } = workspace.canvas
   const [spiToastDismissed, setSpiToastDismissed] = useState(false)
   const [cardTabs, setCardTabs] = useState<Record<string, CardTab>>({})
+  // Part drag (Select tool): live pixel offset while dragging, committed on drop.
+  const [partDrag, setPartDrag] = useState<{
+    partId: string
+    pointerId: number
+    startX: number
+    startY: number
+    dx: number
+    dy: number
+    moved: boolean
+  } | null>(null)
+  // Draw-net tool: the first part clicked, awaiting a second. Only meaningful
+  // while the net tool is active.
+  const [netFromRaw, setNetFrom] = useState<string | null>(null)
+  const netFrom = tool === 'net' ? netFromRaw : null
   const sharedSpi = sharedSpiBuses(board)
   const totals = boardTotals(board)
+
+  const snap = useCallback(
+    (value: number): number => (snapToGrid ? Math.round(value / 10) * 10 : Math.round(value)),
+    [snapToGrid]
+  )
 
   const measure = useCallback((): { width: number; height: number } => {
     const rect = hostRef.current?.getBoundingClientRect()
@@ -298,21 +323,85 @@ export function Canvas({
             const partBuses = part.buses
               .map((id) => board.buses.find((bus) => bus.id === id)?.label ?? id)
               .join(', ')
+            const dragging = partDrag?.partId === part.id
+            const tx = part.layout.x + (dragging ? partDrag.dx / viewport.zoom : 0)
+            const ty = part.layout.y + (dragging ? partDrag.dy / viewport.zoom : 0)
+            const handleCardClick = (event: React.MouseEvent): void => {
+              event.stopPropagation()
+              if (tool === 'net') {
+                if (!netFrom) {
+                  setNetFrom(part.id)
+                } else if (netFrom !== part.id) {
+                  const from = board.parts.find((p) => p.id === netFrom)
+                  onAddNet({
+                    id: `net-${netFrom}-${part.id}-${Date.now().toString(36)}`,
+                    label: `${from?.designator ?? netFrom}–${part.designator}`,
+                    nodes: [
+                      `${netFrom}:${from?.pins[0]?.signal ?? 'NET'}`,
+                      `${part.id}:${part.pins[0]?.signal ?? 'NET'}`
+                    ]
+                  })
+                  setNetFrom(null)
+                }
+                return
+              }
+              onSelectPart(part.id)
+            }
             return (
               <g
                 key={part.id}
                 className="canvas__part"
                 data-selected={selected || undefined}
-                transform={`translate(${part.layout.x} ${part.layout.y})`}
+                data-net-from={netFrom === part.id || undefined}
+                transform={`translate(${tx} ${ty})`}
               >
                 <foreignObject width={part.layout.width} height={part.layout.height}>
                   <div
                     className="canvas__card"
                     data-selected={selected || undefined}
-                    onClick={(event) => {
+                    data-draggable={tool === 'select' || undefined}
+                    onClick={handleCardClick}
+                    onPointerDown={(event) => {
+                      if (tool !== 'select' || event.button !== 0) return
                       event.stopPropagation()
-                      onSelectPart(part.id)
+                      ;(event.target as Element).setPointerCapture?.(event.pointerId)
+                      setPartDrag({
+                        partId: part.id,
+                        pointerId: event.pointerId,
+                        startX: event.clientX,
+                        startY: event.clientY,
+                        dx: 0,
+                        dy: 0,
+                        moved: false
+                      })
                     }}
+                    onPointerMove={(event) => {
+                      setPartDrag((d) => {
+                        if (!d || d.pointerId !== event.pointerId) return d
+                        const dx = event.clientX - d.startX
+                        const dy = event.clientY - d.startY
+                        return {
+                          ...d,
+                          dx,
+                          dy,
+                          moved: d.moved || Math.hypot(dx, dy) > 3
+                        }
+                      })
+                    }}
+                    onPointerUp={(event) => {
+                      setPartDrag((d) => {
+                        if (!d || d.pointerId !== event.pointerId) return d
+                        if (d.moved) {
+                          onMovePart(
+                            part.id,
+                            snap(part.layout.x + d.dx / viewport.zoom),
+                            snap(part.layout.y + d.dy / viewport.zoom)
+                          )
+                        }
+                        return null
+                      })
+                    }}
+                    onPointerCancel={() => setPartDrag(null)}
                   >
                     <div className="canvas__card-head">
                       <span className="canvas__card-glyph" aria-hidden="true">

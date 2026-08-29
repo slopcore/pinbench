@@ -264,6 +264,46 @@ describe('selection', () => {
     expect(within(inspector).getByText('Lr1110Radio::begin()')).toBeInTheDocument()
   })
 
+  it('deletes the selected part from the Edit menu and undoes it', async () => {
+    const { user } = await renderApp()
+    const canvas = (): HTMLElement => screen.getByRole('application', { name: /diagram/i })
+    await user.click(screen.getByRole('button', { name: /LR1110 mesh radio/ }))
+    expect(within(canvas()).getByText('LR1110 mesh radio')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('menuitem', { name: 'Edit' }))
+    await user.click(screen.getByRole('menuitem', { name: /Delete part/ }))
+    expect(within(canvas()).queryByText('LR1110 mesh radio')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('menuitem', { name: 'Edit' }))
+    await user.click(screen.getByRole('menuitem', { name: /^Undo/ }))
+    expect(within(canvas()).getByText('LR1110 mesh radio')).toBeInTheDocument()
+  })
+
+  it('duplicates the selected part from the Edit menu', async () => {
+    const { user } = await renderApp()
+    await user.click(screen.getByRole('button', { name: /2.4" LCD/ }))
+    await user.click(screen.getByRole('menuitem', { name: 'Edit' }))
+    await user.click(screen.getByRole('menuitem', { name: /Duplicate part/ }))
+    // The copy carries the "U3'" designator.
+    expect(screen.getAllByText("U3'").length).toBeGreaterThan(0)
+  })
+
+  it('persists canvas edits into the saved project file', async () => {
+    const { user } = await renderApp()
+    await user.click(screen.getByRole('button', { name: /LR1110 mesh radio/ }))
+    await user.click(screen.getByRole('menuitem', { name: 'Edit' }))
+    await user.click(screen.getByRole('menuitem', { name: /Delete part/ }))
+    await user.click(screen.getByRole('menuitem', { name: 'File' }))
+    const fileMenu = screen.getByRole('menu', { name: 'File' })
+    const saveBtn = [...fileMenu.querySelectorAll<HTMLButtonElement>('button.menu__item')].find(
+      (b) => b.querySelector('.menu__label')?.textContent === 'Save'
+    )!
+    await user.click(saveBtn)
+    const save = vi.mocked(window.pinbench.projectFile.save)
+    const project = save.mock.calls.at(-1)?.[1]
+    expect(project?.boardEdits).toEqual([{ kind: 'deletePart', partId: 'u2' }])
+  })
+
   it('selects a part from the Library place affordance', async () => {
     const { user } = await renderApp()
     const library = screen.getByRole('complementary', { name: 'Library' })

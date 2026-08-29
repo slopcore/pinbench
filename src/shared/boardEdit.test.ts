@@ -3,7 +3,13 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { parseBoard, type BoardDefinition, type PartDefinition } from './board'
-import { applyEdit, BoardEditError, BoardHistory } from './boardEdit'
+import {
+  applyEdit,
+  autoArrangeByBus,
+  BoardEditError,
+  BoardHistory,
+  duplicatePart
+} from './boardEdit'
 import { generatePinHeader } from './codegen'
 import { verifyBoard } from './verify'
 
@@ -113,5 +119,41 @@ describe('BoardHistory', () => {
     const h = new BoardHistory(m9())
     expect(h.undo()).toBe(h.present)
     expect(h.redo()).toBe(h.present)
+  })
+})
+
+describe('duplicatePart', () => {
+  it('gives the copy a fresh id and designator, nudged clear of the source', () => {
+    const board = m9()
+    const source = board.parts.find((p) => p.id === 'u3')!
+    const copy = duplicatePart(source, board)
+    expect(copy.id).toBe('u3-copy')
+    expect(copy.designator).toBe("U3'")
+    expect(copy.layout.x).toBe(source.layout.x + 24)
+    expect(() => applyEdit(board, { kind: 'addPart', part: copy })).not.toThrow()
+  })
+
+  it('avoids a collision when a -copy id is already taken', () => {
+    let board = m9()
+    const source = board.parts.find((p) => p.id === 'u3')!
+    board = applyEdit(board, { kind: 'addPart', part: duplicatePart(source, board) })
+    expect(duplicatePart(source, board).id).toBe('u3-copy-2')
+  })
+})
+
+describe('autoArrangeByBus', () => {
+  it('emits a moveParty per part that needs to move and none is a no-op', () => {
+    const board = m9()
+    const edits = autoArrangeByBus(board)
+    expect(edits.length).toBeGreaterThan(0)
+    for (const edit of edits) {
+      expect(edit.kind).toBe('moveParty')
+      const part = board.parts.find((p) => p.id === (edit as { partId: string }).partId)!
+      const moved = edit as { x: number; y: number }
+      expect(part.layout.x !== moved.x || part.layout.y !== moved.y).toBe(true)
+    }
+    // Replaying them all is a valid board.
+    const arranged = edits.reduce(applyEdit, board)
+    expect(arranged.parts).toHaveLength(board.parts.length)
   })
 })

@@ -11,11 +11,15 @@ function renderCanvas(overrides: Partial<WorkspaceState['canvas']> = {}): {
   onViewport: ReturnType<typeof vi.fn>
   onZoomAt: ReturnType<typeof vi.fn>
   onSelectPart: ReturnType<typeof vi.fn>
+  onMovePart: ReturnType<typeof vi.fn>
+  onAddNet: ReturnType<typeof vi.fn>
   surface: HTMLElement
 } {
   const onViewport = vi.fn()
   const onZoomAt = vi.fn()
   const onSelectPart = vi.fn()
+  const onMovePart = vi.fn()
+  const onAddNet = vi.fn()
   const workspace: WorkspaceState = {
     ...DEFAULT_WORKSPACE,
     canvas: { ...DEFAULT_WORKSPACE.canvas, ...overrides }
@@ -27,6 +31,8 @@ function renderCanvas(overrides: Partial<WorkspaceState['canvas']> = {}): {
       onViewport={onViewport}
       onZoomAt={onZoomAt}
       onSelectPart={onSelectPart}
+      onMovePart={onMovePart}
+      onAddNet={onAddNet}
       onMeasure={() => undefined}
       ready
     />
@@ -35,6 +41,8 @@ function renderCanvas(overrides: Partial<WorkspaceState['canvas']> = {}): {
     onViewport,
     onZoomAt,
     onSelectPart,
+    onMovePart,
+    onAddNet,
     surface: screen.getByRole('application', { name: /diagram/i })
   }
 }
@@ -121,5 +129,36 @@ describe('Canvas', () => {
   it('dims the nets of a filtered-out bus', () => {
     const { surface } = renderCanvas({ hiddenBuses: ['spi'] })
     expect(surface.querySelector('.canvas__net-group[data-dimmed]')).not.toBeNull()
+  })
+
+  it('commits a part drag with the Select tool, snapped to the grid', () => {
+    const { onMovePart } = renderCanvas({ tool: 'select', snapToGrid: true })
+    const card = screen.getByText('LR1110 mesh radio').closest('.canvas__card') as HTMLElement
+    fireEvent.pointerDown(card, { button: 0, pointerId: 1, clientX: 0, clientY: 0 })
+    fireEvent.pointerMove(card, { pointerId: 1, clientX: 47, clientY: 33 })
+    fireEvent.pointerUp(card, { pointerId: 1, clientX: 47, clientY: 33 })
+    // u2 sits at x:60 y:200 in the M9 definition; +47,+33 snapped to /10.
+    expect(onMovePart).toHaveBeenCalledWith('u2', 110, 230)
+  })
+
+  it('does not move a part on a plain click (no drag)', () => {
+    const { onMovePart, onSelectPart } = renderCanvas({ tool: 'select' })
+    const card = screen.getByText('LR1110 mesh radio').closest('.canvas__card') as HTMLElement
+    fireEvent.pointerDown(card, { button: 0, pointerId: 1, clientX: 10, clientY: 10 })
+    fireEvent.pointerUp(card, { pointerId: 1, clientX: 10, clientY: 10 })
+    fireEvent.click(card)
+    expect(onMovePart).not.toHaveBeenCalled()
+    expect(onSelectPart).toHaveBeenCalledWith('u2')
+  })
+
+  it('wires a net between the two parts clicked with the Draw-net tool', () => {
+    const { onAddNet } = renderCanvas({ tool: 'net' })
+    fireEvent.click(screen.getByText('LR1110 mesh radio').closest('.canvas__card') as HTMLElement)
+    expect(onAddNet).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByText('2.4" LCD').closest('.canvas__card') as HTMLElement)
+    expect(onAddNet).toHaveBeenCalledTimes(1)
+    const net = onAddNet.mock.calls[0]![0]
+    expect(net.nodes[0]).toMatch(/^u2:/)
+    expect(net.nodes[1]).toMatch(/^u3:/)
   })
 })

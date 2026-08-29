@@ -7,6 +7,7 @@ import type { PartConfigValue, ProjectFile } from '@shared/project'
 import { DEFAULT_PROJECT } from '@shared/project'
 import { MAX_ZOOM, MIN_ZOOM, clamp, fitViewport } from '@shared/workspace'
 import type { CanvasTool, GridStyle, WorkspaceState } from '@shared/workspace'
+import { autoArrangeByBus, duplicatePart } from '@shared/boardEdit'
 import { Canvas, ZOOM_STEP } from './components/Canvas'
 import { Dock } from './components/Dock'
 import { HelpSheet } from './components/HelpSheet'
@@ -23,6 +24,7 @@ import type { Diagnostic } from '@shared/diagnostics'
 import { findingsToDiagnostics, verifyBoard } from '@shared/verify'
 import { isBuildRunning } from '@shared/build'
 import { useMenuCommands } from './state/useCommands'
+import { useBoardEditor } from './state/useBoardEditor'
 import { useBuild } from './state/useBuild'
 import { useUsbFlash } from './state/useUsbFlash'
 import { useDevices } from './state/useDevices'
@@ -59,7 +61,13 @@ export function App({
   const [usbFlashOpen, setUsbFlashOpen] = useState(false)
   const [helpSheet, setHelpSheet] = useState<HelpSheetKind | null>(null)
   const devices = useDevices()
-  const totals = useMemo(() => boardTotals(board), [board])
+  const editor = useBoardEditor(board, initialProject?.project.boardEdits ?? [])
+  // The board the canvas, Inspector, Library, Verify and codegen all read —
+  // the definition from disk with the session's canvas edits folded in. The
+  // emulator and device host stay on the pristine `board` (hardware doesn't
+  // move because a card was dragged).
+  const editedBoard = editor.board
+  const totals = useMemo(() => boardTotals(editedBoard), [editedBoard])
 
   // Populate the status-bar port label once on mount; the Flash-over-USB dialog
   // refreshes the same list when it opens.
@@ -91,7 +99,7 @@ export function App({
     return () => window.removeEventListener('keydown', onKey)
   }, [dispatch])
   const selectedPart = workspace.selectedPartId
-    ? findPart(board, workspace.selectedPartId)
+    ? findPart(editedBoard, workspace.selectedPartId)
     : undefined
 
   const [gotoLine, setGotoLine] = useState<number | undefined>(undefined)
@@ -104,6 +112,11 @@ export function App({
     () => initialProject?.project.partConfig ?? {}
   )
   const [projectDirty, setProjectDirty] = useState(false)
+  // Canvas edits count that matches what is on disk, so undoing back to it
+  // clears the dirty marker.
+  const [savedEditCount, setSavedEditCount] = useState(
+    initialProject?.project.boardEdits?.length ?? 0
+  )
   /** Set when an opened `.pinbench` names a board other than the loaded one (M13). */
   const [otherBoardId, setOtherBoardId] = useState<string | null>(null)
   /** Rows from the last "Verify pin map" (⌘B) run; empty until first run. */
@@ -220,15 +233,17 @@ export function App({
       setProjectPath(loaded.path)
       setConfig(loaded.project.partConfig)
       setProjectDirty(false)
+      setSavedEditCount(loaded.project.boardEdits?.length ?? 0)
       setOtherBoardId(
         loaded.project.boardId && loaded.project.boardId !== board.id
           ? loaded.project.boardId
           : null
       )
       dispatch({ type: 'selectPart', partId: loaded.project.selectedPartId })
+      editor.load(loaded.project.boardEdits ?? [])
       if (loaded.pio) void project.hydrate(loaded.pio, loaded.project.env)
     },
-    [board.id, dispatch, project]
+    [board.id, dispatch, editor, project]
   )
 
   // Apply the launch project's PlatformIO checkout and selection once. Its
@@ -250,9 +265,10 @@ export function App({
       platformioDir: project.info?.dir ?? null,
       env: project.env,
       partConfig: config,
-      selectedPartId: workspace.selectedPartId
+      selectedPartId: workspace.selectedPartId,
+      boardEdits: editor.edits
     }),
-    [board.id, config, project.env, project.info, workspace.selectedPartId]
+    [board.id, config, editor.edits, project.env, project.info, workspace.selectedPartId]
   )
 
   const saveProject = useCallback(
@@ -264,9 +280,10 @@ export function App({
       if ('path' in result) {
         setProjectPath(result.path)
         setProjectDirty(false)
+        setSavedEditCount(editor.edits.length)
       }
     },
-    [currentProjectFile, projectPath]
+    [currentProjectFile, editor.edits.length, projectPath]
   )
 
   const openProjectFile = useCallback(async (): Promise<void> => {
@@ -294,9 +311,9 @@ export function App({
   )
 
   const runVerify = useCallback((): void => {
-    setVerifyRows(findingsToDiagnostics(verifyBoard(board)))
+    setVerifyRows(findingsToDiagnostics(verifyBoard(editedBoard)))
     dispatch({ type: 'setDockTab', tab: 'diagnostics' })
-  }, [board, dispatch])
+  }, [editedBoard, dispatch])
 
   const runCommand = useCallback(
     (command: CommandId): void => {
@@ -359,7 +376,29 @@ export function App({
           void saveProject(true)
           break
         case 'file.exportHeader':
-          void window.pinbench.board.exportPinHeader()
+          void window.pinbench.board.exportPinHeader(editor.edits)
+          break
+        case 'edit.undo':
+          editor.undo()
+          break
+        case 'edit.redo':
+          editor.redo()
+          break
+        case 'edit.delete':
+          if (workspace.selectedPartId) {
+            editor.apply({ kind: 'deletePart', partId: workspace.selectedPartId })
+            dispatch({ type: 'selectPart', partId: null })
+          }
+          break
+        case 'edit.duplicate':
+          if (selectedPart) {
+            const copy = duplicatePart(selectedPart, editedBoard)
+            editor.apply({ kind: 'addPart', part: copy })
+            dispatch({ type: 'selectPart', partId: copy.id })
+          }
+          break
+        case 'edit.autoArrange':
+          editor.applyMany(autoArrangeByBus(editedBoard))
           break
         case 'build.buildAndFlash':
           buildAndFlash()
@@ -397,12 +436,16 @@ export function App({
       buildAndFlash,
       build,
       dispatch,
+      editedBoard,
+      editor,
       emulator,
       fit,
       openProjectFile,
       project,
       runVerify,
       saveProject,
+      selectedPart,
+      workspace.selectedPartId,
       workspace.workspaceTab,
       zoomBy
     ]
@@ -445,7 +488,8 @@ export function App({
     project.info?.name ??
     (emulator.firmwarePath ? emulator.firmwarePath.split(/[/\\]/).pop() : undefined) ??
     'untitled.pinbench'
-  const subtitle = projectDirty ? `${projectName} •` : projectName
+  const dirty = projectDirty || editor.edits.length !== savedEditCount
+  const subtitle = dirty ? `${projectName} •` : projectName
 
   return (
     <div className="shell">
@@ -486,7 +530,7 @@ export function App({
       <div className="shell__body">
         {workspace.panels.library && (
           <LibraryPanel
-            board={board}
+            board={editedBoard}
             selectedPartId={workspace.selectedPartId}
             onSelectPart={(partId) => dispatch({ type: 'selectPart', partId })}
           />
@@ -519,11 +563,13 @@ export function App({
           <div className="workspace__view">
             {workspace.workspaceTab === 'diagram' ? (
               <Canvas
-                board={board}
+                board={editedBoard}
                 workspace={workspace}
                 onViewport={(viewport) => dispatch({ type: 'setViewport', viewport })}
                 onZoomAt={(zoom, origin) => dispatch({ type: 'zoomTo', zoom, origin })}
                 onSelectPart={(partId) => dispatch({ type: 'selectPart', partId })}
+                onMovePart={(partId, x, y) => editor.apply({ kind: 'moveParty', partId, x, y })}
+                onAddNet={(net) => editor.apply({ kind: 'addNet', net })}
                 onMeasure={onMeasure}
                 ready={restored}
               />
@@ -567,7 +613,7 @@ export function App({
 
         {workspace.panels.inspector && (
           <Inspector
-            board={board}
+            board={editedBoard}
             part={selectedPart}
             values={config}
             onConfigChange={onConfigChange}

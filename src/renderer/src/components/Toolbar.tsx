@@ -15,10 +15,16 @@ export interface ToolSpec {
 }
 
 export const CANVAS_TOOLS: ToolSpec[] = [
-  { id: 'select', label: 'Select', glyph: '⌖', enabled: true, hint: 'Select parts and nets' },
+  { id: 'select', label: 'Select', glyph: '⌖', enabled: true, hint: 'Select and drag parts' },
   { id: 'pan', label: 'Pan', glyph: '✥', enabled: true, hint: 'Drag the canvas' },
-  { id: 'net', label: 'Draw net', glyph: '⌁', enabled: false, hint: 'Draw a net between pins' },
-  { id: 'probe', label: 'Probe pin', glyph: '◎', enabled: false, hint: 'Probe a pin' }
+  {
+    id: 'net',
+    label: 'Draw net',
+    glyph: '⌁',
+    enabled: true,
+    hint: 'Click two parts to wire a net between them'
+  },
+  { id: 'probe', label: 'Probe pin', glyph: '◎', enabled: true, hint: 'Click a part to inspect it' }
 ]
 
 const GRIDS: { id: GridStyle; label: string }[] = [

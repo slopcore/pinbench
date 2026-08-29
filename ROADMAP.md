@@ -1724,7 +1724,7 @@ rebuild step in between.
 
 # Phase 6 — Prove the abstraction
 
-## M13 · Second board: Heltec Wireless Paper v1.1 — `L`
+## M13 · Second board: Heltec Wireless Paper v1.1 — `L` — M13.1–M13.3 ✅, M13.4 blocked in fork SoC bring-up
 
 **Goal.** Adding a board is authoring data plus any missing device models. If it
 is anything more than that, M4 and M5 were wrong and this is where you find out.
@@ -1950,11 +1950,30 @@ two buckets:
 No `src/` change was forced by the abstraction being *wrong* — the models and
 board slotted in as data. The framebuffer format field is the honest exception.
 
-**M13.4 next.** Build `Heltec_Wireless_Paper_repeater` with the DIO /
-flash-size overrides, merge the 8 MB image, launch, and follow the boot through
-`display.begin()`'s e-ink `BUSY` handshake and `radio_init()`'s SX1262
-handshake. May hit the same fork GPIO fault as M7.2b — if so, record it as the
-pre-existing blocker and land M13.4 as far as the fault.
+**M13.4 — attempted, blocked in SoC bring-up (pre-existing fork limitation).**
+`Heltec_Wireless_Paper_repeater` **builds clean** (default and with the DIO /
+`dio_qspi` overrides; Flash 33.5%, RAM 18.2%). Merged to an 8 MB image
+(`spike/bin/mkflash.sh`, no octal-PSRAM global — this part has none) and booted
+on `.qemu/build/qemu-system-xtensa -machine esp32s3`:
+
+- ROM bootloader and second-stage loader run (`mode:DIO`, the override took),
+  the app is reached (`entry 0x403c98d0`), then:
+  `assert failed … startup.c:320` in `do_core_init` / `start_cpu0_default`,
+  before `setup()` and before any board code.
+- This is the **same class** as the M9's QIO `startup.c:290` crash (ADR 0001) —
+  a console / VFS init assert in the Espressif QEMU fork — one step further along
+  (`:320` vs `:290`) and *not* fixed by the DIO switch that rescued the M9. The
+  likely cause is the S3's native USB-serial-JTAG console, which the M9 sidesteps
+  with an external CH340K on UART0 and which this devkitc-1 variant does not.
+- It is a fork/emulator limitation reached in generic SoC startup, **not** a
+  defect in the Heltec board definition or the SSD1680 / SX1262 models — the
+  guest never runs a line of MeshCore. Recorded here the way M7.2b's `-707` was;
+  a real fix is a fork-console investigation, out of scope for M13.
+
+So: both boards are **selectable and load** (M13's picker done-when is met), the
+Heltec firmware builds, and the models are proven by the harness — but a live
+end-to-end boot of the second board waits on the same fork work the M9 milestones
+already flagged.
 
 ## M14 · Generic expansion parts — `M`
 
@@ -2014,7 +2033,7 @@ the M9, and lands a new device model as a PR — working only from the docs.
 | Espressif's QEMU fork diverges or stalls | Maintenance burden | Ongoing | Pin the fork and tag from M0. Keep PinBench's patches minimal and documented. Budget for periodic rebases. |
 | No WiFi or BLE emulation | `companion_radio` and the weather-station fork cannot run fully | M13 | Named as a non-goal up front. Consider API-boundary stubs in M13 so display and UI code remains iterable. |
 | PlatformIO toolchain bootstrap on user machines | Bad first-run experience | M3 | Detect early, guide explicitly, manage a virtualenv rather than fighting system Python. Your MeshCore notes are the source material. |
-| The abstraction is wrong and M13 is a rewrite | Large rework | M13 | Sketch the Heltec board's needs against the M5 schema before committing to it, and treat M13's cost as the honest verdict on M4/M5. |
+| ~~The abstraction is wrong and M13 is a rewrite~~ — **not borne out** (M13.1–M13.3) | Large rework | M13 | The Heltec board is pure data and the SSD1680 / SX1262 models are pure `src/shared/devices/*`; airtime reuses the LR1110's `loraToaMs` unchanged. The only forced change to the shared layer was one optional `format: 'rgb565' \| 'mono1'` field on `DeviceFramebufferMessage` for 1bpp e-ink. The board picker was always scoped into M13. Verdict: M4/M5 held. |
 
 ## Sequencing notes
 

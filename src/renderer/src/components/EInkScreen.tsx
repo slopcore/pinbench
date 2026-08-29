@@ -54,9 +54,7 @@ export function EInkScreen({ framebuffer, zoom }: EInkScreenProps): React.JSX.El
     ctx.putImageData(image, 0, 0)
   }, [framebuffer])
 
-  const base = framebuffer
-    ? { w: framebuffer.width, h: framebuffer.height }
-    : { w: 250, h: 122 }
+  const base = framebuffer ? { w: framebuffer.width, h: framebuffer.height } : { w: 250, h: 122 }
 
   return (
     <div className="eink">

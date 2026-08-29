@@ -14,9 +14,13 @@ const EMULATOR_LABELS: Record<EmulatorState, string> = {
 
 interface StatusBarProps {
   board: BoardDefinition
-  /** Board ids on disk; a picker is shown when there is more than one. */
+  /** Hardware-profile ids on disk; a picker is shown when there is more than one. */
   availableBoards: string[]
   onSelectBoard: (id: string) => void
+  /** Build envs from the open folder's `platformio.ini`; picker hidden when empty. */
+  envs: string[]
+  env: string | null
+  onSelectEnv: (env: string) => void
   totals: BoardTotals
   /** First serial port `pio device list` sees, or null when none is attached. */
   port: string | null
@@ -28,6 +32,9 @@ export function StatusBar({
   board,
   availableBoards,
   onSelectBoard,
+  envs,
+  env,
+  onSelectEnv,
   totals,
   port,
   emulator,
@@ -38,7 +45,7 @@ export function StatusBar({
       {availableBoards.length > 1 ? (
         <select
           className="statusbar__board statusbar__board-picker"
-          aria-label="Board"
+          aria-label="Hardware profile"
           value={board.id}
           onChange={(event) => onSelectBoard(event.target.value)}
         >
@@ -52,6 +59,21 @@ export function StatusBar({
         <span className="statusbar__board">{board.name}</span>
       )}
       <span className="statusbar__mcu">{board.mcu}</span>
+      {envs.length > 0 && (
+        <select
+          className="statusbar__env statusbar__env-picker"
+          aria-label="Build environment"
+          value={env ?? ''}
+          onChange={(event) => onSelectEnv(event.target.value)}
+        >
+          {env === null && <option value="">— env —</option>}
+          {envs.map((name) => (
+            <option key={name} value={name}>
+              {name}
+            </option>
+          ))}
+        </select>
+      )}
       <span className="statusbar__port" title="Attached serial port">
         {port ?? 'no port'}
       </span>

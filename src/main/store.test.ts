@@ -25,13 +25,13 @@ describe('normaliseSession', () => {
     expect(session.window.y).toBeUndefined()
   })
 
-  it('keeps only string entries from recentProjects', () => {
+  it('keeps only string entries from recentFolders', () => {
     const session = normaliseSession({
-      version: 1,
+      version: 2,
       window: { width: 1000, height: 700 },
-      recentProjects: ['/a.pinbench', 42, null, '/b.pinbench']
+      recentFolders: ['/repo/a', 42, null, '/repo/b']
     })
-    expect(session.recentProjects).toEqual(['/a.pinbench', '/b.pinbench'])
+    expect(session.recentFolders).toEqual(['/repo/a', '/repo/b'])
   })
 })
 
@@ -72,20 +72,6 @@ describe('SessionStore', () => {
     const file = scratch()
     new SessionStore(file).setWorkspace(DEFAULT_WORKSPACE)
     expect(JSON.parse(readFileSync(file, 'utf8'))).toMatchObject({ version: 2 })
-  })
-
-  it('records recent projects most-recent-first, de-duplicated and capped', () => {
-    const file = scratch()
-    const store = new SessionStore(file)
-    for (const p of ['/one.pinbench', '/two.pinbench', '/one.pinbench']) store.addRecentProject(p)
-    expect(store.lastProject()).toBe('/one.pinbench')
-
-    const reloaded = new SessionStore(file)
-    expect(reloaded.get().recentProjects).toEqual(['/one.pinbench', '/two.pinbench'])
-
-    for (let i = 0; i < 12; i++) reloaded.addRecentProject(`/p${i}.pinbench`)
-    expect(reloaded.get().recentProjects).toHaveLength(8)
-    expect(reloaded.lastProject()).toBe('/p11.pinbench')
   })
 
   it('records recent source folders most-recent-first, de-duplicated and capped', () => {

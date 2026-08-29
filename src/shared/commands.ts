@@ -11,11 +11,8 @@
  */
 
 export const COMMANDS = [
-  'file.newProject',
   'file.openProject',
   'file.openFirmware',
-  'file.save',
-  'file.saveAs',
   'file.saveProfileAs',
   'file.exportHeader',
   'file.importPinout',
@@ -104,22 +101,22 @@ export const MENUS: MenuSpec[] = [
     id: 'file',
     label: 'File',
     entries: [
-      // Everything that touches a project or a firmware image belongs to M2/M3.
-      item('file.newProject', 'New project…', { accelerator: 'CmdOrCtrl+N', enabled: false }),
-      // "Open project…" opens a `.pinbench` file from M5; the firmware checkout
-      // is attached from Build & flash.
-      item('file.openProject', 'Open project…', { accelerator: 'CmdOrCtrl+O', enabled: true }),
+      // A session is a firmware source folder + a hardware profile, both
+      // persisted the instant they change — there is no `.pinbench` document to
+      // create or save. "Open…" points at a source folder (see
+      // docs/features/board-definitions.md § Session model).
+      item('file.openProject', 'Open…', { accelerator: 'CmdOrCtrl+O', enabled: true }),
       item('file.openFirmware', 'Open firmware image…', {
         accelerator: 'CmdOrCtrl+Shift+O',
         enabled: true
       }),
       separator,
-      item('file.save', 'Save', { accelerator: 'CmdOrCtrl+S', enabled: true }),
-      item('file.saveAs', 'Save as…', { accelerator: 'CmdOrCtrl+Shift+S', enabled: true }),
-      separator,
       // Writes the current (edited) board as a new boards/<id>.board.json — the
-      // way canvas hardware edits become a shareable profile. Wired in Phase 2.
-      item('file.saveProfileAs', 'Save hardware profile as…', { enabled: false }),
+      // way canvas hardware edits become a shareable profile.
+      item('file.saveProfileAs', 'Save hardware profile as…', {
+        accelerator: 'CmdOrCtrl+Shift+S',
+        enabled: true
+      }),
       separator,
       // Writes the pin-map C header (shared/codegen.ts) — the same output
       // Build & flash produces, on demand and to a path the user picks.

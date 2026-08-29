@@ -51,13 +51,15 @@ only here.
       `shared/commands.ts`, `shared/workspace.ts`, `Canvas.tsx`
 - [x] Canvas editing: **drag parts** (Select tool, snap to grid), **Draw‑net
       tool** (click two cards), **Probe‑pin tool** (selects), **`⌘Z`/`⇧⌘Z`**
-      undo/redo, **persist edits** in `ProjectFile.boardEdits` (replayed on
-      open, stale edits skipped). `useBoardEditor` folds the edits into the
-      board the canvas/Inspector/Library/Verify/export all read. — `Canvas.tsx`,
-      `state/useBoardEditor.ts`, `shared/boardEdit.ts`, `shared/project.ts`.
+      undo/redo. `useBoardEditor` folds the edits into the board the
+      canvas/Inspector/Library/Verify/export all read. — `Canvas.tsx`,
+      `state/useBoardEditor.ts`, `shared/boardEdit.ts`.
       Build & flash writes the generated header into the checkout
       (`include/<boardId>_pins.h`) before `pio run`, honouring the codegen
-      divergence guard. — `src/main/build.ts`, `src/main/index.ts`
+      divergence guard. — `src/main/build.ts`, `src/main/index.ts`.
+      _(`folder-is-project`: edits are no longer a persisted `.pinbench` delta —
+      **File ▸ Save hardware profile as…** bakes them into a new
+      `boards/<id>.board.json`. — [[board-definitions]])_
 
 ### Inspector
 
@@ -138,15 +140,15 @@ only here.
 
 ## B. Relocated — built, different home (confirm these are deliberate)
 
-| Design location                            | Delivered location                                        |
-| ------------------------------------------ | --------------------------------------------------------- |
-| IN / OUT tabs inside the canvas node       | Inspector sections (`InPanel` / `OutPanel`)               |
-| Board chip in the top bar                  | Status‑bar `<select>` picker (`StatusBar.tsx`)            |
-| Canvas overlay: parts · nets · GPIO totals | Status bar totals (`boardTotals`)                         |
+| Design location                            | Delivered location                                                               |
+| ------------------------------------------ | -------------------------------------------------------------------------------- |
+| IN / OUT tabs inside the canvas node       | Inspector sections (`InPanel` / `OutPanel`)                                      |
+| Board chip in the top bar                  | Status‑bar `<select>` picker (`StatusBar.tsx`)                                   |
+| Canvas overlay: parts · nets · GPIO totals | Status bar totals (`boardTotals`)                                                |
 | ST7789 ½/¾/1:1 buttons on the OUT screen   | Both: `scale` config field **and** on-panel picker (`OutPanel` `ScreenControls`) |
 | `BL ON/OFF` toggle on the OUT screen       | Both: `backlight` config field **and** on-panel `BL` toggle                      |
-| CFG pin rows in the canvas node            | Inspector "Pin map" table                                 |
-| Node "class" badge / glyph                 | Inspector heading (`designator`, `category`)              |
+| CFG pin rows in the canvas node            | Inspector "Pin map" table                                                        |
+| Node "class" badge / glyph                 | Inspector heading (`designator`, `category`)                                     |
 
 The build‑button label progression (`Compiling… → Linking… → Flashed ✓`) **does
 match** the design — `BUTTON_LABELS` in `shared/build.ts`. Not a gap.

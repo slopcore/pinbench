@@ -2,9 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { boardTotals, findPart } from '@shared/board'
 import type { BoardDefinition } from '@shared/board'
 import type { CommandId } from '@shared/commands'
-import type { AppInfo, ProjectFileResult, WindowState } from '@shared/ipc'
-import type { PartConfigValue, ProjectFile } from '@shared/project'
-import { DEFAULT_PROJECT } from '@shared/project'
+import type { AppInfo, LaunchState, WindowState } from '@shared/ipc'
+import type { PartConfigValue } from '@shared/partConfig'
 import { MAX_ZOOM, MIN_ZOOM, clamp, fitViewport } from '@shared/workspace'
 import type { CanvasTool, GridStyle, WorkspaceState } from '@shared/workspace'
 import { autoArrangeByBus, duplicatePart } from '@shared/boardEdit'
@@ -39,12 +38,17 @@ interface AppProps {
   appInfo: AppInfo
   windowState: WindowState
   board: BoardDefinition
-  /** Board ids on disk, for the status-bar picker. */
+  /** Hardware-profile ids on disk, for the status-bar picker. */
   availableBoards: string[]
-  /** Switch to another board — `Root` reloads the definition and remounts. */
+  /** Switch to another profile — `Root` reloads the definition and remounts. */
   onSelectBoard: (id: string) => void
-  /** The `.pinbench` file reopened on launch, if any — resolved by `Root`. */
-  initialProject: ProjectFileResult | null
+  /** Called after "Save hardware profile as…" writes a new `boards/<id>.board.json`. */
+  onProfileSaved: (id: string) => void
+  /**
+   * Launch state from `Root`: the source folder reopened on launch (if any) and
+   * that (folder, profile) pair's remembered build env + Inspector config.
+   */
+  initialFolder: LaunchState
 }
 
 export function App({
@@ -53,7 +57,8 @@ export function App({
   board,
   availableBoards,
   onSelectBoard,
-  initialProject
+  onProfileSaved,
+  initialFolder
 }: AppProps): React.JSX.Element {
   const { workspace, dispatch, restored } = useWorkspace()
   const emulator = useEmulator(board.emulator)
@@ -63,7 +68,7 @@ export function App({
   const [usbFlashOpen, setUsbFlashOpen] = useState(false)
   const [helpSheet, setHelpSheet] = useState<HelpSheetKind | null>(null)
   const devices = useDevices()
-  const editor = useBoardEditor(board, initialProject?.project.boardEdits ?? [])
+  const editor = useBoardEditor(board, [])
   // The board the canvas, Inspector, Library, Verify and codegen all read —
   // the definition from disk with the session's canvas edits folded in. The
   // emulator and device host stay on the pristine `board` (hardware doesn't
@@ -110,23 +115,23 @@ export function App({
 
   const [gotoLine, setGotoLine] = useState<number | undefined>(undefined)
 
-  // The `.pinbench` document: board, firmware project, and per-part config.
-  // Seeded from the file `Root` reopened; its PlatformIO project and selection
-  // are applied in the mount effect below.
-  const [projectPath, setProjectPath] = useState<string | null>(initialProject?.path ?? null)
+  // Inspector config for the current (folder, profile) pair. Seeded from the
+  // launch state `Root` resolved; every change is persisted straight back to
+  // `session.json` (there is no document to save).
   const [config, setConfig] = useState<Record<string, PartConfigValue>>(
-    () => initialProject?.project.partConfig ?? {}
+    () => initialFolder.partConfig
   )
-  const [projectDirty, setProjectDirty] = useState(false)
-  // Canvas edits count that matches what is on disk, so undoing back to it
-  // clears the dirty marker.
-  const [savedEditCount, setSavedEditCount] = useState(
-    initialProject?.project.boardEdits?.length ?? 0
-  )
-  /** Set when an opened `.pinbench` names a board other than the loaded one (M13). */
-  const [otherBoardId, setOtherBoardId] = useState<string | null>(null)
   /** Rows from the last "Verify pin map" (⌘B) run; empty until first run. */
   const [verifyRows, setVerifyRows] = useState<Diagnostic[]>([])
+
+  /** Persist the current build env + Inspector config for this folder + profile. */
+  const rememberFolderState = useCallback(
+    (env: string | null, partConfig: Record<string, PartConfigValue>): void => {
+      const dir = project.info?.dir
+      if (dir) window.pinbench.project.setFolderState(dir, board.id, { env, partConfig })
+    },
+    [project.info?.dir, board.id]
+  )
 
   const openInSource = useCallback(
     (file: string, line?: number) => {
@@ -149,7 +154,7 @@ export function App({
       rows.push({
         id: 'project-open',
         severity: 'ok',
-        message: `Project: ${project.info.name} · env ${project.env ?? '—'}`
+        message: `Folder: ${project.info.name} · env ${project.env ?? '—'}`
       })
     }
     if (build.status.state === 'failed' && build.status.error) {
@@ -167,13 +172,6 @@ export function App({
     rows.push(...build.diagnostics)
     rows.push(...devices.diagnostics)
     rows.push(...verifyRows)
-    if (otherBoardId) {
-      rows.push({
-        id: 'other-board',
-        severity: 'warn',
-        message: `This project targets board "${otherBoardId}" — pick it in the status-bar board selector to switch`
-      })
-    }
     if (emulator.state === 'crashed' && emulator.error) {
       rows.push({ id: 'emu-crash', severity: 'error', message: emulator.error })
     }
@@ -181,13 +179,12 @@ export function App({
       rows.push({
         id: 'no-firmware',
         severity: 'note',
-        message: 'Open a firmware image (⌘⇧O), or attach a project checkout from Build & flash'
+        message: 'Open a firmware image (⌘⇧O), or open a source folder from File ▸ Open…'
       })
     }
     return rows
   }, [
     board.name,
-    otherBoardId,
     board.mcu,
     project.info,
     project.env,
@@ -203,9 +200,21 @@ export function App({
   const canBuild =
     project.info !== null && project.env !== null && !isBuildRunning(build.status.state)
 
+  const openFolder = useCallback(async (): Promise<void> => {
+    const result = await project.open()
+    if (!result) return
+    // A freshly opened folder has no remembered Inspector state yet. Persist
+    // against `result.dir` directly — `project.info` has not re-rendered yet.
+    setConfig({})
+    window.pinbench.project.setFolderState(result.dir, board.id, {
+      env: result.envs[0] ?? null,
+      partConfig: {}
+    })
+  }, [project, board.id])
+
   const buildAndFlash = useCallback(() => {
     if (!project.info || !project.env) {
-      void project.open()
+      void openFolder()
       return
     }
     build.start({
@@ -214,7 +223,7 @@ export function App({
       emulator: board.emulator,
       boardEdits: editor.edits
     })
-  }, [board.emulator, build, editor.edits, project])
+  }, [board.emulator, build, editor.edits, openFolder, project])
 
   const startUsbFlash = useCallback(
     (port: string, mode: UsbFlashMode) => {
@@ -230,73 +239,52 @@ export function App({
     [board.emulator.machine, project.env, project.info, usbFlash]
   )
 
-  const onConfigChange = useCallback((partId: string, fieldId: string, value: PartConfigValue) => {
-    setConfig((previous) => ({ ...previous, [`${partId}.${fieldId}`]: value }))
-    setProjectDirty(true)
-  }, [])
-
-  const applyProjectFile = useCallback(
-    (loaded: ProjectFileResult): void => {
-      setProjectPath(loaded.path)
-      setConfig(loaded.project.partConfig)
-      setProjectDirty(false)
-      setSavedEditCount(loaded.project.boardEdits?.length ?? 0)
-      setOtherBoardId(
-        loaded.project.boardId && loaded.project.boardId !== board.id
-          ? loaded.project.boardId
-          : null
-      )
-      dispatch({ type: 'selectPart', partId: loaded.project.selectedPartId })
-      editor.load(loaded.project.boardEdits ?? [])
-      if (loaded.pio) void project.hydrate(loaded.pio, loaded.project.env)
+  const onConfigChange = useCallback(
+    (partId: string, fieldId: string, value: PartConfigValue) => {
+      setConfig((previous) => {
+        const next = { ...previous, [`${partId}.${fieldId}`]: value }
+        rememberFolderState(project.env, next)
+        return next
+      })
     },
-    [board.id, dispatch, editor, project]
+    [project.env, rememberFolderState]
   )
 
-  // Apply the launch project's PlatformIO checkout and selection once. Its
-  // path and per-part config are already seeded into state above.
+  const onSelectEnv = useCallback(
+    (next: string): void => {
+      project.setEnv(next)
+      rememberFolderState(next, config)
+    },
+    [project, config, rememberFolderState]
+  )
+
+  // Adopt the folder `Root` reopened on launch, once. `config` is already
+  // seeded from `initialFolder.partConfig` in state above.
   const launchApplied = useRef(false)
   useEffect(() => {
-    if (launchApplied.current || !initialProject) return
+    if (launchApplied.current) return
     launchApplied.current = true
-    dispatch({ type: 'selectPart', partId: initialProject.project.selectedPartId })
-    if (initialProject.pio) {
-      void project.hydrate(initialProject.pio, initialProject.project.env)
+    if (initialFolder.folder) {
+      void project.hydrate(initialFolder.folder, initialFolder.env)
     }
-  }, [initialProject, dispatch, project])
+  }, [initialFolder, project])
 
-  const currentProjectFile = useCallback(
-    (): ProjectFile => ({
-      ...DEFAULT_PROJECT,
-      boardId: board.id,
-      platformioDir: project.info?.dir ?? null,
-      env: project.env,
-      partConfig: config,
-      selectedPartId: workspace.selectedPartId,
-      boardEdits: editor.edits
-    }),
-    [board.id, config, editor.edits, project.env, project.info, workspace.selectedPartId]
-  )
-
-  const saveProject = useCallback(
-    async (forceDialog: boolean): Promise<void> => {
-      const result = await window.pinbench.projectFile.save(
-        forceDialog ? null : projectPath,
-        currentProjectFile()
-      )
-      if ('path' in result) {
-        setProjectPath(result.path)
-        setProjectDirty(false)
-        setSavedEditCount(editor.edits.length)
-      }
-    },
-    [currentProjectFile, editor.edits.length, projectPath]
-  )
-
-  const openProjectFile = useCallback(async (): Promise<void> => {
-    const loaded = await window.pinbench.projectFile.open()
-    if (loaded) applyProjectFile(loaded)
-  }, [applyProjectFile])
+  // "Save hardware profile as…" — bake the current canvas edits into a new
+  // shareable `boards/<id>.board.json`; `Root` then re-lists and loads it.
+  const saveProfileAs = useCallback(async (): Promise<void> => {
+    const id = window.prompt('Save hardware profile as (id):', `${board.id}-edited`)?.trim()
+    if (!id) return
+    const result = await window.pinbench.board.saveProfile(id, editedBoard)
+    if ('error' in result) {
+      setVerifyRows([
+        { id: 'save-profile', severity: 'error', message: `Save profile failed: ${result.error}` }
+      ])
+      dispatch({ type: 'setDockTab', tab: 'diagnostics' })
+      return
+    }
+    editor.load([])
+    onProfileSaved(result.id)
+  }, [board.id, editedBoard, editor, onProfileSaved, dispatch])
 
   const canvasSize = useRef({ width: 0, height: 0 })
   const onMeasure = useCallback((size: { width: number; height: number }) => {
@@ -403,13 +391,10 @@ export function App({
           emulator.openAndStart()
           break
         case 'file.openProject':
-          void openProjectFile()
+          void openFolder()
           break
-        case 'file.save':
-          void saveProject(false)
-          break
-        case 'file.saveAs':
-          void saveProject(true)
+        case 'file.saveProfileAs':
+          if (!structuralEditsLocked) void saveProfileAs()
           break
         case 'file.exportHeader':
           void window.pinbench.board.exportPinHeader(editor.edits)
@@ -480,10 +465,10 @@ export function App({
       emulator,
       fit,
       importPinout,
-      openProjectFile,
+      openFolder,
       project,
       runVerify,
-      saveProject,
+      saveProfileAs,
       selectedPart,
       structuralEditsLocked,
       workspace.selectedPartId,
@@ -525,12 +510,12 @@ export function App({
   )
 
   const projectName =
-    projectPath?.split(/[/\\]/).pop() ??
     project.info?.name ??
     (emulator.firmwarePath ? emulator.firmwarePath.split(/[/\\]/).pop() : undefined) ??
-    'untitled.pinbench'
-  const dirty = projectDirty || editor.edits.length !== savedEditCount
-  const subtitle = dirty ? `${projectName} •` : projectName
+    board.name
+  // The title-bar dot means "unsaved canvas hardware edits" — the only thing
+  // left that isn't persisted the instant it changes.
+  const subtitle = editor.edits.length > 0 ? `${projectName} •` : projectName
 
   return (
     <div className="shell">
@@ -681,6 +666,9 @@ export function App({
         board={board}
         availableBoards={availableBoards}
         onSelectBoard={onSelectBoard}
+        envs={project.envs}
+        env={project.env}
+        onSelectEnv={onSelectEnv}
         totals={totals}
         port={activePort}
         emulator={emulator.state}

@@ -3,12 +3,19 @@ import type { FileNode } from '@shared/files'
 import type { OpenProjectResult } from '@shared/ipc'
 
 export interface ProjectHandle {
-  /** null until a project is opened. */
+  /** null until a source folder is opened. */
   info: OpenProjectResult | null
+  /** Build environments from the folder's `platformio.ini` (+ `extra_configs`). */
+  envs: string[]
   env: string | null
   setEnv(env: string): void
-  open(): Promise<void>
-  /** Adopt a PlatformIO project the main process already re-opened (from a `.pinbench` file). */
+  /**
+   * Prompt for a firmware source folder and adopt it. Resolves to the adopted
+   * folder (with its resolved env list) so the caller can persist per-folder
+   * state, or null when the dialog was cancelled.
+   */
+  open(): Promise<OpenProjectResult | null>
+  /** Adopt a folder the main process already opened (launch reopen). */
   hydrate(info: OpenProjectResult, env: string | null): Promise<void>
   /** Root-level nodes; directories are filled in lazily on expand. */
   tree: FileNode[]
@@ -40,9 +47,9 @@ export function useProject(): ProjectHandle {
     })
   }, [])
 
-  const open = useCallback(async () => {
+  const open = useCallback(async (): Promise<OpenProjectResult | null> => {
     const result = await window.pinbench.project.open()
-    if (!result) return
+    if (!result) return null
     childrenRef.current.clear()
     setInfo(result)
     setEnvState(result.envs[0] ?? null)
@@ -50,6 +57,7 @@ export function useProject(): ProjectHandle {
     setDirty(new Set())
     setActiveFile(null)
     setTree(await window.pinbench.project.readTree())
+    return result
   }, [])
 
   const hydrate = useCallback(async (nextInfo: OpenProjectResult, nextEnv: string | null) => {
@@ -99,6 +107,7 @@ export function useProject(): ProjectHandle {
 
   return {
     info,
+    envs: info?.envs ?? [],
     env,
     setEnv,
     open,

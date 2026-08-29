@@ -11,8 +11,6 @@ import type {
   BuildRequest,
   LaunchState,
   OpenProjectResult,
-  ProjectFileResult,
-  ProjectSaveResult,
   UsbFlashRequest,
   WindowState
 } from '../shared/ipc'
@@ -22,7 +20,6 @@ import type { BoardDefinition } from '../shared/board'
 import type { CommandId } from '../shared/commands'
 import { acpRequested, startAcpBridge, type AcpBridge } from './acp/bridge'
 import { normaliseWorkspace } from '../shared/workspace'
-import { normaliseProject } from '../shared/project'
 import { buildApplicationMenu } from './menu'
 import { isBuildRunning } from '../shared/build'
 import { isUsbFlashRunning } from '../shared/usb-flash'
@@ -30,7 +27,6 @@ import { collectEnvNames } from '../shared/pio'
 import { availableBoardIds, loadBoard, saveBoardProfile } from './board'
 import { generatePinHeader } from '../shared/codegen'
 import { applyEdit, type BoardEdit } from '../shared/boardEdit'
-import { readProjectFile, writeProjectFile } from './projectFile'
 import { BuildRunner } from './build'
 import { UsbFlashRunner } from './usb-flash'
 import { DeviceHost } from './devices'
@@ -489,48 +485,6 @@ function registerIpc(): void {
       })
   })
 
-  ipcMain.handle(IpcChannel.projectFileOpen, async (): Promise<ProjectFileResult | null> => {
-    if (!mainWindow) return null
-    const result = await dialog.showOpenDialog(mainWindow, {
-      title: 'Open PinBench project',
-      filters: [{ name: 'PinBench project', extensions: ['pinbench'] }],
-      properties: ['openFile']
-    })
-    if (result.canceled || result.filePaths.length === 0) return null
-    return adoptProjectFile(result.filePaths[0]!)
-  })
-
-  ipcMain.handle(
-    IpcChannel.projectFileSave,
-    async (_event, path: string | null, incoming: unknown): Promise<ProjectSaveResult> => {
-      const projectFile = normaliseProject(incoming)
-      let target = typeof path === 'string' && path ? path : null
-      if (!target) {
-        if (!mainWindow) return { canceled: true }
-        const result = await dialog.showSaveDialog(mainWindow, {
-          title: 'Save PinBench project',
-          defaultPath: 'untitled.pinbench',
-          filters: [{ name: 'PinBench project', extensions: ['pinbench'] }]
-        })
-        if (result.canceled || !result.filePath) return { canceled: true }
-        target = result.filePath
-      }
-      writeProjectFile(target, projectFile)
-      session().addRecentProject(target)
-      return { path: target }
-    }
-  )
-
-  ipcMain.handle(IpcChannel.projectFileRecent, async (): Promise<ProjectFileResult | null> => {
-    const last = session().lastProject()
-    if (!last || !existsSync(last)) return null
-    try {
-      return adoptProjectFile(last)
-    } catch {
-      return null
-    }
-  })
-
   ipcMain.on(IpcChannel.buildCancel, () => build?.cancel())
 
   ipcMain.handle(IpcChannel.usbFlashListPorts, () => flasher().listPorts())
@@ -599,23 +553,6 @@ function openProject(rawDir: string): OpenProjectResult {
   }
   const envs = readEnvNames(dir)
   return { dir, name: basename(dir), envs }
-}
-
-/**
- * Read a `.pinbench` file, record it as recent, and re-adopt the PlatformIO
- * project it names so the Source tab and Build & flash come back with it.
- */
-function adoptProjectFile(rawPath: string): ProjectFileResult {
-  const path = resolve(rawPath)
-  const projectFile = readProjectFile(path)
-  session().addRecentProject(path)
-
-  let pio: OpenProjectResult | null = null
-  const dir = projectFile.platformioDir
-  if (dir && existsSync(join(dir, 'platformio.ini'))) {
-    pio = openProject(dir)
-  }
-  return { path, project: projectFile, pio }
 }
 
 function readEnvNames(dir: string): string[] {

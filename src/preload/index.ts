@@ -9,8 +9,6 @@ import type {
   LaunchState,
   OpenProjectResult,
   PinBenchApi,
-  ProjectFileResult,
-  ProjectSaveResult,
   SerialPortInfo,
   UsbFlashRequest,
   UsbFlashStatus,
@@ -18,7 +16,6 @@ import type {
 } from '../shared/ipc'
 import type { BoardDefinition } from '../shared/board'
 import type { PartConfigValue } from '../shared/partConfig'
-import type { ProjectFile } from '../shared/project'
 import type { BuildOutputLine, BuildStatus } from '../shared/build'
 import type { CommandId } from '../shared/commands'
 import type {
@@ -57,13 +54,6 @@ const api: PinBenchApi = {
     exportPinHeader: (edits) =>
       ipcRenderer.invoke(IpcChannel.exportPinHeader, edits) as Promise<string | null>,
     importPinHeader: () => ipcRenderer.invoke(IpcChannel.importPinHeader) as Promise<string | null>
-  },
-  projectFile: {
-    open: () => ipcRenderer.invoke(IpcChannel.projectFileOpen) as Promise<ProjectFileResult | null>,
-    save: (path: string | null, project: ProjectFile) =>
-      ipcRenderer.invoke(IpcChannel.projectFileSave, path, project) as Promise<ProjectSaveResult>,
-    recent: () =>
-      ipcRenderer.invoke(IpcChannel.projectFileRecent) as Promise<ProjectFileResult | null>
   },
   window: {
     minimise: () => ipcRenderer.send(IpcChannel.windowMinimise),

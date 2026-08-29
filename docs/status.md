@@ -17,7 +17,14 @@ title: Status — done, blocked, next
   dirty-rect partial repaint; SPI bus-contention diagnostic — [[display-pipeline]]
 - LR1110 frame injection, LoRa airtime model, IN/OUT panels, live host→guest
   BUSY/DIO9 line reads — [[radio]]
-- Boards as validated data; two boards on disk; a runtime board picker — [[board-definitions]]
+- Boards as validated data; two boards on disk; a runtime hardware-profile
+  picker (choice persisted); **File ▸ Save hardware profile as…** writes canvas
+  edits to a new `boards/*.board.json` — [[board-definitions]]
+- No `.pinbench` document: a session is a firmware **source folder** (File ▸
+  Open…, reopened on launch) + a **hardware profile**, with per-(folder,
+  profile) build env + Inspector config in `session.json`. Env detection follows
+  `extra_configs`, so a repo with per-variant `platformio.ini` files populates
+  the picker — [[board-definitions]], [[firmware-build]]
 - Verify pin map (rule engine) + pin-map C-header codegen with a
   divergence guard — [[pin-map-verify-and-codegen]]
 - Agent control plane: pure core, loopback MCP control server, agent-side
@@ -31,8 +38,9 @@ title: Status — done, blocked, next
   surface onto the Inspector's `scale` / `backlight` fields) — section A of the
   gap report is now fully built and unit-tested
 - Canvas editing: drag parts, Draw-net / Probe tools, ⌘Z undo/redo,
-  Duplicate / Delete / Auto-arrange, edits persisted in `ProjectFile.boardEdits`
-  and replayed on open; Build & flash writes the generated pin header into the
+  Duplicate / Delete / Auto-arrange. Edits are live session state; **File ▸ Save
+  hardware profile as…** bakes them into a new `boards/<id>.board.json`
+  ([[board-definitions]]). Build & flash writes the generated pin header into the
   checkout and File ▸ Import pin header reads one back as rebind edits —
   [[pin-map-verify-and-codegen]]
 - Per-model Inspector IN panels from `shared/stimuli.ts` + a keyboard matrix;
@@ -55,17 +63,6 @@ title: Status — done, blocked, next
 
 ## Next
 
-- **`folder-is-project`** — retire the `.pinbench` document. A session is a
-  firmware **source folder** (opened directly, remembered in `session.json`) plus
-  a **hardware profile** (its own `boards/*.board.json`, "Save hardware profile
-  as…", last choice persisted). Per-(folder, profile) build env + Inspector
-  config move into `session.json`. _Phase 1a landed:_ `SessionState` v2, the
-  `app:launch-state` / `board:save-profile` / `board:remember` /
-  `project:set-folder-state` IPC, and `collectEnvNames` (env detection that
-  follows `extra_configs`, so MeshCore's variant envs show up). _Phase 2:_ the
-  renderer Open-folder flow, an env picker, and removing the New / Save /
-  Save-As-project menu items plus `boardEdits` replay-on-open —
-  [[board-definitions]], [[firmware-build]]
 - Flash real hardware over USB — board-native rebuild + `esptool` _Flash_ /
   _Erase + flash_, `pio device list` port picker. Shared layer, `UsbFlashRunner`
   and the dialog are built and unit-tested; **not yet run against a physical

@@ -3,7 +3,6 @@ import type { CommandId } from './commands'
 import type { BoardDefinition } from './board'
 import type { BoardEdit } from './boardEdit'
 import type { PartConfigValue } from './partConfig'
-import type { ProjectFile } from './project'
 import type {
   DeviceCommandMessage,
   DeviceEventMessage,
@@ -49,9 +48,6 @@ export const IpcChannel = {
   exportPinHeader: 'board:export-pin-header',
   importPinHeader: 'board:import-pin-header',
   projectSetFolderState: 'project:set-folder-state',
-  projectFileOpen: 'projectfile:open',
-  projectFileSave: 'projectfile:save',
-  projectFileRecent: 'projectfile:recent',
   buildStart: 'build:start',
   buildCancel: 'build:cancel',
   buildClean: 'build:clean',
@@ -112,17 +108,6 @@ export interface LaunchState {
   partConfig: Record<string, PartConfigValue>
 }
 
-/** A `.pinbench` file the main process opened, with its PlatformIO project re-adopted. */
-export interface ProjectFileResult {
-  /** Absolute path of the `.pinbench` file. */
-  path: string
-  project: ProjectFile
-  /** The re-opened PlatformIO project, or null if the file names none / it is gone. */
-  pio: OpenProjectResult | null
-}
-
-export type ProjectSaveResult = { path: string } | { canceled: true }
-
 export interface BuildRequest {
   projectDir: string
   env: string
@@ -179,14 +164,6 @@ export interface PinBenchApi {
      * fold back into the board as `rebindPin` edits. Null if cancelled.
      */
     importPinHeader(): Promise<string | null>
-  }
-  projectFile: {
-    /** Prompt for a `.pinbench` file and open it, re-adopting its PlatformIO project. */
-    open(): Promise<ProjectFileResult | null>
-    /** Write `project`; when `path` is null, prompt for one. */
-    save(path: string | null, project: ProjectFile): Promise<ProjectSaveResult>
-    /** The most recently opened `.pinbench` file, for auto-reopen on launch. */
-    recent(): Promise<ProjectFileResult | null>
   }
   window: {
     minimise(): void

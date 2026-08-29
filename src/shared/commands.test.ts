@@ -40,7 +40,7 @@ describe('menu spec', () => {
 
   it('leaves commands whose milestone has not landed disabled', () => {
     const disabled = allMenuItems().filter((item) => !item.enabled)
-    expect(disabled.map((item) => item.command)).toContain('file.newProject')
+    expect(disabled.map((item) => item.command)).toContain('edit.cut')
   })
 
   it('enables Verify pin map — the M11.1 rule engine', () => {
@@ -61,8 +61,7 @@ describe('menu spec', () => {
       [
         'file.openProject',
         'file.openFirmware',
-        'file.save',
-        'file.saveAs',
+        'file.saveProfileAs',
         'file.exportHeader',
         'file.importPinout',
         'edit.undo',

@@ -86,6 +86,7 @@ read):
   for that (folder, profile) pair. Keying under the profile id means switching
   profiles never surfaces another board's part ids.
 
-> **Status:** the store + IPC spine landed in Phase 1a of the
-> `folder-is-project` branch; the renderer's Open-folder flow, env picker and
-> the removal of the `.pinbench` menu items land in Phase 2.
+`app:launch-state` returns all three in one call so `Root` resolves the board +
+folder + config before first paint. `File ▸ Open…` picks a source folder (a
+directory holding `platformio.ini`); `session.setFolderState` fires on every env
+or Inspector change. There is no `.pinbench` file, and no New / Save / Save-As.

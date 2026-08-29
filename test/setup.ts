@@ -33,11 +33,6 @@ export function installBridge(initial: WorkspaceState = DEFAULT_WORKSPACE): Test
       exportPinHeader: vi.fn(() => Promise.resolve(null as string | null)),
       importPinHeader: vi.fn(() => Promise.resolve(null as string | null))
     },
-    projectFile: {
-      open: vi.fn(() => Promise.resolve(null)),
-      save: vi.fn(() => Promise.resolve({ canceled: true as const })),
-      recent: vi.fn(() => Promise.resolve(null))
-    },
     window: {
       minimise: vi.fn(),
       toggleMaximise: vi.fn(),

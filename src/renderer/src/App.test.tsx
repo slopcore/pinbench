@@ -23,7 +23,8 @@ async function renderApp(
       board={M9_BOARD}
       availableBoards={[M9_BOARD.id]}
       onSelectBoard={() => {}}
-      initialProject={null}
+      onProfileSaved={() => {}}
+      initialFolder={{ lastBoardId: null, folder: null, env: null, partConfig: {} }}
     />
   )
   // The status bar is always present; waiting on it lets the restore land
@@ -53,10 +54,11 @@ describe('the shell', () => {
         board={M9_BOARD}
         availableBoards={[M9_BOARD.id, 'heltec-wireless-paper-v1.1']}
         onSelectBoard={onSelectBoard}
-        initialProject={null}
+        onProfileSaved={() => {}}
+        initialFolder={{ lastBoardId: null, folder: null, env: null, partConfig: {} }}
       />
     )
-    const picker = await screen.findByRole('combobox', { name: 'Board' })
+    const picker = await screen.findByRole('combobox', { name: 'Hardware profile' })
     expect(picker).toHaveValue(M9_BOARD.id)
     await user.selectOptions(picker, 'heltec-wireless-paper-v1.1')
     expect(onSelectBoard).toHaveBeenCalledWith('heltec-wireless-paper-v1.1')
@@ -319,20 +321,26 @@ describe('selection', () => {
     expect(screen.getAllByText('U3B').length).toBeGreaterThan(0)
   })
 
-  it('persists canvas edits into the saved project file', async () => {
-    const { user } = await renderApp()
-    await user.click(screen.getByRole('button', { name: /LR1110 mesh radio/ }))
-    await user.click(screen.getByRole('menuitem', { name: 'Edit' }))
-    await user.click(screen.getByRole('menuitem', { name: /Delete part/ }))
-    await user.click(screen.getByRole('menuitem', { name: 'File' }))
-    const fileMenu = screen.getByRole('menu', { name: 'File' })
-    const saveBtn = [...fileMenu.querySelectorAll<HTMLButtonElement>('button.menu__item')].find(
-      (b) => b.querySelector('.menu__label')?.textContent === 'Save'
-    )!
-    await user.click(saveBtn)
-    const save = vi.mocked(window.pinbench.projectFile.save)
-    const project = save.mock.calls.at(-1)?.[1]
-    expect(project?.boardEdits).toEqual([{ kind: 'deletePart', partId: 'u2' }])
+  it('bakes canvas edits into a new hardware profile', async () => {
+    const promptSpy = vi.spyOn(window, 'prompt').mockReturnValue('m9-no-radio')
+    try {
+      const { user } = await renderApp()
+      await user.click(screen.getByRole('button', { name: /LR1110 mesh radio/ }))
+      await user.click(screen.getByRole('menuitem', { name: 'Edit' }))
+      await user.click(screen.getByRole('menuitem', { name: /Delete part/ }))
+      await user.click(screen.getByRole('menuitem', { name: 'File' }))
+      const fileMenu = screen.getByRole('menu', { name: 'File' })
+      const saveBtn = [...fileMenu.querySelectorAll<HTMLButtonElement>('button.menu__item')].find(
+        (b) => b.querySelector('.menu__label')?.textContent === 'Save hardware profile as…'
+      )!
+      await user.click(saveBtn)
+      const saveProfile = vi.mocked(window.pinbench.board.saveProfile)
+      const [id, def] = saveProfile.mock.calls.at(-1)!
+      expect(id).toBe('m9-no-radio')
+      expect(def.parts.some((p) => p.id === 'u2')).toBe(false)
+    } finally {
+      promptSpy.mockRestore()
+    }
   })
 
   it('adds a generic catalogue part to the canvas from the Library', async () => {

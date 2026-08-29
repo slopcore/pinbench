@@ -87,16 +87,25 @@ export function applyEdit(board: BoardDefinition, edit: BoardEdit): BoardDefinit
 
 /**
  * A fresh part id / designator that does not collide with anything on the
- * board — `u3` → `u3-copy`, then `u3-copy-2`, … and `U3` → `U3'`.
+ * board — `u3` → `u3-copy`, then `u3-copy-2`, … and `U3` → `U3B`, `U3C`, …
+ * (a letter suffix, not an apostrophe, so the designator stays a distinct C
+ * identifier through {@link generatePinHeader}'s `ident()`).
  */
 export function duplicatePart(source: PartDefinition, board: BoardDefinition): PartDefinition {
-  const taken = new Set(board.parts.map((p) => p.id))
+  const takenIds = new Set(board.parts.map((p) => p.id))
   let id = `${source.id}-copy`
-  for (let n = 2; taken.has(id); n += 1) id = `${source.id}-copy-${n}`
+  for (let n = 2; takenIds.has(id); n += 1) id = `${source.id}-copy-${n}`
+
+  const takenDesignators = new Set(board.parts.map((p) => p.designator))
+  let designator = `${source.designator}B`
+  for (let c = 66; takenDesignators.has(designator) && c < 90; c += 1) {
+    designator = `${source.designator}${String.fromCharCode(c + 1)}`
+  }
+
   return {
     ...source,
     id,
-    designator: `${source.designator}'`,
+    designator,
     // Nudge it clear of the original so both are visible.
     layout: { ...source.layout, x: source.layout.x + 24, y: source.layout.y + 24 },
     // A copy carries no net endpoints and no device model — it is a fresh

@@ -23,11 +23,13 @@ title: Status — done, blocked, next
 - Agent control plane: pure core, loopback MCP control server, agent-side
   connection, deferred operations — [[agent-control-plane]]
 - QEMU fork patches: GP-SPI2/3, GPIO in/out, the device-host socket bridge — [[qemu-fork]]
-- Design-parity pass (see `TODO.md`, tiers 1–7): rich canvas node cards
+- Design-parity pass (see `TODO.md`, tiers 1–8): rich canvas node cards
   (CFG/IN/OUT), net labels + bus-labels toggle + bus-filter chips, canvas stats
   chip and shared-SPI toast, Inspector Identity/Nets/firmware-hook sections,
-  Verify button + port label, Export pin header, Help sheet, Dock meta line +
-  collapse chevron
+  Verify button + port label, Export/Import pin header, Help sheet, Dock meta
+  line + collapse chevron, on-panel screen-zoom picker + `BL` toggle (a second
+  surface onto the Inspector's `scale` / `backlight` fields) — section A of the
+  gap report is now fully built and unit-tested
 - Canvas editing: drag parts, Draw-net / Probe tools, ⌘Z undo/redo,
   Duplicate / Delete / Auto-arrange, edits persisted in `ProjectFile.boardEdits`
   and replayed on open; Build & flash writes the generated pin header into the

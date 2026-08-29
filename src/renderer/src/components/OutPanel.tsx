@@ -9,6 +9,10 @@ interface OutPanelProps {
   view: PartDeviceView | undefined
   /** Drive a line into the model to a level. Present only for a drivable model. */
   onSetLevel?: (signal: string, level: 0 | 1) => void
+  /** Live config values (the Inspector `values` map), keyed `partId.fieldId`. */
+  configValues?: Record<string, string | number | boolean>
+  /** Commit a config-field change — the Inspector's `applyConfig`, part-scoped. */
+  onConfigChange?: (fieldId: string, value: string | number | boolean) => void
 }
 
 /**
@@ -21,14 +25,20 @@ interface OutPanelProps {
  * by the "Toggle" control rather than by firmware; every edge is timestamped in
  * the log so it stays honest about where it came from.
  */
-export function OutPanel({ part, view, onSetLevel }: OutPanelProps): React.JSX.Element {
+export function OutPanel({
+  part,
+  view,
+  onSetLevel,
+  configValues,
+  onConfigChange
+}: OutPanelProps): React.JSX.Element {
   const snapshot = view?.snapshot
   const isLed = part.deviceModel === 'pinbench.led'
   const isPanel = part.deviceModel === 'sitronix.st7789'
   const isEInk = part.deviceModel === 'ultrachip.uc8151'
   const lit = snapshot?.state['lit'] === true
   const pinHigh = snapshot?.state['pin'] === 1
-  const zoom = panelZoom(part)
+  const zoom = panelZoom(part, configValues)
 
   return (
     <section className="inspector__section outpanel" aria-label="Output">
@@ -66,6 +76,15 @@ export function OutPanel({ part, view, onSetLevel }: OutPanelProps): React.JSX.E
                 </button>
               )}
             </div>
+          )}
+
+          {(isPanel || isEInk) && onConfigChange && (
+            <ScreenControls
+              part={part}
+              configValues={configValues}
+              onConfigChange={onConfigChange}
+              showBacklight={isPanel}
+            />
           )}
 
           {isPanel && <St7789Screen framebuffer={view?.framebuffer} zoom={zoom} />}
@@ -106,14 +125,85 @@ export function OutPanel({ part, view, onSetLevel }: OutPanelProps): React.JSX.E
   )
 }
 
+/** A config field's live value (session edit) falling back to the board default. */
+function fieldValue(
+  part: PartDefinition,
+  configValues: Record<string, string | number | boolean> | undefined,
+  fieldId: string
+): string | number | boolean | undefined {
+  const key = `${part.id}.${fieldId}`
+  if (configValues && key in configValues) return configValues[key]
+  return part.config.find((f) => f.id === fieldId)?.value
+}
+
 /** The ST7789 "Panel zoom" segmented control → a pixel multiplier. */
-function panelZoom(part: PartDefinition): number {
-  const field = part.config.find((f) => f.id === 'scale')
-  if (field && field.kind === 'segmented') {
-    const n = parseInt(field.value, 10)
+function panelZoom(
+  part: PartDefinition,
+  configValues?: Record<string, string | number | boolean>
+): number {
+  const raw = fieldValue(part, configValues, 'scale')
+  if (typeof raw === 'string') {
+    const n = parseInt(raw, 10)
     if (n === 1 || n === 2 || n === 3) return n
   }
   return 2
+}
+
+/**
+ * The design puts the panel-zoom picker and a `BL ON/OFF` toggle on the screen
+ * OUT panel itself, not only in the Inspector's Configuration list. These are a
+ * second surface onto the same `scale` / `backlight` config fields — every click
+ * goes through the Inspector's `onConfigChange`, so the two stay in lock-step.
+ */
+function ScreenControls({
+  part,
+  configValues,
+  onConfigChange,
+  showBacklight
+}: {
+  part: PartDefinition
+  configValues: Record<string, string | number | boolean> | undefined
+  onConfigChange: (fieldId: string, value: string | number | boolean) => void
+  showBacklight: boolean
+}): React.JSX.Element | null {
+  const scale = part.config.find((f) => f.id === 'scale')
+  const backlight = part.config.find((f) => f.id === 'backlight')
+  const scaleValue = fieldValue(part, configValues, 'scale')
+  const blOn = fieldValue(part, configValues, 'backlight') === true
+
+  if ((!scale || scale.kind !== 'segmented') && !(showBacklight && backlight)) return null
+
+  return (
+    <div className="outpanel__screen-controls">
+      {scale && scale.kind === 'segmented' && (
+        <div className="field__segmented" role="group" aria-label="Panel zoom">
+          {scale.options.map((option) => (
+            <button
+              key={option}
+              type="button"
+              className="field__segment"
+              aria-pressed={scaleValue === option}
+              data-active={scaleValue === option || undefined}
+              onClick={() => onConfigChange('scale', option)}
+            >
+              {option}
+            </button>
+          ))}
+        </div>
+      )}
+      {showBacklight && backlight && (
+        <button
+          type="button"
+          className="outpanel__bl"
+          aria-pressed={blOn}
+          data-on={blOn || undefined}
+          onClick={() => onConfigChange('backlight', !blOn)}
+        >
+          BL {blOn ? 'ON' : 'OFF'}
+        </button>
+      )}
+    </div>
+  )
 }
 
 /** ns since emulator start → a compact `s.mmm` reading. */

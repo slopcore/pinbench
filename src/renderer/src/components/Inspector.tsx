@@ -277,7 +277,13 @@ export function Inspector({
             )}
 
             {part.deviceModel !== undefined && (
-              <OutPanel part={part} view={device} {...(onSetLevel ? { onSetLevel } : {})} />
+              <OutPanel
+                part={part}
+                view={device}
+                configValues={values}
+                onConfigChange={(fieldId, value) => applyConfig(part.id, fieldId, value)}
+                {...(onSetLevel ? { onSetLevel } : {})}
+              />
             )}
           </>
         )}

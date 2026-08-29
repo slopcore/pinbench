@@ -297,8 +297,8 @@ describe('selection', () => {
     await user.click(screen.getByRole('button', { name: /2.4" LCD/ }))
     await user.click(screen.getByRole('menuitem', { name: 'Edit' }))
     await user.click(screen.getByRole('menuitem', { name: /Duplicate part/ }))
-    // The copy carries the "U3'" designator.
-    expect(screen.getAllByText("U3'").length).toBeGreaterThan(0)
+    // The copy carries a letter-suffixed designator ("U3B").
+    expect(screen.getAllByText('U3B').length).toBeGreaterThan(0)
   })
 
   it('persists canvas edits into the saved project file', async () => {

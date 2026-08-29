@@ -110,6 +110,99 @@ describe('OutPanel', () => {
     expect(screen.getByRole('status')).toHaveTextContent(/quarantined/i)
   })
 
+  const PANEL_PART: PartDefinition = {
+    id: 'u3',
+    designator: 'U3',
+    name: 'ST7789 LCD',
+    category: 'display',
+    deviceModel: 'sitronix.st7789',
+    summary: 'demo',
+    buses: ['spi-disp'],
+    pins: [{ signal: 'CS', pin: 'GPIO17' }],
+    config: [
+      { id: 'backlight', label: 'Backlight', kind: 'toggle', value: true },
+      {
+        id: 'scale',
+        label: 'Panel zoom',
+        kind: 'segmented',
+        options: ['1×', '2×', '3×'],
+        value: '2×'
+      }
+    ],
+    layout: { x: 0, y: 0, width: 1, height: 1 }
+  }
+
+  const panelView: PartDeviceView = {
+    snapshot: snapshot({ deviceModel: 'sitronix.st7789', state: {}, meters: [] }),
+    events: []
+  }
+
+  it('drives the zoom picker and BL toggle through onConfigChange', async () => {
+    const onConfigChange = vi.fn()
+    render(
+      <OutPanel
+        part={PANEL_PART}
+        view={panelView}
+        configValues={{ 'u3.scale': '2×', 'u3.backlight': true }}
+        onConfigChange={onConfigChange}
+      />
+    )
+    await userEvent.click(screen.getByRole('button', { name: '3×' }))
+    expect(onConfigChange).toHaveBeenLastCalledWith('scale', '3×')
+
+    await userEvent.click(screen.getByRole('button', { name: /^BL ON$/ }))
+    expect(onConfigChange).toHaveBeenLastCalledWith('backlight', false)
+  })
+
+  it('reflects the live scale value from configValues, not just the board default', () => {
+    const { container } = render(
+      <OutPanel
+        part={PANEL_PART}
+        view={panelView}
+        configValues={{ 'u3.scale': '3×' }}
+        onConfigChange={vi.fn()}
+      />
+    )
+    const canvas = container.querySelector('.st7789__canvas') as HTMLCanvasElement
+    // 240×320 GRAM transposed to landscape (320×240) at zoom 3.
+    expect(canvas.style.width).toBe(`${320 * 3}px`)
+  })
+
+  it('shows no BL toggle for the e-ink panel (reflective, no backlight)', () => {
+    const EINK_PART: PartDefinition = {
+      id: 'u3',
+      designator: 'U3',
+      name: '2.13" e-paper',
+      category: 'display',
+      deviceModel: 'ultrachip.uc8151',
+      summary: 'demo',
+      buses: ['spi-disp'],
+      pins: [{ signal: 'CS', pin: 'GPIO4' }],
+      config: [
+        {
+          id: 'scale',
+          label: 'Panel zoom',
+          kind: 'segmented',
+          options: ['1×', '2×', '3×'],
+          value: '2×'
+        }
+      ],
+      layout: { x: 0, y: 0, width: 1, height: 1 }
+    }
+    render(
+      <OutPanel
+        part={EINK_PART}
+        view={{
+          snapshot: snapshot({ deviceModel: 'ultrachip.uc8151', state: {}, meters: [] }),
+          events: []
+        }}
+        onConfigChange={vi.fn()}
+      />
+    )
+    expect(screen.getByRole('button', { name: '3×' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^BL / })).not.toBeInTheDocument()
+  })
+
   it('renders the e-paper canvas for the UC8151 e-paper model', () => {
     const EINK_PART: PartDefinition = {
       id: 'u3',

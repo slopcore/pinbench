@@ -81,8 +81,13 @@ only here.
 - [x] Keyboard IN panel — QWERTY matrix + D‑pad + HOME/BACK/MENU/CHAT/MAP/LOC
       shortcut keys + a live key‑buffer readout; every key sends `key`. —
       `InPanel.tsx` (`KeyboardInPanel`)
-- [ ] LCD OUT panel: ½ / ¾ / 1:1 zoom buttons and a `BL ON/OFF` toggle on the
-      panel itself. **Relocated**, see section B — not a true gap.
+- [x] LCD OUT panel: zoom picker and a `BL ON/OFF` toggle **on the panel
+      itself** (design shows ½/¾/1:1; we render the board's own `scale` options,
+      `1×/2×/3×`). The Inspector's `scale` / `backlight` config fields stay the
+      state owner — the panel controls are a second surface onto them, every
+      click routed through the same `onConfigChange` so the two never diverge.
+      `ScreenControls` in `OutPanel.tsx`; e-ink gets the zoom picker only (no
+      backlight to model). — `OutPanel.tsx`, `Inspector.tsx`, `outpanel.css`
 
 ### Toolbar & menus
 
@@ -138,8 +143,8 @@ only here.
 | IN / OUT tabs inside the canvas node       | Inspector sections (`InPanel` / `OutPanel`)               |
 | Board chip in the top bar                  | Status‑bar `<select>` picker (`StatusBar.tsx`)            |
 | Canvas overlay: parts · nets · GPIO totals | Status bar totals (`boardTotals`)                         |
-| ST7789 ½/¾/1:1 buttons on the OUT screen   | `scale` segmented config field (`Inspector`, `panelZoom`) |
-| `BL ON/OFF` toggle on the OUT screen       | `backlight` toggle config field                           |
+| ST7789 ½/¾/1:1 buttons on the OUT screen   | Both: `scale` config field **and** on-panel picker (`OutPanel` `ScreenControls`) |
+| `BL ON/OFF` toggle on the OUT screen       | Both: `backlight` config field **and** on-panel `BL` toggle                      |
 | CFG pin rows in the canvas node            | Inspector "Pin map" table                                 |
 | Node "class" badge / glyph                 | Inspector heading (`designator`, `category`)              |
 

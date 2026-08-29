@@ -128,7 +128,9 @@ describe('duplicatePart', () => {
     const source = board.parts.find((p) => p.id === 'u3')!
     const copy = duplicatePart(source, board)
     expect(copy.id).toBe('u3-copy')
-    expect(copy.designator).toBe("U3'")
+    // A letter suffix, not an apostrophe — the designator stays a valid C
+    // identifier through generatePinHeader's ident().
+    expect(copy.designator).toBe('U3B')
     expect(copy.layout.x).toBe(source.layout.x + 24)
     expect(() => applyEdit(board, { kind: 'addPart', part: copy })).not.toThrow()
   })
@@ -137,7 +139,9 @@ describe('duplicatePart', () => {
     let board = m9()
     const source = board.parts.find((p) => p.id === 'u3')!
     board = applyEdit(board, { kind: 'addPart', part: duplicatePart(source, board) })
-    expect(duplicatePart(source, board).id).toBe('u3-copy-2')
+    const next = duplicatePart(source, board)
+    expect(next.id).toBe('u3-copy-2')
+    expect(next.designator).toBe('U3C')
   })
 })
 

@@ -136,6 +136,15 @@ describe('Uc8151Model', () => {
     ])
   })
 
+  it('reads BUSY low while RST is held — steers detectEInk() to this driver', () => {
+    const h = harness(new Uc8151Model())
+    expect(h.line('BUSY')).toBe(1) // idle, active-low => HIGH
+    h.signal('RST', 0) // E213Display::detectEInk() holds RST and reads BUSY
+    expect(h.line('BUSY')).toBe(0) // busy => LOW => picks LCMEN2R13EFC1 (UC8151)
+    h.signal('RST', 1)
+    expect(h.line('BUSY')).toBe(1)
+  })
+
   it('honours a hardware reset on the RST line', () => {
     const model = new Uc8151Model()
     const h = harness(model)

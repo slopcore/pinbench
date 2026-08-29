@@ -227,6 +227,13 @@ export class Uc8151Model implements DeviceModel {
         const asserted = edge.level === 0 // active-low
         if (asserted && !this.rstAsserted) {
           this.rstAsserted = true
+          // Holding RST asserted holds the panel busy — real hardware, and what
+          // `E213Display::detectEInk()` relies on: it pulls RST low and reads
+          // BUSY, choosing the `LCMEN2R13EFC1` (UC8151) driver iff BUSY reads
+          // the busy level. Not driving it here would leave the idle level and
+          // steer the guest to the *other* driver, whose command set we do not
+          // model.
+          this.ctx?.driveSignal('BUSY', this.busyLevel(true))
         } else if (!asserted && this.rstAsserted) {
           this.rstAsserted = false
           this.resetCount += 1

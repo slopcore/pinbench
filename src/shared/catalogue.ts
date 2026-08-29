@@ -15,7 +15,13 @@ export interface CatalogueEntry {
   name: string
   category: PartCategory
   summary: string
-  /** Pin bindings are left unbound (`—`) until the user wires them. */
+  /**
+   * The part's own signal names, shown as unbound rows once placed. The
+   * placement does NOT turn these into pin bindings — an unbound `pin` value is
+   * not a declared board pin and would poison Verify / totals / codegen — so a
+   * placed catalogue part starts with no `pins` and the user wires them with
+   * the Draw-net tool.
+   */
   signals?: string[]
   deviceModel?: string
 }
@@ -120,7 +126,9 @@ export function instantiateCatalogueEntry(
     ...(entry.deviceModel ? { deviceModel: entry.deviceModel } : {}),
     summary: entry.summary,
     buses: [],
-    pins: (entry.signals ?? []).map((signal) => ({ signal, pin: '—' })),
+    // No pin bindings — an unbound pin would not be a declared board pin and
+    // would corrupt Verify / totals. The user wires the part after placing it.
+    pins: [],
     config: [],
     layout: { x: Math.round(at.x), y: Math.round(at.y), width: 150, height: 110 }
   }

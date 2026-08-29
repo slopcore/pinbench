@@ -156,4 +156,14 @@ describe('autoArrangeByBus', () => {
     const arranged = edits.reduce(applyEdit, board)
     expect(arranged.parts).toHaveLength(board.parts.length)
   })
+
+  it('keeps arranged parts inside the board outline', () => {
+    const board = m9()
+    const arranged = autoArrangeByBus(board).reduce(applyEdit, board)
+    for (const part of arranged.parts) {
+      if (part.category === 'mcu') continue
+      expect(part.layout.x).toBeLessThan(board.canvas.width)
+      expect(part.layout.x).toBeGreaterThanOrEqual(0)
+    }
+  })
 })

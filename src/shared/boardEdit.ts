@@ -106,14 +106,15 @@ export function duplicatePart(source: PartDefinition, board: BoardDefinition): P
 }
 
 /**
- * Lay every non-MCU part out in bus-grouped columns around the MCU. Returns one
- * `moveParty` edit per part that needs to move — feed them to {@link BoardHistory}.
+ * Lay every non-MCU part out in bus-grouped columns to the right of the MCU,
+ * wrapping to a new row band before the columns run off the board outline.
+ * Returns one `moveParty` edit per part that needs to move.
  */
 export function autoArrangeByBus(board: BoardDefinition): BoardEdit[] {
   const mcu = board.parts.find((p) => p.category === 'mcu')
   if (!mcu) return []
   const others = board.parts.filter((p) => p.id !== mcu.id)
-  // Group by the part's first bus, then everything else.
+  // Group by the part's first bus, then everything else — one column per group.
   const groups = new Map<string, PartDefinition[]>()
   for (const part of others) {
     const key = part.buses[0] ?? '—'
@@ -121,15 +122,22 @@ export function autoArrangeByBus(board: BoardDefinition): BoardEdit[] {
     if (bucket) bucket.push(part)
     else groups.set(key, [part])
   }
-  const colGap = 220
-  const rowGap = 150
-  const startX = mcu.layout.x + mcu.layout.width + 120
+
+  const colGap = 200
+  const rowGap = 140
+  const startX = Math.min(mcu.layout.x + mcu.layout.width + 100, board.canvas.width - colGap)
+  const startY = 40
+  // How many columns fit before the right edge.
+  const colsPerBand = Math.max(1, Math.floor((board.canvas.width - startX) / colGap))
+
   const edits: BoardEdit[] = []
   let col = 0
   for (const bucket of groups.values()) {
+    const band = Math.floor(col / colsPerBand)
+    const bandTop = startY + band * (rowGap * 4 + rowGap)
     bucket.forEach((part, row) => {
-      const x = startX + col * colGap
-      const y = mcu.layout.y + row * rowGap
+      const x = startX + (col % colsPerBand) * colGap
+      const y = bandTop + row * rowGap
       if (part.layout.x !== x || part.layout.y !== y) {
         edits.push({ kind: 'moveParty', partId: part.id, x, y })
       }

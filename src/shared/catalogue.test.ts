@@ -2,13 +2,16 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { parseBoard, type BoardDefinition } from './board'
+import { boardTotals, parseBoard, type BoardDefinition } from './board'
 import { applyEdit } from './boardEdit'
+import { verifyBoard } from './verify'
 import { CATALOGUE, instantiateCatalogueEntry } from './catalogue'
 
 function m9(): BoardDefinition {
   return parseBoard(
-    JSON.parse(readFileSync(resolve(__dirname, '../../boards/thinknode-m9-v1.0.board.json'), 'utf8'))
+    JSON.parse(
+      readFileSync(resolve(__dirname, '../../boards/thinknode-m9-v1.0.board.json'), 'utf8')
+    )
   )
 }
 
@@ -38,5 +41,18 @@ describe('instantiateCatalogueEntry', () => {
       y: 0
     })
     expect(second.id).toBe('led-2')
+  })
+
+  it('places with no pin bindings, so Verify and the GPIO count are untouched', () => {
+    const board = m9()
+    const led = CATALOGUE[0]!.entries.find((e) => e.key === 'led')!
+    const part = instantiateCatalogueEntry(led, new Set(board.parts.map((p) => p.id)), {
+      x: 0,
+      y: 0
+    })
+    expect(part.pins).toEqual([])
+    const withLed = applyEdit(board, { kind: 'addPart', part })
+    expect(boardTotals(withLed).assignedGpio).toBe(boardTotals(board).assignedGpio)
+    expect(() => verifyBoard(withLed)).not.toThrow()
   })
 })

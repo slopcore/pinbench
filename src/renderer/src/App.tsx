@@ -69,6 +69,10 @@ export function App({
   // move because a card was dragged).
   const editedBoard = editor.board
   const totals = useMemo(() => boardTotals(editedBoard), [editedBoard])
+  // The device host loaded its models from the pristine board; adding or
+  // removing a part while the emulator runs would leave a model running against
+  // a part the canvas no longer shows. Layout drags and net edits are fine.
+  const structuralEditsLocked = emulator.state === 'running' || emulator.state === 'starting'
 
   // Populate the status-bar port label once on mount; the Flash-over-USB dialog
   // refreshes the same list when it opens.
@@ -313,6 +317,7 @@ export function App({
 
   const placeCatalogueEntry = useCallback(
     (entry: CatalogueEntry): void => {
+      if (structuralEditsLocked) return
       const taken = new Set(editedBoard.parts.map((p) => p.id))
       const part = instantiateCatalogueEntry(entry, taken, {
         x: editedBoard.canvas.width / 2 - 75,
@@ -321,7 +326,7 @@ export function App({
       editor.apply({ kind: 'addPart', part })
       dispatch({ type: 'selectPart', partId: part.id })
     },
-    [dispatch, editedBoard, editor]
+    [dispatch, editedBoard, editor, structuralEditsLocked]
   )
 
   const runVerify = useCallback((): void => {
@@ -393,26 +398,26 @@ export function App({
           void window.pinbench.board.exportPinHeader(editor.edits)
           break
         case 'edit.undo':
-          editor.undo()
+          if (!structuralEditsLocked) editor.undo()
           break
         case 'edit.redo':
-          editor.redo()
+          if (!structuralEditsLocked) editor.redo()
           break
         case 'edit.delete':
-          if (workspace.selectedPartId) {
+          if (workspace.selectedPartId && !structuralEditsLocked) {
             editor.apply({ kind: 'deletePart', partId: workspace.selectedPartId })
             dispatch({ type: 'selectPart', partId: null })
           }
           break
         case 'edit.duplicate':
-          if (selectedPart) {
+          if (selectedPart && !structuralEditsLocked) {
             const copy = duplicatePart(selectedPart, editedBoard)
             editor.apply({ kind: 'addPart', part: copy })
             dispatch({ type: 'selectPart', partId: copy.id })
           }
           break
         case 'edit.autoArrange':
-          editor.applyMany(autoArrangeByBus(editedBoard))
+          if (!structuralEditsLocked) editor.applyMany(autoArrangeByBus(editedBoard))
           break
         case 'build.buildAndFlash':
           buildAndFlash()
@@ -459,6 +464,7 @@ export function App({
       runVerify,
       saveProject,
       selectedPart,
+      structuralEditsLocked,
       workspace.selectedPartId,
       workspace.workspaceTab,
       zoomBy

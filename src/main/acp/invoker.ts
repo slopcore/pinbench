@@ -16,7 +16,8 @@
 
 import { COMMANDS, type CommandId } from '../../shared/commands'
 import type { AppInfo } from '../../shared/ipc'
-import type { BoardDefinition } from '../../shared/board'
+import { boardTotals, type BoardDefinition } from '../../shared/board'
+import type { BoardEdit } from '../../shared/boardEdit'
 import type { BuildStatus } from '../../shared/build'
 import type { EmulatorStatus } from '../../shared/emulator'
 import type { FileNode } from '../../shared/files'
@@ -28,8 +29,17 @@ import { verifyBoard } from '../../shared/verify'
 /** What the invoker needs from the running app. Every method may be async. */
 export interface PinBenchAcpDeps {
   appInfo(): AppInfo | Promise<AppInfo>
-  /** The current board definition — the authority is the main process (ADR 0002). */
-  boardDefinition(): BoardDefinition | Promise<BoardDefinition>
+  /**
+   * The board document. The main process is the single authority (ADR 0002):
+   * `edit` / `undo` / `redo` mutate its in-memory history and return the new
+   * definition. `applyEdit` throws `BoardEditError` on a bad reference.
+   */
+  board: {
+    current(): BoardDefinition | Promise<BoardDefinition>
+    edit(edit: BoardEdit): BoardDefinition | Promise<BoardDefinition>
+    undo(): BoardDefinition | Promise<BoardDefinition>
+    redo(): BoardDefinition | Promise<BoardDefinition>
+  }
   project: {
     /** Adopt the PlatformIO project at `dir`; throws if it holds no platformio.ini. */
     open(dir: string): Promise<{ dir: string; name: string; envs: string[] }>
@@ -37,13 +47,16 @@ export interface PinBenchAcpDeps {
     readFile(path: string): Promise<string>
   }
   build: {
+    /** Build `env` for the open project and boot the result. Throws if no project is open. */
+    start(env: string): void
     cancel(): void
     clean(): void
     status(): BuildStatus | Promise<BuildStatus>
   }
   emulator: {
-    /** Boot a specific image. Reusing the last-built one is M16.3 (needs the supervisor's path). */
     start(firmwarePath: string): void
+    /** The image last booted, for a pathless `emulator_start`. */
+    lastFirmware(): string | null
     stop(): void
     reset(): void
     status(): EmulatorStatus | Promise<EmulatorStatus>
@@ -63,9 +76,9 @@ export interface PinBenchAcpDeps {
 
 const COMMAND_IDS = new Set<string>(COMMANDS)
 /**
- * Menu commands `menu_command` refuses, so it cannot become a bypass for an
- * operation deliberately deferred to M16.3. `build.buildAndFlash` is the
- * deferred `build_start` under another name.
+ * Menu commands `menu_command` refuses because a typed operation covers the
+ * same ground and should be used instead — `build.buildAndFlash` → `build_start`.
+ * Keeping the denylist also means the two paths can't diverge in behaviour.
  */
 const MENU_COMMAND_DENYLIST = new Set<string>(['build.buildAndFlash'])
 const SERIAL_DEFAULT_LIMIT = 200
@@ -85,13 +98,13 @@ export function createInvoker(deps: PinBenchAcpDeps): McpToolInvoker {
         return deps.appInfo()
 
       case 'board_get':
-        return deps.boardDefinition()
+        return deps.board.current()
 
       case 'board_verify':
-        return verifyBoard(await deps.boardDefinition())
+        return verifyBoard(await deps.board.current())
 
       case 'pinmap_preview': {
-        const board = await deps.boardDefinition()
+        const board = await deps.board.current()
         return { header: generatePinHeader(board), buildFlags: generateBuildFlags(board) }
       }
 
@@ -118,25 +131,26 @@ export function createInvoker(deps: PinBenchAcpDeps): McpToolInvoker {
       case 'device_snapshots':
         return { devices: await deps.devices.snapshots() }
 
-      // ── Deferred to M16.3 (ADR 0002) ──────────────────────────────────────
-      case 'board_edit':
-      case 'board_undo':
-      case 'board_redo':
-        throw new NotAvailable(
-          op.name,
-          'board editing over the agent bridge needs the M11.3 history in the main process (M16.3)'
-        )
+      // ── Edit the board document (main-authoritative history, ADR 0002) ─────
+      case 'board_edit': {
+        const board = await deps.board.edit(params['edit'] as BoardEdit)
+        return { board, totals: boardTotals(board) }
+      }
+
+      case 'board_undo': {
+        const board = await deps.board.undo()
+        return { board, totals: boardTotals(board) }
+      }
+
+      case 'board_redo': {
+        const board = await deps.board.redo()
+        return { board, totals: boardTotals(board) }
+      }
 
       case 'pinmap_write':
         throw new NotAvailable(
           op.name,
-          'the project header-write path lands with M11.3 / M16.3; use pinmap_preview to see the output'
-        )
-
-      case 'build_start':
-        throw new NotAvailable(
-          op.name,
-          'the build request needs the board’s emulator launch options assembled in the renderer (M16.3)'
+          'writing the header into the project lands with the M11.3 canvas; use pinmap_preview for the output'
         )
 
       // ── Act ───────────────────────────────────────────────────────────────
@@ -144,6 +158,10 @@ export function createInvoker(deps: PinBenchAcpDeps): McpToolInvoker {
         const result = await deps.project.open(params['dir'] as string)
         return result
       }
+
+      case 'build_start':
+        deps.build.start(params['env'] as string)
+        return { started: true, env: params['env'] }
 
       case 'build_cancel':
         deps.build.cancel()
@@ -154,11 +172,12 @@ export function createInvoker(deps: PinBenchAcpDeps): McpToolInvoker {
         return { cleaned: true }
 
       case 'emulator_start': {
-        const firmwarePath = params['firmwarePath'] as string | undefined
+        const firmwarePath =
+          (params['firmwarePath'] as string | undefined) ?? deps.emulator.lastFirmware()
         if (!firmwarePath) {
           throw new NotAvailable(
             op.name,
-            'reusing the last-built image needs the supervisor’s firmware path exposed (M16.3) — pass firmwarePath'
+            'no firmwarePath given and nothing has been built or booted yet'
           )
         }
         deps.emulator.start(firmwarePath)

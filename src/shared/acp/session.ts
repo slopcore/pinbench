@@ -18,9 +18,9 @@ export interface ClientInfo {
 
 /**
  * Capabilities PinBench advertises to the agent. It can read and write files
- * in the open project (see the `project_*` operations for the guarded path)
- * and run terminal commands — the same surface a normal editor client offers,
- * so a stock agent behaves.
+ * in the open project (see the `project_*` operations for the guarded path).
+ * `terminal` is advertised only when the host wires a terminal provider — the
+ * agent-session core lands `fs/*` first (M16.3); terminal follows.
  */
 export interface AcpClientCapabilities {
   fs: { readTextFile: boolean; writeTextFile: boolean }
@@ -29,7 +29,7 @@ export interface AcpClientCapabilities {
 
 export const PINBENCH_CLIENT_CAPABILITIES: AcpClientCapabilities = {
   fs: { readTextFile: true, writeTextFile: true },
-  terminal: true
+  terminal: false
 }
 
 export interface InitializeParams {
@@ -38,10 +38,13 @@ export interface InitializeParams {
   clientInfo: ClientInfo
 }
 
-export function initializeParams(clientInfo: ClientInfo): InitializeParams {
+export function initializeParams(
+  clientInfo: ClientInfo,
+  capabilities: AcpClientCapabilities = PINBENCH_CLIENT_CAPABILITIES
+): InitializeParams {
   return {
     protocolVersion: ACP_PROTOCOL_VERSION,
-    clientCapabilities: PINBENCH_CLIENT_CAPABILITIES,
+    clientCapabilities: capabilities,
     clientInfo
   }
 }

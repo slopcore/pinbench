@@ -9,12 +9,21 @@ import {
 } from './session'
 
 describe('initializeParams', () => {
-  it('advertises our version, fs read/write and terminal', () => {
+  it('advertises our version and fs read/write; terminal is off until wired', () => {
     const p = initializeParams({ name: 'PinBench', version: '0.1.0' })
     expect(p.protocolVersion).toBe(ACP_PROTOCOL_VERSION)
     expect(p.clientCapabilities).toEqual(PINBENCH_CLIENT_CAPABILITIES)
     expect(p.clientCapabilities.fs).toEqual({ readTextFile: true, writeTextFile: true })
+    expect(p.clientCapabilities.terminal).toBe(false)
+  })
+
+  it('takes an explicit capability override', () => {
+    const p = initializeParams(
+      { name: 'PinBench', version: '0.1.0' },
+      { fs: { readTextFile: true, writeTextFile: false }, terminal: true }
+    )
     expect(p.clientCapabilities.terminal).toBe(true)
+    expect(p.clientCapabilities.fs.writeTextFile).toBe(false)
   })
 })
 

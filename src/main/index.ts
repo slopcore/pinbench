@@ -12,7 +12,7 @@ import type {
   ProjectSaveResult,
   WindowState
 } from '../shared/ipc'
-import type { EmulatorLaunchOptions } from '../shared/emulator'
+import { DEFAULT_LAUNCH_OPTIONS, type EmulatorLaunchOptions } from '../shared/emulator'
 import type { BoardDefinition } from '../shared/board'
 import type { CommandId } from '../shared/commands'
 import { acpRequested, startAcpBridge, type AcpBridge } from './acp/bridge'
@@ -448,10 +448,24 @@ function openProjectAt(rawDir: string): OpenProjectResult {
   return openProject(dir)
 }
 
+const noProject = <T>(): Promise<T> => Promise.reject(new Error('no project open'))
+
+/** Build & boot `env` for the open project — the agent bridge's `build_start`. */
+function buildEnv(env: string): void {
+  if (!project) throw new Error('no project open')
+  const emulatorTarget = currentBoard?.emulator ?? DEFAULT_LAUNCH_OPTIONS
+  void builder()
+    .run({ projectDir: project.rootDir, env, emulator: emulatorTarget })
+    .catch((error: unknown) => {
+      mainWindow?.webContents.send(IpcChannel.buildState, { state: 'failed', error: String(error) })
+    })
+}
+
 /**
- * Stand up the agent control plane (roadmap M16.2). Opt-in: only when the app
- * was started `--acp` / `PINBENCH_ACP=1`. Prints the loopback MCP URL and the
- * per-session token to stderr for a client to pick up.
+ * Stand up the agent control plane (roadmap M16.2–M16.3). Opt-in: only when the
+ * app was started `--acp` / `PINBENCH_ACP=1`. Prints the loopback MCP URL and
+ * the per-session token to stderr. When `PINBENCH_AGENT_CMD` is set, also
+ * spawns that agent and opens a session pointed at the control server.
  */
 async function startAgentBridge(): Promise<void> {
   if (!acpRequested()) return
@@ -461,15 +475,22 @@ async function startAgentBridge(): Promise<void> {
       platform: process.platform,
       isDev,
       emulator: emu(),
-      build: builder(),
+      build: {
+        getStatus: () => builder().getStatus(),
+        start: (env) => buildEnv(env),
+        cancel: () => builder().cancel()
+      },
       devices: deviceHost(),
       getBoard: () => currentBoard,
+      onBoardChanged: (board) => {
+        currentBoard = board
+      },
       project: {
         open: async (dir) => openProjectAt(dir),
-        readTree: (dir) =>
-          project ? project.readTree(dir) : Promise.reject(new Error('no project open')),
-        readFile: (path) =>
-          project ? project.readFile(path) : Promise.reject(new Error('no project open')),
+        readTree: (dir) => (project ? project.readTree(dir) : noProject()),
+        readFile: (path) => (project ? project.readFile(path) : noProject()),
+        writeFile: (path, content) => (project ? project.writeFile(path, content) : noProject()),
+        rootDir: () => project?.rootDir ?? null,
         clean: () => {
           if (!project) throw new Error('no project open')
           rmSync(join(project.rootDir, '.pio', 'build'), { recursive: true, force: true })
@@ -489,6 +510,31 @@ async function startAgentBridge(): Promise<void> {
           detail: op.summary
         })
         return response === 1
+      },
+      requestAgentPermission: async (params) => {
+        const p = (params ?? {}) as {
+          options?: { optionId: string; name: string }[]
+          toolCall?: { title?: string }
+        }
+        if (!mainWindow || !p.options || p.options.length === 0) {
+          return { outcome: { outcome: 'cancelled' } }
+        }
+        const { response } = await dialog.showMessageBox(mainWindow, {
+          type: 'question',
+          buttons: [...p.options.map((o) => o.name), 'Cancel'],
+          defaultId: 0,
+          cancelId: p.options.length,
+          message: `Agent tool call: ${p.toolCall?.title ?? 'permission requested'}`
+        })
+        const picked = p.options[response]
+        return picked
+          ? { outcome: { outcome: 'selected', optionId: picked.optionId } }
+          : { outcome: { outcome: 'cancelled' } }
+      },
+      onAgentUpdate: (params) => {
+        // The renderer-facing session panel is still panel work; until then the
+        // turn is observable on stderr.
+        process.stderr.write(`[agent] update ${JSON.stringify(params)}\n`)
       }
     })
     process.stderr.write(

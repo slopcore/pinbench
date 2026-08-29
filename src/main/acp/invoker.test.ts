@@ -14,19 +14,26 @@ const board = parseBoard(
 function fakeDeps(): PinBenchAcpDeps {
   return {
     appInfo: vi.fn(() => ({ version: '0.1.0', platform: 'darwin' as const, isDev: true })),
-    boardDefinition: vi.fn(() => board),
+    board: {
+      current: vi.fn(() => board),
+      edit: vi.fn(() => board),
+      undo: vi.fn(() => board),
+      redo: vi.fn(() => board)
+    },
     project: {
       open: vi.fn(async (dir: string) => ({ dir, name: 'proj', envs: ['m9'] })),
       readTree: vi.fn(async () => [{ name: 'src', path: '/p/src', kind: 'dir' as const }]),
       readFile: vi.fn(async () => 'file body')
     },
     build: {
+      start: vi.fn(),
       cancel: vi.fn(),
       clean: vi.fn(),
       status: vi.fn(() => ({ state: 'idle' as const }))
     },
     emulator: {
       start: vi.fn(),
+      lastFirmware: vi.fn(() => null),
       stop: vi.fn(),
       reset: vi.fn(),
       status: vi.fn(() => ({ state: 'idle' as const }))
@@ -75,7 +82,7 @@ describe('createInvoker — behaviour', () => {
     const deps = fakeDeps()
     const findings = await run(deps, 'board_verify')
     expect(Array.isArray(findings)).toBe(true)
-    expect(deps.boardDefinition).toHaveBeenCalled()
+    expect(deps.board.current).toHaveBeenCalled()
   })
 
   it('pinmap_preview returns a header and build flags', async () => {
@@ -87,10 +94,10 @@ describe('createInvoker — behaviour', () => {
     expect(out.buildFlags.every((f) => f.startsWith('-D'))).toBe(true)
   })
 
-  it('build_start / pinmap_write are deferred with a clear message', async () => {
-    await expect(run(fakeDeps(), 'build_start', { env: 'm9' })).rejects.toThrow(
-      /not available in this build/
-    )
+  it('build_start forwards the env; pinmap_write is still deferred', async () => {
+    const deps = fakeDeps()
+    await run(deps, 'build_start', { env: 'm9' })
+    expect(deps.build.start).toHaveBeenCalledWith('m9')
     await expect(run(fakeDeps(), 'pinmap_write')).rejects.toThrow(/not available in this build/)
   })
 
@@ -102,12 +109,30 @@ describe('createInvoker — behaviour', () => {
     expect(deps.build.clean).toHaveBeenCalled()
   })
 
-  it('emulator_start boots a given image, and refuses a pathless call', async () => {
+  it('emulator_start boots a given image, falls back to the last one, else refuses', async () => {
     const deps = fakeDeps()
     await run(deps, 'emulator_start', { firmwarePath: '/fw.bin' })
-    expect(deps.emulator.start).toHaveBeenCalledWith('/fw.bin')
-    await expect(run(deps, 'emulator_start', {})).rejects.toThrow(/not available in this build/)
-    expect(deps.emulator.start).toHaveBeenCalledTimes(1)
+    expect(deps.emulator.start).toHaveBeenLastCalledWith('/fw.bin')
+
+    // pathless with a prior image → reuse it
+    ;(deps.emulator.lastFirmware as ReturnType<typeof vi.fn>).mockReturnValue('/last.bin')
+    await run(deps, 'emulator_start', {})
+    expect(deps.emulator.start).toHaveBeenLastCalledWith('/last.bin')
+
+    // pathless with nothing ever built → a clear error
+    ;(deps.emulator.lastFirmware as ReturnType<typeof vi.fn>).mockReturnValue(null)
+    await expect(run(deps, 'emulator_start', {})).rejects.toThrow(/no firmwarePath/)
+  })
+
+  it('board_edit / board_undo / board_redo mutate the main-held history', async () => {
+    const deps = fakeDeps()
+    const edit = { kind: 'moveParty', partId: 'u2', x: 1, y: 2 }
+    await run(deps, 'board_edit', { edit })
+    expect(deps.board.edit).toHaveBeenCalledWith(edit)
+    await run(deps, 'board_undo')
+    expect(deps.board.undo).toHaveBeenCalled()
+    await run(deps, 'board_redo')
+    expect(deps.board.redo).toHaveBeenCalled()
   })
 
   it('serial_read clamps the limit to a positive integer', async () => {
@@ -144,14 +169,6 @@ describe('createInvoker — behaviour', () => {
       /not available in this build/
     )
     expect(deps.menuCommand).not.toHaveBeenCalled()
-  })
-
-  it('board edits report as not available in this build', async () => {
-    for (const name of ['board_edit', 'board_undo', 'board_redo']) {
-      await expect(run(fakeDeps(), name, { edit: {} })).rejects.toThrow(
-        /not available in this build/
-      )
-    }
   })
 
   it('project_open adopts the given directory', async () => {

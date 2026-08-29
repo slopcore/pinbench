@@ -1822,7 +1822,7 @@ with per-field validation, JSON-Schema emit and the risk/permission model
 `tools/call` flow and the permission gate — with no agent and no emulator in
 the loop. **51 unit tests, on `main`.**
 
-### M16.2 · Binding and the loopback control server — `M` ✅ **done**
+### M16.2 · Binding and the loopback control server — `M` ✅ **done** (deferred ops landed in M16.3)
 
 **Build.** `src/main/acp/`, no Electron in the testable core:
 
@@ -1860,30 +1860,61 @@ operation against fakes, the loopback server's auth / origin / fail-closed
 behaviour end to end over real HTTP, and the permission prompt fired through
 `startAcpBridge` against a real server. **77 ACP unit tests across
 `src/shared/acp/` and `src/main/acp/`**; `npm run typecheck` and `npm run
-build` clean. The live end-to-end check — launch `PINBENCH_ACP=1`, point a
-configured agent at the printed URL + token, watch a `board_verify` prompt
-round-trip — is **not yet performed**; it moves to M16.3's checklist, which
-lands the agent-side connection that makes it runnable.
+build` clean. The live end-to-end check with a real agent binary belongs to
+M16.3.
 
 **Watch for.** The MCP server must never bind a routable interface (the test
 asserts the `127.0.0.1` URL). The bridge must dispose with the app. No-path
 `emulator_start` and `menu_command('build.buildAndFlash')` are both refused,
 so neither becomes a silent no-op nor a bypass for a deferred operation.
 
-### M16.3 · The agent session, and the panel — `M`
+### M16.3 · The agent-side connection, and the deferred operations — `M` ✅ **done** (panel carried to M16.4)
 
-**Build.** The agent-side ACP connection: spawn the configured agent
-subprocess, ndjson stdio stream, `initialize` → `session/new` (listing the
-loopback MCP server) → `session/prompt`, serve the client callbacks (`fs/*`
-and `terminal/*` gated by `ProjectFiles.guard()`, `session/request_permission`
-to the dialog, `session/update` to the renderer). Land the deferred
-operations: assemble the build request for `build_start`, wire `pinmap_write`
-to the M11.3 header path, and route `board_edit` / `board_undo` / `board_redo`
-through the main-authoritative `BoardHistory`. A dock panel: the running turn,
-each tool call and result, permission prompts inline (allow /
-allow-for-session / deny), a stop button wired to `session/cancel`, and the
-policy control. Ship the `pinbench-mcp` stdio→HTTP bridge script for
-stdio-only agents.
+**Build.** `src/main/acp/`:
+
+- `connection.ts` — `AcpConnection`, a symmetric JSON-RPC 2.0 peer over a line
+  transport: outbound `request` / `notify` with response correlation, an
+  injected handler map for inbound, both directions interleaving.
+- `agent.ts` — `agentCommandFromEnv()` (`PINBENCH_AGENT_CMD` /
+  `PINBENCH_AGENT_ARGS`) and `spawnAgent()`, wrapping the child's stdio as a
+  transport with its stderr forwarded.
+- `agentSession.ts` — `AgentSession`: `initialize` → `session/new` (listing the
+  loopback MCP control server, so the agent's model calls PinBench's
+  operations as tools) → `session/prompt`; serves `fs/read_text_file`,
+  `fs/write_text_file` (both through `ProjectFiles.guard()`),
+  `session/request_permission`, and the `session/update` stream; `cancel()`
+  sends `session/cancel`.
+- `bridge.ts` — when an agent command is configured, spawns it, opens the
+  connection, drives the session, exposes `bridge.prompt(text)`, and kills the
+  child on dispose.
+
+Deferred operations landed: `board_edit` / `board_undo` / `board_redo` run
+against a `BoardHistory` the **main process** owns (ADR 0002 — every mutation
+re-`load`s the device host and calls `onBoardChanged`); `build_start` assembles
+the `BuildRequest` from the open project and the board's `emulator` target;
+pathless `emulator_start` reuses `EmulatorSupervisor.lastFirmware()`.
+`ProjectFiles` gained a guarded `writeFile`; `EmulatorSupervisor` a
+`lastFirmware()` accessor. Client capabilities now advertise `terminal: false`
+until a terminal provider is wired.
+
+**Done when.** `npm test` drives a full turn against a fake agent over an
+in-memory transport — `initialize`, `session/new` with the control server
+listed, `session/prompt`, `fs/*`, `session/request_permission`,
+`session/update`, `session/cancel` — plus `board_edit` round-tripping through
+the bridge's real history and re-syncing the device host. **97 ACP unit tests
+across `src/shared/acp/` and `src/main/acp/`**; `npm run typecheck` / `npm run
+build` clean. Still owed: the live run against a real agent binary
+(`PINBENCH_AGENT_CMD=<agent> PINBENCH_ACP=1`).
+
+### M16.4 · The agent session panel, and stdio agents — `S`
+
+**Build.** A dock panel: the running turn, each tool call and result,
+permission prompts inline (allow / allow-for-session / deny), a stop button
+wired to `session.cancel()`, and the policy control (ask-everything / default
+/ trusted). Replace the stderr `onAgentUpdate` sink with an IPC channel to
+that panel. Ship the `pinbench-mcp` stdio→HTTP bridge executable for agents
+that only support the mandatory `Stdio` MCP transport. Wire `pinmap_write` to
+the M11.3 canvas header path. Advertise and implement `terminal/*`.
 
 **Done when.** You can watch an agent wire the LR1110's BUSY line to a GPIO,
 verify, and flash — from the panel, approving the `exec` steps as they come.

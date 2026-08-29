@@ -1,16 +1,21 @@
 /**
- * Assembles the agent control plane in the main process (roadmap M16.2):
- * builds a {@link PinBenchAcpDeps} from the live supervisors, composes the
- * permission gate, and stands up the loopback MCP server ({@link
- * startAcpControlServer}).
+ * Assembles the agent control plane in the main process (roadmap M16.2–M16.3):
+ *
+ *  - builds a {@link PinBenchAcpDeps} from the live supervisors and a
+ *    main-authoritative board history (ADR 0002);
+ *  - composes the permission gate (`read`/`write` auto, `exec` → the host's
+ *    `confirm`);
+ *  - stands up the loopback MCP control server ({@link startAcpControlServer});
+ *  - when an agent command is configured, spawns it, opens an
+ *    {@link AcpConnection}, and drives an {@link AgentSession} that lists the
+ *    control server so the agent's model can call PinBench's operations.
  *
  * Only reached when PinBench is started `--acp` / `PINBENCH_ACP=1` — see
- * {@link acpRequested}. The agent-side ACP connection (spawning the agent,
- * the prompt turn, `session/update` streaming) is M16.3; this milestone puts
- * the operations on a wire an agent can call.
+ * {@link acpRequested}.
  */
 
 import type { BoardDefinition } from '../../shared/board'
+import { BoardHistory, type BoardEdit } from '../../shared/boardEdit'
 import type { CommandId } from '../../shared/commands'
 import type { FileNode } from '../../shared/files'
 import type { SerialLine } from '../../shared/serial'
@@ -19,6 +24,9 @@ import { defaultPermissionPolicy } from '../../shared/acp/operations'
 import type { OperationDescriptor } from '../../shared/acp/operations'
 import { createInvoker, type PinBenchAcpDeps } from './invoker'
 import { startAcpControlServer, type AcpControlServerHandle } from './httpServer'
+import { AcpConnection } from './connection'
+import { AgentSession, type SessionCallbacks } from './agentSession'
+import { agentCommandFromEnv, spawnAgent, type AgentCommand, type SpawnedAgent } from './agent'
 
 /** True when this launch asked for the agent bridge. */
 export function acpRequested(argv: readonly string[] = process.argv, env = process.env): boolean {
@@ -28,6 +36,7 @@ export function acpRequested(argv: readonly string[] = process.argv, env = proce
 interface EmulatorLike {
   getStatus(): { state: string }
   start(firmwarePath: string): void
+  lastFirmware(): string | null
   reset(): void
   stop(): void
   writeSerial(text: string): void
@@ -37,10 +46,12 @@ interface EmulatorLike {
 
 interface BuildLike {
   getStatus(): unknown
+  start(env: string): void
   cancel(): void
 }
 
 interface DeviceHostLike {
+  load(board: BoardDefinition): void
   command(partId: string, command: string, args?: Record<string, unknown>): void
   on(event: 'snapshot', listener: (message: DeviceSnapshotMessage) => void): unknown
 }
@@ -52,14 +63,19 @@ export interface AcpBridgeWiring {
   emulator: EmulatorLike
   build: BuildLike
   devices: DeviceHostLike
-  /** The board the main process currently holds authority over (ADR 0002). */
+  /** The board the app currently holds — seeds the bridge's authoritative history. */
   getBoard(): BoardDefinition | null
+  /** Called after every board edit / undo / redo so the app re-syncs (device host, renderer). */
+  onBoardChanged(board: BoardDefinition): void
   project: {
     open(dir: string): Promise<{ dir: string; name: string; envs: string[] }>
     readTree(dir?: string): Promise<FileNode[]>
     readFile(path: string): Promise<string>
+    writeFile(path: string, content: string): Promise<void>
     /** Delete the build caches for the open project. Throws if no project is open. */
     clean(): void
+    /** Absolute root of the open project, or null. Used as the agent session cwd. */
+    rootDir(): string | null
   }
   menuCommand(command: CommandId): void
   /**
@@ -68,6 +84,14 @@ export interface AcpBridgeWiring {
    * `ask`.
    */
   confirm(op: OperationDescriptor): Promise<boolean>
+  /** ACP `session/request_permission` from the agent — the tool-call approval prompt. */
+  requestAgentPermission?(params: unknown): Promise<{
+    outcome: { outcome: string; optionId?: string }
+  }>
+  /** A streamed `session/update` from the agent (assistant text, tool calls, plans). */
+  onAgentUpdate?(params: unknown): void
+  /** The agent command; defaults to `PINBENCH_AGENT_CMD` / `PINBENCH_AGENT_ARGS`. */
+  agent?: AgentCommand | null
   /** How many trailing serial lines to keep for `serial_read`. */
   serialBufferLines?: number
 }
@@ -76,6 +100,10 @@ const DEFAULT_SERIAL_BUFFER = 2000
 
 export interface AcpBridge {
   readonly server: AcpControlServerHandle
+  /** The agent session, once `session/new` has resolved. Null when no agent is configured. */
+  readonly session: AgentSession | null
+  /** Send a prompt to the agent. Rejects if no agent is running. */
+  prompt(text: string): Promise<{ stopReason: string }>
   dispose(): Promise<void>
 }
 
@@ -94,16 +122,34 @@ export async function startAcpBridge(wiring: AcpBridgeWiring): Promise<AcpBridge
   }
   wiring.devices.on('snapshot', onSnapshot)
 
+  // The main process is the single authority on the board document (ADR 0002).
+  // Seeded lazily from whatever the app currently holds.
+  let history: BoardHistory | null = null
+  const ensureHistory = (): BoardHistory => {
+    if (!history) {
+      const board = wiring.getBoard()
+      if (!board) throw new Error('no board is loaded')
+      history = new BoardHistory(board)
+    }
+    return history
+  }
+  const commitBoard = (board: BoardDefinition): BoardDefinition => {
+    wiring.devices.load(board)
+    wiring.onBoardChanged(board)
+    return board
+  }
+
   const deps: PinBenchAcpDeps = {
     appInfo: () => ({
       version: wiring.appVersion,
       platform: wiring.platform,
       isDev: wiring.isDev
     }),
-    boardDefinition: () => {
-      const board = wiring.getBoard()
-      if (!board) throw new Error('no board is loaded')
-      return board
+    board: {
+      current: () => (history ? history.present : requireBoard(wiring.getBoard())),
+      edit: (edit: BoardEdit) => commitBoard(ensureHistory().apply(edit)),
+      undo: () => commitBoard(ensureHistory().undo()),
+      redo: () => commitBoard(ensureHistory().redo())
     },
     project: {
       open: (dir) => wiring.project.open(dir),
@@ -111,12 +157,14 @@ export async function startAcpBridge(wiring: AcpBridgeWiring): Promise<AcpBridge
       readFile: (path) => wiring.project.readFile(path)
     },
     build: {
+      start: (env) => wiring.build.start(env),
       cancel: () => wiring.build.cancel(),
       clean: () => wiring.project.clean(),
       status: () => wiring.build.getStatus() as never
     },
     emulator: {
       start: (firmwarePath) => wiring.emulator.start(firmwarePath),
+      lastFirmware: () => wiring.emulator.lastFirmware(),
       stop: () => wiring.emulator.stop(),
       reset: () => wiring.emulator.reset(),
       status: () => wiring.emulator.getStatus() as never
@@ -142,9 +190,55 @@ export async function startAcpBridge(wiring: AcpBridgeWiring): Promise<AcpBridge
     authorize
   })
 
+  // ── The agent, if one is configured ──────────────────────────────────────
+  let spawned: SpawnedAgent | null = null
+  let session: AgentSession | null = null
+  // `agent: null` means "no agent, don't look at the env"; omitting it falls
+  // back to PINBENCH_AGENT_CMD.
+  const agentCommand = wiring.agent === undefined ? agentCommandFromEnv() : wiring.agent
+  if (agentCommand) {
+    try {
+      const cwd = wiring.project.rootDir() ?? process.cwd()
+      spawned = spawnAgent(agentCommand, cwd)
+      const connection = new AcpConnection(spawned.transport)
+      const callbacks: SessionCallbacks = {
+        fs: {
+          readTextFile: (path) => wiring.project.readFile(path),
+          writeTextFile: (path, content) => wiring.project.writeFile(path, content)
+        },
+        requestPermission: (params) =>
+          wiring.requestAgentPermission
+            ? wiring.requestAgentPermission(params)
+            : Promise.resolve({ outcome: { outcome: 'cancelled' } }),
+        onUpdate: (params) => wiring.onAgentUpdate?.(params)
+      }
+      session = new AgentSession({
+        connection,
+        clientInfo: { name: 'PinBench', version: wiring.appVersion },
+        cwd,
+        mcpServerUrl: server.url,
+        mcpServerToken: server.token,
+        callbacks
+      })
+      await session.start()
+    } catch (error) {
+      process.stderr.write(`[pinbench] agent session failed to start: ${String(error)}\n`)
+      spawned?.kill()
+      spawned = null
+      session = null
+    }
+  }
+
   return {
     server,
+    session,
+    prompt: (text) => {
+      if (!session) return Promise.reject(new Error('no agent is running'))
+      return session.prompt(text)
+    },
     dispose: async () => {
+      session?.cancel()
+      spawned?.kill()
       ;(wiring.emulator as unknown as { off?: typeof wiring.emulator.on }).off?.('serial', onSerial)
       ;(wiring.devices as unknown as { off?: typeof wiring.devices.on }).off?.(
         'snapshot',
@@ -153,4 +247,9 @@ export async function startAcpBridge(wiring: AcpBridgeWiring): Promise<AcpBridge
       await server.close()
     }
   }
+}
+
+function requireBoard(board: BoardDefinition | null): BoardDefinition {
+  if (!board) throw new Error('no board is loaded')
+  return board
 }

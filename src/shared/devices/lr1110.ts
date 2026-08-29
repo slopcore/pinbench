@@ -146,8 +146,9 @@ const STAT2_MODE = {
 
 const PACKET_TYPE_LORA = 0x02
 
-// IRQ bits (32-bit IRQ word). RX_DONE joins in M7.3 with frame injection.
+// IRQ bits (32-bit IRQ word).
 const IRQ_TX_DONE = 0x01 << 2
+const IRQ_RX_DONE = 0x01 << 3
 
 // LoRa bandwidth register value → kHz (RadioLib LR11X0_LORA_BW_*).
 const BW_KHZ: Record<number, number> = { 0x03: 62.5, 0x04: 125, 0x05: 250, 0x06: 500 }
@@ -219,6 +220,9 @@ export class Lr1110Model implements DeviceModel {
   private txBuffer = new Uint8Array(0)
   private rxBuffer = new Uint8Array(0)
   private rxLen = 0
+  private noiseFloorDbm = -120
+  private rxCount = 0
+  private txCount = 0
 
   /** A read whose reply the next bare-NOP transaction will carry. */
   private pendingRead: Uint8Array | null = null
@@ -261,6 +265,7 @@ export class Lr1110Model implements DeviceModel {
     this.txBuffer = new Uint8Array(0)
     this.rxBuffer = new Uint8Array(0)
     this.rxLen = 0
+    this.noiseFloorDbm = -120
     this.pendingRead = null
     this.ctx?.driveSignal('BUSY', 0)
     this.ctx?.driveSignal('IRQ', 0)
@@ -461,6 +466,7 @@ export class Lr1110Model implements DeviceModel {
       }
       case OP.SET_TX: {
         this.mode = 'tx'
+        this.txCount += 1
         const airtime = loraToaMs(this.sf, this.bwHz, this.crDen, this.txBuffer.length || 16)
         this.lastAirtimeMs = airtime
         this.raiseIrq(IRQ_TX_DONE)
@@ -510,7 +516,8 @@ export class Lr1110Model implements DeviceModel {
 
   onCommand(command: string, args?: Record<string, unknown>): void {
     if (command === 'setParam') {
-      // The four Inspector fields. Full IN-panel injection lands in M7.3.
+      // The four Inspector config fields, wired live (the general
+      // Inspector-config mechanism is M12; this is four fields by hand).
       const bw = num(args?.['bw'])
       const sf = num(args?.['sf'])
       const cr = num(args?.['cr'])
@@ -525,7 +532,56 @@ export class Lr1110Model implements DeviceModel {
       })
       return
     }
+    if (command === 'inject') {
+      this.inject(args ?? {})
+      return
+    }
     this.ctx?.diagnose('warn', `LR1110: unknown command "${command}"`)
+  }
+
+  /**
+   * IN-panel stimuli. `kind` is `advert` (a node advert from an address at N
+   * hops), `channel` (a channel message — `text`), `ack` (a delivery ack), or
+   * `noise` (a noise-floor burst, no packet). Each carries the `rssi`/`snr` the
+   * OUT panel reports. A packet fills the RX buffer, sets RX-done, and pulses
+   * DIO9 so the guest's poll wakes; noise only moves the floor.
+   */
+  private inject(args: Record<string, unknown>): void {
+    const kind = String(args['kind'] ?? 'channel')
+
+    if (kind === 'noise') {
+      this.noiseFloorDbm = num(args['floor']) ?? -100
+      this.lastRssi = this.noiseFloorDbm
+      this.ctx?.emit({
+        kind: 'noise',
+        summary: `Noise floor ${this.noiseFloorDbm} dBm`,
+        detail: { floorDbm: this.noiseFloorDbm }
+      })
+      return
+    }
+
+    const frame = new Uint8Array(buildMeshFrame(kind, args))
+    this.rxBuffer = frame
+    this.rxLen = frame.length
+    this.lastRssi = num(args['rssi']) ?? -80
+    this.lastSnr = num(args['snr']) ?? 7
+    this.lastAirtimeMs = loraToaMs(this.sf, this.bwHz, this.crDen, frame.length || 16)
+    this.rxCount += 1
+    // Raise RX-done regardless of mode — MeshCore arms continuous RX; if the
+    // guest is not listening it will simply clear the flag.
+    this.raiseIrq(IRQ_RX_DONE)
+    this.ctx?.emit({
+      kind: 'rx',
+      summary: `RX ${kind} ${frame.length} B  ${this.lastRssi} dBm / ${this.lastSnr} dB`,
+      detail: {
+        kind,
+        bytes: frame.length,
+        rssiDbm: this.lastRssi,
+        snrDb: this.lastSnr,
+        airtimeMs: this.lastAirtimeMs,
+        armed: this.mode === 'rx'
+      }
+    })
   }
 
   // --- observable state -----------------------------------------------
@@ -544,6 +600,9 @@ export class Lr1110Model implements DeviceModel {
       lastRssi: this.lastRssi,
       lastSnr: this.lastSnr,
       lastAirtimeMs: this.lastAirtimeMs,
+      noiseFloorDbm: this.noiseFloorDbm,
+      rxCount: this.rxCount,
+      txCount: this.txCount,
       resetCount: this.resetCount,
       nssLow: this.nssLow
     }
@@ -568,6 +627,24 @@ export class Lr1110Model implements DeviceModel {
 function isAllZero(a: Uint8Array): boolean {
   for (const b of a) if (b !== 0) return false
   return true
+}
+
+/**
+ * A plausible-shaped mesh frame for an IN-panel stimulus. MeshCore parses its
+ * own wire format from the RX buffer; the model only needs the length right for
+ * airtime and a leading type byte so a trace is legible. `[type, ...src(4),
+ * hops, ...payload]`.
+ */
+function buildMeshFrame(kind: string, args: Record<string, unknown>): Uint8Array {
+  const from = (num(args['from']) ?? 0x0a1b2c3d) >>> 0
+  const hops = Math.max(0, Math.min(7, num(args['hops']) ?? 0))
+  const src = [from >>> 24, (from >>> 16) & 0xff, (from >>> 8) & 0xff, from & 0xff]
+  if (kind === 'advert') return Uint8Array.from([0x01, ...src, hops, 0x00])
+  if (kind === 'ack') return Uint8Array.from([0x20, ...src, hops])
+  // channel message
+  const text = typeof args['text'] === 'string' ? (args['text'] as string) : 'trailhead in 20'
+  const body = new TextEncoder().encode(text)
+  return Uint8Array.from([0x10, ...src, hops, ...body])
 }
 
 function num(v: unknown): number | undefined {

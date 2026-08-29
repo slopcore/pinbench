@@ -1,8 +1,17 @@
 import { CATEGORY_LABELS } from '@shared/board'
 import type { BoardDefinition, PartConfigField, PartDefinition } from '@shared/board'
+import { InPanel } from './InPanel'
 import { OutPanel } from './OutPanel'
 import type { PartDeviceView } from '../state/useDevices'
 import './panels.css'
+
+/** LR1110 Inspector fields wired straight to the model's `setParam` (M7.3). */
+const LR1110_LIVE_FIELDS: Record<string, string> = {
+  bw: 'bw',
+  sf: 'sf',
+  cr: 'cr',
+  txPower: 'txPower'
+}
 
 interface InspectorProps {
   board: BoardDefinition
@@ -18,6 +27,8 @@ interface InspectorProps {
   device?: PartDeviceView | undefined
   /** Drive a signal into the selected part's model (LED stand-in until M6). */
   onSetLevel?: ((signal: string, level: 0 | 1) => void) | undefined
+  /** Send an IN-panel command to the selected part's model (`onCommand`). */
+  onCommand?: ((command: string, args?: Record<string, unknown>) => void) | undefined
 }
 
 /** UART rates read as baud; a clocked bus reads as a frequency. */
@@ -42,8 +53,16 @@ export function Inspector({
   values,
   onConfigChange,
   device,
-  onSetLevel
+  onSetLevel,
+  onCommand
 }: InspectorProps): React.JSX.Element {
+  /** Apply a config edit, and for the LR1110's live fields also poke the model. */
+  const applyConfig = (partId: string, fieldId: string, value: string | number | boolean): void => {
+    onConfigChange(partId, fieldId, value)
+    if (part?.deviceModel === 'semtech.lr1110' && onCommand && LR1110_LIVE_FIELDS[fieldId]) {
+      onCommand('setParam', { [LR1110_LIVE_FIELDS[fieldId]!]: value })
+    }
+  }
   return (
     <aside className="panel panel--inspector" aria-label="Inspector">
       <div className="panel__header">
@@ -80,7 +99,7 @@ export function Inspector({
                 {part.config.map((field) => {
                   const value = fieldValue(values, part, field)
                   const change = (next: string | number | boolean): void =>
-                    onConfigChange(part.id, field.id, next)
+                    applyConfig(part.id, field.id, next)
                   return (
                     <div className="field" key={field.id}>
                       <span className="field__label">{field.label}</span>
@@ -185,6 +204,10 @@ export function Inspector({
                   })}
                 </ul>
               </section>
+            )}
+
+            {part.deviceModel !== undefined && onCommand && (
+              <InPanel part={part} onCommand={onCommand} />
             )}
 
             {part.deviceModel !== undefined && (

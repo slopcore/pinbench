@@ -482,6 +482,12 @@ export function App({ appInfo, windowState, board, initialProject }: AppProps): 
                     devices.setSignal(selectedPart.id, signal, level)
                 : undefined
             }
+            onCommand={
+              selectedPart
+                ? (command: string, args?: Record<string, unknown>) =>
+                    devices.sendCommand(selectedPart.id, command, args)
+                : undefined
+            }
           />
         )}
       </div>

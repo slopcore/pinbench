@@ -263,6 +263,10 @@ function registerIpc(): void {
         const level = message.args['level'] === 0 ? 0 : 1
         const signal = String(message.args['signal'] ?? 'ANODE')
         devices?.injectSignal(message.partId, signal, level)
+      } else {
+        // Any other command (LR1110 IN panel: `inject`, `setParam`) goes
+        // straight to the model's onCommand.
+        devices?.command(message.partId, message.command, message.args)
       }
     }
   )

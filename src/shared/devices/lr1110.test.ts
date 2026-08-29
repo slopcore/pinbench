@@ -149,6 +149,64 @@ describe('Lr1110Model', () => {
     expect(s['crDen']).toBe(6)
     expect(s['txPowerDbm']).toBe(14)
   })
+
+  describe('IN-panel injection (M7.3)', () => {
+    function configured(): ReturnType<typeof harness> {
+      const h = harness(new Lr1110Model())
+      write(h, OP.SET_PACKET_TYPE, 0x02)
+      write(h, OP.SET_MODULATION_PARAMS, 11, 0x05, 0x05, 0x00) // SF11 BW250 CR4/5
+      write(h, OP.SET_DIO_IRQ_PARAMS, 0xff, 0xff, 0xff, 0xff, 0, 0, 0, 0)
+      write(h, OP.SET_RX, 0, 0, 0)
+      return h
+    }
+
+    it('a channel message raises RX-done, pulses DIO9, and fills the RX buffer', () => {
+      const h = configured()
+      h.command('inject', { kind: 'channel', text: 'trailhead in 20', rssi: -74, snr: 9 })
+      expect(h.line('IRQ')).toBe(1)
+      const irq = (poll(h)[2]! << 24) | (poll(h)[3]! << 16) | (poll(h)[4]! << 8) | poll(h)[5]!
+      expect(irq & (1 << 3)).toBeTruthy() // RX_DONE
+      const s = h.snapshot()
+      expect(s['rxCount']).toBe(1)
+      expect(s['lastRssi']).toBe(-74)
+      expect(s['lastSnr']).toBe(9)
+      expect(s['lastAirtimeMs']).toBeGreaterThan(0)
+      // GET_RX_BUFFER_STATUS reports a non-zero payload length.
+      expect(read(h, 0x0203, [], 2)[1]).toBeGreaterThan(0)
+      // READ_BUFFER returns the injected bytes (type 0x10 = channel message).
+      const status = read(h, 0x0203, [], 2)
+      const len = status[1]!
+      expect(read(h, 0x010a, [0, len], len)[1]).toBe(0x10)
+    })
+
+    it('an advert and an ack each raise RX-done with the right RSSI', () => {
+      const h = configured()
+      h.command('inject', { kind: 'advert', from: 0x11223344, hops: 3, rssi: -88 })
+      expect(h.snapshot()['lastRssi']).toBe(-88)
+      write(h, OP.CLEAR_IRQ, 0xff, 0xff, 0xff, 0xff)
+      h.command('inject', { kind: 'ack', rssi: -60 })
+      expect(h.line('IRQ')).toBe(1)
+      expect(h.snapshot()['rxCount']).toBe(2)
+    })
+
+    it('a noise burst moves the floor without raising an IRQ', () => {
+      const h = configured()
+      h.command('inject', { kind: 'noise', floor: -95 })
+      expect(h.line('IRQ')).toBe(0)
+      const s = h.snapshot()
+      expect(s['noiseFloorDbm']).toBe(-95)
+      expect(s['rxCount']).toBe(0)
+    })
+
+    it('the airtime meter tracks the active modulation for an injected frame', () => {
+      const h = configured()
+      h.command('inject', { kind: 'channel', text: 'x'.repeat(40) })
+      const slow = h.meter('airtime')!
+      h.command('setParam', { sf: 7 })
+      h.command('inject', { kind: 'channel', text: 'x'.repeat(40) })
+      expect(h.meter('airtime')!).toBeLessThan(slow) // SF7 is faster than SF11
+    })
+  })
 })
 
 describe('loraToaMs', () => {

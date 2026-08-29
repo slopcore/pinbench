@@ -327,6 +327,18 @@ export class DeviceHost extends EventEmitter {
     this.runSignal(device, signal, level, at)
   }
 
+  /**
+   * Deliver an IN-panel command to the model on `partId` (`onCommand`). Used by
+   * the LR1110/keyboard IN panels from M7. A model without `onCommand` is a
+   * no-op; a throw is caught by {@link guard} like any other model call.
+   */
+  command(partId: string, command: string, args?: Record<string, unknown>): void {
+    const device = this.devices.get(partId)
+    if (!device || device.quarantined || !device.model.onCommand) return
+    this.guard(device, 'onCommand', () => device.model.onCommand!(command, args))
+    this.pushSnapshot(device)
+  }
+
   /** Reset every loaded model and clear quarantine. */
   resetAll(): void {
     for (const device of this.devices.values()) {

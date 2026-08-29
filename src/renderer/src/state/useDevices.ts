@@ -23,6 +23,8 @@ export interface DevicesHandle {
   diagnostics: Diagnostic[]
   /** Drive a line into a device to a level — a stand-in until M6 feeds real GPIO edges. */
   setSignal(partId: string, signal: string, level: 0 | 1): void
+  /** Send an IN-panel command to a model's `onCommand` (LR1110 `inject`, `setParam`). */
+  sendCommand(partId: string, command: string, args?: Record<string, unknown>): void
 }
 
 interface DevicesState {
@@ -97,6 +99,14 @@ export function useDevices(): DevicesHandle {
     window.pinbench.devices.command({ partId, command: 'signal', args: { signal, level } })
   }, [])
 
+  /** Send an IN-panel command to a model's `onCommand` (LR1110 `inject` etc.). */
+  const sendCommand = useCallback(
+    (partId: string, command: string, args?: Record<string, unknown>) => {
+      window.pinbench.devices.command({ partId, command, ...(args ? { args } : {}) })
+    },
+    []
+  )
+
   const byPart = new Map<string, PartDeviceView>()
   const partIds = new Set([
     ...state.snapshots.keys(),
@@ -112,5 +122,5 @@ export function useDevices(): DevicesHandle {
     })
   }
 
-  return { byPart, diagnostics: state.diagnostics, setSignal }
+  return { byPart, diagnostics: state.diagnostics, setSignal, sendCommand }
 }

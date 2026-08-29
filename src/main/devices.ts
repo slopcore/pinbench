@@ -139,6 +139,8 @@ export class DeviceHost extends EventEmitter {
   private pinLevels = new Map<number, 0 | 1>()
   /** board bus id → part ids on it, in board order. */
   private busMembers = new Map<string, string[]>()
+  /** ids of the board's SPI buses; its size drives multi-bus xfer routing. */
+  private spiBusIds = new Set<string>()
   private frameTimer: ReturnType<typeof setInterval> | null = null
 
   constructor(options: DeviceHostOptions = {}) {
@@ -175,6 +177,7 @@ export class DeviceHost extends EventEmitter {
       }
     }
     const spiBusIds = new Set(board.buses.filter((b) => b.kind === 'spi').map((b) => b.id))
+    this.spiBusIds = spiBusIds
 
     for (const part of board.parts) {
       const id = part.deviceModel
@@ -433,7 +436,7 @@ export class DeviceHost extends EventEmitter {
       }
       case Op.Xfer: {
         const device = this.deviceForXfer(frame.bus, frame.select)
-        const bus = this.busOrder[frame.bus] ?? 'unknown'
+        const bus = device?.part.buses[0] ?? this.busOrder[frame.bus] ?? 'unknown'
         const miso = device
           ? this.runBus(device, {
               bus,
@@ -607,14 +610,29 @@ export class DeviceHost extends EventEmitter {
     if (busIndex === BUS_NONE) return undefined
     const busId = this.busOrder[busIndex]
     if (!busId) return undefined
-    const onBus = [...this.devices.values()].filter((d) => d.part.buses.includes(busId))
-    if (onBus.length <= 1) return onBus[0]
+    const primary = [...this.devices.values()].filter((d) => d.part.buses.includes(busId))
+
+    // An explicit hardware select in the frame always wins.
     if (select !== SELECT_NONE) {
-      const byHash = onBus.find((d) => d.signalsByHash.has(select))
+      const byHash = primary.find((d) => d.signalsByHash.has(select))
       if (byHash) return byHash
     }
-    const selected = onBus.filter((d) => d.csLow)
-    return selected.length === 1 ? selected[0] : undefined
+
+    // GPIO chip-select boards carry no hardware select, so the target is the
+    // SPI device holding CS low. The fork maps GP-SPI2 and GP-SPI3 both to
+    // bus_index 0, so on a board with more than one SPI bus the indexed bus
+    // names only one of them — widen the CS scan to every SPI device.
+    const pool = primary.length > 1 || this.spiBusIds.size > 1 ? this.spiDevices() : primary
+    const low = pool.filter((d) => d.csLow)
+    if (low.length === 1) return low[0]
+    if (primary.length === 1) return primary[0]
+    return undefined
+  }
+
+  private spiDevices(): LoadedDevice[] {
+    return [...this.devices.values()].filter((d) =>
+      d.part.buses.some((b) => this.spiBusIds.has(b))
+    )
   }
 
   /**

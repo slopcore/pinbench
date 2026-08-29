@@ -182,6 +182,16 @@ export class Sx1262Model implements DeviceModel {
   // Line state.
   private nssLow = false
 
+  // SPI frame reassembly. RadioLib's ArduinoHal clocks each SX126x command one
+  // byte per SPI transaction, so `onBus` is called once per byte. A frame is
+  // the run of bytes between an NSS falling and rising edge; we accumulate MOSI,
+  // recompute the whole reply each byte, and hand back this byte's slice.
+  private frameMosi: number[] = []
+  private frameReplied = 0
+  private frameActive = false
+  private lastBusT = 0
+  private warnedNoFrame = false
+
   // Controller state.
   private mode: RadioMode = 'standby'
   private packetType = PACKET_TYPE_LORA
@@ -228,6 +238,9 @@ export class Sx1262Model implements DeviceModel {
 
   private powerOn(): void {
     this.nssLow = false
+    this.frameMosi = []
+    this.frameReplied = 0
+    this.frameActive = false
     this.mode = 'standby'
     this.packetType = PACKET_TYPE_LORA
     this.freqHz = 0
@@ -254,9 +267,21 @@ export class Sx1262Model implements DeviceModel {
   onSignal(edge: SignalEdge): void {
     switch (edge.signal) {
       case 'NSS':
-      case 'CS':
-        this.nssLow = edge.level === 0
+      case 'CS': {
+        const low = edge.level === 0
+        this.nssLow = low
+        if (low) {
+          // Start of an SPI frame.
+          this.frameMosi = []
+          this.frameReplied = 0
+          this.frameActive = true
+        } else if (this.frameActive) {
+          // End of frame — a write command takes effect now.
+          this.frameActive = false
+          this.commitFrame()
+        }
         return
+      }
       // No wired reset on this board; BUSY / DIO1 are device-driven.
       default:
         this.ctx?.diagnose('warn', `SX1262 has no input line "${edge.signal}"`)
@@ -267,36 +292,70 @@ export class Sx1262Model implements DeviceModel {
 
   onBus(txn: BusTransaction): BusResponse {
     const mosi = txn.mosi
-    // Fill with a clean status byte so `statusPos` always parses, then overlay.
-    const miso = new Uint8Array(mosi.length).fill(this.statusByte())
     this.bytesOnBus += mosi.length
-    if (mosi.length === 0) return { miso }
+    this.lastBusT = txn.t
+    if (mosi.length === 0) return { miso: new Uint8Array(0) }
 
-    const op = mosi[0]!
-    // BUSY high while the command is digested, low again before the guest polls.
-    this.ctx?.driveSignal('BUSY', 1)
-
-    if (op === OP.NOP) {
-      this.ctx?.driveSignal('BUSY', 0)
-      return { miso }
+    // BUSY is kept low throughout: RadioLib polls `digitalRead(BUSY)` with a
+    // timeout on both sides of every transfer, and any high window risks a
+    // spurious `RADIOLIB_ERR_SPI_CMD_TIMEOUT` (same lesson the UC8151 encodes).
+    if (!this.frameActive) {
+      // No NSS framing around this call — a whole-command delivery (a test via
+      // `injectBus`, or a bridge that coalesces per chip-select). Treat it as a
+      // complete, self-contained frame. If this ever fires with byte-sized
+      // chunks it means a chip-select the host doesn't route, so flag it once.
+      if (!this.warnedNoFrame && mosi.length < 2) {
+        this.warnedNoFrame = true
+        this.ctx?.diagnose('warn', 'SX1262: SPI byte with no NSS frame — chip-select not wired?')
+      }
+      const selfMiso = this.renderFrame([...mosi])
+      const op = mosi[0]
+      if (op !== undefined && op !== OP.NOP && !(op in READ_CMD_LEN) && KNOWN_OPS.has(op)) {
+        this.applyWrite(op, mosi.subarray(1), txn.t)
+      } else if (op !== undefined && op !== OP.NOP && !KNOWN_OPS.has(op)) {
+        this.ctx?.diagnose(
+          'warn',
+          `SX1262: unimplemented command 0x${op.toString(16).padStart(2, '0')}`
+        )
+      }
+      return { miso: selfMiso }
     }
+
+    for (const b of mosi) this.frameMosi.push(b)
+    const full = this.renderFrame(this.frameMosi)
+    const out = new Uint8Array(mosi.length)
+    for (let i = 0; i < mosi.length; i++) out[i] = full[this.frameReplied + i] ?? this.statusByte()
+    this.frameReplied += mosi.length
+    return { miso: out }
+  }
+
+  /**
+   * The complete MISO for the frame accumulated so far — status byte in every
+   * position, with a read command's payload overlaid. Recomputed per byte; the
+   * caller returns only the newly-clocked slice.
+   */
+  private renderFrame(frame: number[]): Uint8Array {
+    const mosi = Uint8Array.from(frame)
+    const miso = new Uint8Array(mosi.length).fill(this.statusByte())
+    const op = mosi[0]
+    if (op === undefined || op === OP.NOP) return miso
+    if (!KNOWN_OPS.has(op)) return miso
+    if (op in READ_CMD_LEN) this.fillRead(op, mosi, miso)
+    return miso
+  }
+
+  /** Apply a completed write frame's side effects (called on the NSS rising edge). */
+  private commitFrame(): void {
+    const op = this.frameMosi[0]
+    if (op === undefined || op === OP.NOP || op in READ_CMD_LEN) return
     if (!KNOWN_OPS.has(op)) {
       this.ctx?.diagnose(
         'warn',
         `SX1262: unimplemented command 0x${op.toString(16).padStart(2, '0')}`
       )
-      this.ctx?.driveSignal('BUSY', 0)
-      return { miso }
+      return
     }
-
-    if (op in READ_CMD_LEN) {
-      this.fillRead(op, mosi, miso)
-    } else {
-      this.applyWrite(op, mosi.subarray(1), txn.t)
-    }
-
-    this.ctx?.driveSignal('BUSY', 0)
-    return { miso }
+    this.applyWrite(op, Uint8Array.from(this.frameMosi.slice(1)), this.lastBusT)
   }
 
   private fillRead(op: number, mosi: Uint8Array, miso: Uint8Array): void {

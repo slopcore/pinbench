@@ -90,6 +90,35 @@ static void esp32_gpio_forward(Esp32GpioState *s)
     s->last_out = now;
 }
 
+/*
+ * Forward the current OUT level of specific pins to the device host, even when
+ * that level is unchanged since the last forward. Used when a pin's output
+ * driver is switched on (GPIO_ENABLE 0->1, i.e. `pinMode(pin, OUTPUT)`): the
+ * SoC now actively drives the line, which is a real electrical event the device
+ * model must see even if the level is still 0. Without this, a guest that does
+ * `pinMode(RST, OUTPUT); digitalWrite(RST, LOW)` over a reset-0 OUT register
+ * produces no frame at all, and a model that probes that line (the e-ink
+ * `detectEInk()` reset-polarity test) reads a stale idle level and mis-detects.
+ */
+static void esp32_gpio_forward_enabled(Esp32GpioState *s, uint64_t pins)
+{
+    if (!pins) {
+        return;
+    }
+    uint64_t now = (uint64_t) s->out | ((uint64_t) s->out1 << 32);
+    PinbenchHost *host = pinbench_host_get();
+    if (host) {
+        for (int pin = 0; pin < 32 + GPIO_BANK1_PINS; pin++) {
+            if (pins & (1ull << pin)) {
+                pinbench_host_gpio(host, pin, (now >> pin) & 1);
+            }
+        }
+    }
+    /* Keep last_out coherent for these pins so a later real OUT write still
+     * diffs correctly (and isn't double-emitted). */
+    s->last_out = (s->last_out & ~pins) | (now & pins);
+}
+
 static uint64_t esp32_gpio_read(void *opaque, hwaddr addr, unsigned int size)
 {
     Esp32GpioState *s = ESP32_GPIO(opaque);
@@ -119,21 +148,29 @@ static void esp32_gpio_write(void *opaque, hwaddr addr,
 {
     Esp32GpioState *s = ESP32_GPIO(opaque);
     uint32_t v = (uint32_t) value;
+    uint64_t old_enable = (uint64_t) s->enable | ((uint64_t) s->enable1 << 32);
+    bool is_enable = true;
 
     switch (addr) {
-    case A_GPIO_OUT:          s->out = v;             break;
-    case A_GPIO_OUT_W1TS:     s->out |= v;            break;
-    case A_GPIO_OUT_W1TC:     s->out &= ~v;           break;
-    case A_GPIO_OUT1:         s->out1 = v;            break;
-    case A_GPIO_OUT1_W1TS:    s->out1 |= v;           break;
-    case A_GPIO_OUT1_W1TC:    s->out1 &= ~v;          break;
-    case A_GPIO_ENABLE:       s->enable = v;          return;
-    case A_GPIO_ENABLE_W1TS:  s->enable |= v;         return;
-    case A_GPIO_ENABLE_W1TC:  s->enable &= ~v;        return;
-    case A_GPIO_ENABLE1:      s->enable1 = v;         return;
-    case A_GPIO_ENABLE1_W1TS: s->enable1 |= v;        return;
-    case A_GPIO_ENABLE1_W1TC: s->enable1 &= ~v;       return;
+    case A_GPIO_OUT:          s->out = v;             is_enable = false; break;
+    case A_GPIO_OUT_W1TS:     s->out |= v;            is_enable = false; break;
+    case A_GPIO_OUT_W1TC:     s->out &= ~v;           is_enable = false; break;
+    case A_GPIO_OUT1:         s->out1 = v;            is_enable = false; break;
+    case A_GPIO_OUT1_W1TS:    s->out1 |= v;           is_enable = false; break;
+    case A_GPIO_OUT1_W1TC:    s->out1 &= ~v;          is_enable = false; break;
+    case A_GPIO_ENABLE:       s->enable = v;          break;
+    case A_GPIO_ENABLE_W1TS:  s->enable |= v;         break;
+    case A_GPIO_ENABLE_W1TC:  s->enable &= ~v;        break;
+    case A_GPIO_ENABLE1:      s->enable1 = v;         break;
+    case A_GPIO_ENABLE1_W1TS: s->enable1 |= v;        break;
+    case A_GPIO_ENABLE1_W1TC: s->enable1 &= ~v;       break;
     default:
+        return;
+    }
+
+    if (is_enable) {
+        uint64_t new_enable = (uint64_t) s->enable | ((uint64_t) s->enable1 << 32);
+        esp32_gpio_forward_enabled(s, new_enable & ~old_enable);
         return;
     }
     esp32_gpio_forward(s);

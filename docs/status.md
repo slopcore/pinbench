@@ -49,17 +49,37 @@ title: Status — done, blocked, next
 
 ## Blocked
 
-- **Live radio demo** — MeshCore's `radio_init()` `halt()`s at `-707` on a
-  pre-existing fork GPIO fault (a bogus pin 227 from RadioLib's `Module` setup),
-  _before_ it clocks any radio SPI. This gates: the LR1110 live channel-list
-  demo, the M9 home screen (drawn only after `radio_init()`), the first
-  end-to-end run through the Electron **Build & flash** button, and the keyboard
-  milestone (no main loop until the radio is up). Fix is a fork-console / GPIO
-  investigation. See [[qemu-fork]].
-- **Heltec live boot** — builds clean, but the plain `esp32-s3-devkitc-1` variant
-  hits a generic-SoC console/VFS init assert (`startup.c:320`) in the fork, not
-  fixed by the DIO switch. The UC8151 and SX1262 models are proven by harness;
-  the board loads and renders. Same class of fork work as the M9 blocker.
+- **Live radio demo (M9 / LR1110)** — MeshCore's `radio_init()` `halt()`s at
+  `-707` on the M9 board on a pre-existing fork GPIO fault (a bogus pin 227 from
+  RadioLib's `Module` setup), _before_ it clocks any radio SPI. Still open. Of
+  the three Heltec fixes only the GPIO enable-edge forward (`esp32_gpio.c`) is
+  board-agnostic; bus-routing is gated on >1 SPI bus (M9 has one) and the SX126x
+  reassembly is a different model. But `ArduinoHal::spiTransfer` is shared across
+  every RadioLib module — it clocks one byte per SPI USR pulse — so if `-707`
+  outlives the GPIO fix, `lr1110.ts` likely needs the same NSS-framed
+  reassembly the SX1262 model just got. See [[qemu-fork]].
+
+## Recently unblocked
+
+- **Heltec live boot — the e-paper screen now renders.** MeshCore's
+  `Heltec_Wireless_Paper_repeater` boots through display detection, `radio_init()`
+  and into its main loop; the OutPanel shows the firmware's "Please wait…" screen
+  (partial refresh, custom LUTs). Three bugs, all fixed on branch `usb-flash`:
+  1. **e-ink init hang** (was misattributed to `startup.c:320`) — the fork only
+     forwarded GPIO `OUT` *changes*, so `E213Display::detectEInk()`'s first-touch
+     `digitalWrite(RST, LOW)` over a reset-0 pin produced no frame and the panel
+     controller was mis-detected. Fix: forward a pin's `OUT` level on the
+     `ENABLE` 0→1 edge (`qemu/hw/gpio/esp32_gpio.c`).
+  2. **SPI bus mis-routing** — the fork maps GP-SPI2 and GP-SPI3 both to
+     `bus_index 0`; `deviceForXfer` mapped index 0 to the first board bus only
+     (`spi-radio`), so every SPI transaction — e-ink included — went to the
+     SX1262 model and the e-ink got nothing. Fix: when a board has >1 SPI bus,
+     route by chip-select across all SPI devices (`src/main/devices.ts`).
+  3. **`radio init failed: -2`** — RadioLib's `ArduinoHal` clocks each SX126x
+     command one byte per SPI transaction; the `sx1262` model assumed whole
+     frames, so `findChip()`'s version read never spelled `SX1261`. Fix: the
+     model now reassembles a frame across NSS-framed 1-byte `onBus` calls and
+     applies write side-effects on the NSS rising edge (`src/shared/devices/sx1262.ts`).
 
 ## Next
 

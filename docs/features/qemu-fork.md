@@ -37,10 +37,18 @@ no DMA, so the FIFO path is the whole story.
 
 `qemu/hw/gpio/esp32_gpio.c` — a pinned replacement (`esp32_gpio_write` was `{ }`
 upstream). Models `OUT`/`OUT1`/`ENABLE` and their `W1TS`/`W1TC` aliases, and
-forwards every level *change* as an `Op.Gpio` frame. One nuance: an initial write
-of 0 over a reset-0 register is a no-change and is not forwarded — device models
-compensate with a sensible power-on default (the ST7789 powers on `dc` LOW /
-backlight lit).
+forwards every level *change* as an `Op.Gpio` frame. A write of 0 over a reset-0
+`OUT` register is a no-change and is not forwarded on its own — but the moment a
+pin's `ENABLE` bit goes 0→1 (`pinMode(pin, OUTPUT)`) its current `OUT` level is
+forwarded unconditionally, even if that level is 0. That enable edge is the real
+electrical event ("the SoC now drives this line"), and a device model that
+*probes* a line it drives depends on seeing it: the heltec e-ink `detectEInk()`
+does `pinMode(RST, OUTPUT); digitalWrite(RST, LOW)` over a never-touched pin and
+reads BUSY to pick its driver — without the enable-edge forward the model never
+learns RST was asserted, feeds back a stale idle level, and the guest selects the
+wrong controller and spins forever in its BUSY-poll `wait()`. Models still want a
+sensible power-on default for lines that are only ever read (the ST7789 powers on
+`dc` LOW / backlight lit).
 
 ## GPIO input (host→guest line reads)
 

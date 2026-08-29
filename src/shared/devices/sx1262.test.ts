@@ -56,7 +56,7 @@ describe('Sx1262Model', () => {
     expect(Math.round((s['freqHz'] as number) / 1e5)).toBe(8681) // ~868.1 MHz
   })
 
-  it('drives BUSY around a command and DIO1 on TX done', () => {
+  it('keeps BUSY low and asserts DIO1 on TX done', () => {
     const h = harness(new Sx1262Model())
     xfer(h, 0x8a, 0x01)
     xfer(h, 0x8b, 0x09, 0x04, 0x01, 0x00) // SF9 BW125 CR4/5
@@ -65,16 +65,39 @@ describe('Sx1262Model', () => {
     h.driven.length = 0
     xfer(h, 0x83, 0x00, 0x00, 0x00) // SET_TX
 
-    // BUSY went high then low again within the transaction; DIO1 asserted on TX_DONE.
-    expect(h.driven).toContainEqual({ signal: 'BUSY', level: 1 })
-    expect(h.driven).toContainEqual({ signal: 'BUSY', level: 0 })
+    // BUSY is never driven high — RadioLib polls it with a timeout on both sides
+    // of every transfer, so any high window risks a spurious CMD_TIMEOUT.
+    expect(h.driven).not.toContainEqual({ signal: 'BUSY', level: 1 })
     expect(h.line('BUSY')).toBe(0)
-    expect(h.line('DIO1')).toBe(1)
+    expect(h.line('DIO1')).toBe(1) // DIO1 asserted on TX_DONE
     expect(h.meter('airtime')).toBeGreaterThan(0)
 
     // CLEAR_IRQ_STATUS drops DIO1.
     xfer(h, 0x02, 0xff, 0xff)
     expect(h.line('DIO1')).toBe(0)
+  })
+
+  it('reassembles a byte-at-a-time NSS-framed frame (RadioLib ArduinoHal path)', () => {
+    const h = harness(new Sx1262Model())
+    // RadioLib's ArduinoHal clocks the version read one byte per SPI transaction.
+    const mosi = [0x1d, 0x03, 0x20, 0x00, ...new Array<number>(16).fill(0)]
+    const miso: number[] = []
+    h.signal('NSS', 0)
+    for (const b of mosi) {
+      const r = h.bus({ bus: BUS, kind: 'spi', select: 'NSS', mosi: Uint8Array.of(b) })
+      miso.push(r[0]!)
+    }
+    h.signal('NSS', 1)
+
+    expect(String.fromCharCode(...miso.slice(4, 10))).toBe('SX1261')
+    expect(statusOk(miso[1]!)).toBe(true)
+
+    // A write frame split the same way still takes effect (on the NSS rising edge).
+    h.signal('NSS', 0)
+    for (const b of [0x8a, 0x01]) h.bus({ bus: BUS, kind: 'spi', select: 'NSS', mosi: Uint8Array.of(b) })
+    h.signal('NSS', 1)
+    expect(h.snapshot()['packetType']).toBe('LoRa')
+    expect(h.diagnostics).toEqual([])
   })
 
   it('computes the same airtime as the LR1110 model for identical LoRa params', () => {

@@ -69,7 +69,7 @@ export function LibraryPanel({
               <h3 className="library__group-title">{CATEGORY_LABELS[category]}</h3>
               <ul className="library__list">
                 {parts.map((part) => (
-                  <li key={part.id}>
+                  <li key={part.id} className="library__row">
                     <button
                       type="button"
                       className="library__item"
@@ -82,6 +82,15 @@ export function LibraryPanel({
                         <span className="library__bus">{part.buses[0].toUpperCase()}</span>
                       )}
                     </button>
+                    <button
+                      type="button"
+                      className="library__place"
+                      aria-label="Place part on canvas"
+                      title={`Place ${part.name} on the canvas`}
+                      onClick={() => onSelectPart(part.id)}
+                    >
+                      ＋
+                    </button>
                   </li>
                 ))}
               </ul>
@@ -89,6 +98,9 @@ export function LibraryPanel({
           )
         })}
       </div>
+      <p className="library__hint">
+        Click a part to inspect it, then drag on the canvas to arrange.
+      </p>
     </aside>
   )
 }

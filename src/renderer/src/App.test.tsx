@@ -261,6 +261,16 @@ describe('selection', () => {
     )
   })
 
+  it('selects a part from the Library place affordance', async () => {
+    const { user } = await renderApp()
+    const library = screen.getByRole('complementary', { name: 'Library' })
+    expect(within(library).getByText(/Click a part to inspect it/)).toBeInTheDocument()
+    const placeButtons = within(library).getAllByRole('button', { name: 'Place part on canvas' })
+    await user.click(placeButtons[0]!)
+    const inspector = screen.getByRole('complementary', { name: 'Inspector' })
+    expect(within(inspector).getByText('Identity')).toBeInTheDocument()
+  })
+
   it('records an Inspector config change', async () => {
     const { user } = await renderApp()
     await user.click(screen.getByRole('button', { name: /LR1110 mesh radio/ }))

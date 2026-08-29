@@ -75,9 +75,12 @@ owns it, `P_LORA_TX_LED`); the power block only reads battery and the rail.
 
 SX1262 build flags carried into `u2.deviceOptions`: `dio2RfSwitch`
 (`SX126X_DIO2_AS_RF_SWITCH=true`) and `dio3TcxoVoltage` 1.8 V
-(`SX126X_DIO3_TCXO_VOLTAGE=1.8`). The e-ink `u3.deviceOptions.busyActiveHigh`
-records that the Heltec Wireless Paper V1.1 panel's Solomon Systech controller
-signals busy HIGH (the `heltec-eink-modules` `detectEInk()` probe). The radio
+(`SX126X_DIO3_TCXO_VOLTAGE=1.8`). The e-ink `u3.deviceOptions.busyActiveLow`
+records that the Heltec Wireless Paper V1.1 panel's UC8151 controller signals
+busy **LOW** — `heltec-eink-modules` resolves `EInkDisplay_WirelessPaperV1_1` to
+its `LCMEN2R13EFC1` driver (connector HINK-E0213A162), whose `wait()` loops
+`while(digitalRead(pin_busy) == LOW)`. This is a different controller family
+from the SSD1680 the earlier Wireless Paper V1 panel used. The radio
 model (`semtech.sx1262`) answers RadioLib's version-register read with the
 string `SX1261` — RadioLib's `SX1262` class shares the SX1261 `chipType`, and
 `findChip()` `strncmp`s that, not what the silicon really reports.

@@ -110,13 +110,13 @@ describe('OutPanel', () => {
     expect(screen.getByRole('status')).toHaveTextContent(/quarantined/i)
   })
 
-  it('renders the e-paper canvas for the SSD1680 model', () => {
+  it('renders the e-paper canvas for the UC8151 e-paper model', () => {
     const EINK_PART: PartDefinition = {
       id: 'u3',
       designator: 'U3',
       name: '2.13" e-paper',
       category: 'display',
-      deviceModel: 'solomon.ssd1680',
+      deviceModel: 'ultrachip.uc8151',
       summary: 'demo',
       buses: ['spi-disp'],
       pins: [{ signal: 'CS', pin: 'GPIO4' }],
@@ -135,7 +135,7 @@ describe('OutPanel', () => {
       <OutPanel
         part={EINK_PART}
         view={{
-          snapshot: snapshot({ deviceModel: 'solomon.ssd1680', state: {}, meters: [] }),
+          snapshot: snapshot({ deviceModel: 'ultrachip.uc8151', state: {}, meters: [] }),
           events: []
         }}
       />

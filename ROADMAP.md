@@ -1815,6 +1815,14 @@ renders its canvas; `loadBoard()` with no id still resolves to the M9;
 uses) — a 250×122 1-bit e-paper model that is a genuinely different display
 class from the ST7789.
 
+> **Resolved during M13.2 (see the progress note below):** the V1.1 panel's
+> controller is **UC8151**, not SSD1680 — `heltec-eink-modules` resolves
+> `EInkDisplay_WirelessPaperV1_1` to its `LCMEN2R13EFC1` driver. The model
+> shipped is `ultrachip.uc8151` (128×250, active-low `BUSY`, `PON`/`DRF`/`POF`
+> update, `DTM1`/`DTM2` planes, LUT registers 0x20–0x24). The `Build` list below
+> describes the SSD1680 command set that was the wrong guess; it is kept for the
+> record.
+
 **Build**
 
 - `src/shared/devices/ssd1680.ts`: SPI command state machine (`DC` low =
@@ -1913,18 +1921,22 @@ the only sub-milestone open.
   switches boards without a restart (new `board:list` IPC; `key={board.id}` on
   `<App>` for a clean remount). Not done: persisting the choice across launches;
   a native `View → Board` submenu (the menu is a static `CommandId` enum).
-- **M13.2** — `solomon.ssd1680`: a 250×122 1bpp e-paper model, a genuinely
-  different class — RAM is buffered and only latches to the visible frame on
-  `MASTER_ACTIVATION`, with a modelled refresh time (full ~2.6 s / fast ~900 ms
-  / partial ~340 ms) as a meter, and `BUSY` as an `outputSignal` pulsed around
-  the update so `display.begin()`'s wait clears. `EInkScreen` renders the
-  `mono1` framebuffer.
+- **M13.2** — `ultrachip.uc8151`: a 128×250 1bpp e-paper model, a genuinely
+  different class — RAM is buffered in two planes (`DTM1`/`DTM2`, 0x10/0x13) and
+  only latches to the visible frame on `DRF` (0x12), with a modelled refresh
+  time (full ~2 s / partial ~480 ms) as a meter, and `BUSY` — **active-low** on
+  this controller — as an `outputSignal` pulsed around `PON`/`DRF` so
+  `display.begin()`'s wait clears. `EInkScreen` renders the `mono1` framebuffer.
+  *First cut of this model was SSD1680, from memory — wrong: the V1.1 panel is
+  `heltec-eink-modules`' `LCMEN2R13EFC1` (a UC8151-class part), read from the
+  driver source in the checkout. Replaced before it shipped; the earlier
+  Wireless Paper V1 panel is the SSD1680.*
 - **M13.3** — `semtech.sx1262`: 8-bit opcodes, in-band status byte at
   `statusPos = 1`, version register answering `SX1261` (RadioLib's `SX1262`
   class shares that `chipType`), `BUSY` + `DIO1` as `outputSignals`. Airtime
   **reuses** `loraToaMs` from `lr1110.ts` and a test pins it equal to the
   LR1110's for identical LoRa params — the abstraction check the roadmap asked
-  for. 24 new model tests (8 SSD1680, 8 SX1262, plus board/renderer).
+  for. 22 new model tests (7 UC8151, 8 SX1262, plus board/renderer).
 
 **M13's grade on M4/M5 so far.** The board is pure data and the two models are
 pure `src/shared/devices/*`. What the milestone additionally cost, outside those
@@ -1966,7 +1978,7 @@ on `.qemu/build/qemu-system-xtensa -machine esp32s3`:
   likely cause is the S3's native USB-serial-JTAG console, which the M9 sidesteps
   with an external CH340K on UART0 and which this devkitc-1 variant does not.
 - It is a fork/emulator limitation reached in generic SoC startup, **not** a
-  defect in the Heltec board definition or the SSD1680 / SX1262 models — the
+  defect in the Heltec board definition or the UC8151 / SX1262 models — the
   guest never runs a line of MeshCore. Recorded here the way M7.2b's `-707` was;
   a real fix is a fork-console investigation, out of scope for M13.
 
@@ -2033,7 +2045,7 @@ the M9, and lands a new device model as a PR — working only from the docs.
 | Espressif's QEMU fork diverges or stalls | Maintenance burden | Ongoing | Pin the fork and tag from M0. Keep PinBench's patches minimal and documented. Budget for periodic rebases. |
 | No WiFi or BLE emulation | `companion_radio` and the weather-station fork cannot run fully | M13 | Named as a non-goal up front. Consider API-boundary stubs in M13 so display and UI code remains iterable. |
 | PlatformIO toolchain bootstrap on user machines | Bad first-run experience | M3 | Detect early, guide explicitly, manage a virtualenv rather than fighting system Python. Your MeshCore notes are the source material. |
-| ~~The abstraction is wrong and M13 is a rewrite~~ — **not borne out** (M13.1–M13.3) | Large rework | M13 | The Heltec board is pure data and the SSD1680 / SX1262 models are pure `src/shared/devices/*`; airtime reuses the LR1110's `loraToaMs` unchanged. The only forced change to the shared layer was one optional `format: 'rgb565' \| 'mono1'` field on `DeviceFramebufferMessage` for 1bpp e-ink. The board picker was always scoped into M13. Verdict: M4/M5 held. |
+| ~~The abstraction is wrong and M13 is a rewrite~~ — **not borne out** (M13.1–M13.3) | Large rework | M13 | The Heltec board is pure data and the UC8151 / SX1262 models are pure `src/shared/devices/*`; airtime reuses the LR1110's `loraToaMs` unchanged. The only forced change to the shared layer was one optional `format: 'rgb565' \| 'mono1'` field on `DeviceFramebufferMessage` for 1bpp e-ink. The board picker was always scoped into M13. Verdict: M4/M5 held. |
 
 ## Sequencing notes
 

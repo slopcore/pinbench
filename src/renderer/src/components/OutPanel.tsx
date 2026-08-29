@@ -25,7 +25,7 @@ export function OutPanel({ part, view, onSetLevel }: OutPanelProps): React.JSX.E
   const snapshot = view?.snapshot
   const isLed = part.deviceModel === 'pinbench.led'
   const isPanel = part.deviceModel === 'sitronix.st7789'
-  const isEInk = part.deviceModel === 'solomon.ssd1680'
+  const isEInk = part.deviceModel === 'ultrachip.uc8151'
   const lit = snapshot?.state['lit'] === true
   const pinHigh = snapshot?.state['pin'] === 1
   const zoom = panelZoom(part)

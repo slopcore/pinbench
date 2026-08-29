@@ -1791,6 +1791,71 @@ the M9, and lands a new device model as a PR — working only from the docs.
 
 ---
 
+# Phase 8 — Hand it to an agent
+
+## M16 · Agent Client Protocol — `L`
+
+**Goal.** A stock coding agent — Zed's agent, Gemini CLI, Claude Code — can
+drive PinBench end to end: open a project, edit the canvas, verify, build &
+flash, boot the emulator, read serial, stimulate a device model. The same
+operations the UI drives, and no more.
+
+**Decision of record.** [ADR 0002](docs/adr/0002-acp-control-plane.md): PinBench
+is the ACP *Client*; the agent runs as a subprocess. PinBench's operation
+surface — the `PinBenchApi` interface plus the `BoardEdit` transforms — is
+handed to the agent as an in-process **MCP server** listed in `session/new`,
+so a stock agent's model sees each operation as a tool. Opt-in behind `--acp`
+/ `PINBENCH_ACP`; loopback / Unix-socket only; every operation carries a
+`read` / `write` / `exec` risk class and `exec` prompts by default.
+
+### M16.1 · The pure core — `S` ✅ **done**
+
+**Build.** `src/shared/acp/`, no Electron: JSON-RPC 2.0 framing + an ndjson
+buffer (`jsonrpc.ts`); the ACP/MCP method and version tables (`methods.ts`);
+the transport-agnostic request router (`dispatch.ts`); the operation catalogue
+with per-field validation, JSON-Schema emit and the risk/permission model
+(`operations.ts`); the MCP control-server core built from that catalogue
+(`mcp.ts`); the ACP session builders and version handshake (`session.ts`).
+
+**Done when.** `npm test` covers framing, routing, catalogue coverage of the
+`PinBenchApi` surface, param validation, the MCP `initialize` / `tools/list` /
+`tools/call` flow and the permission gate — with no agent and no emulator in
+the loop. **51 unit tests, on `main`.**
+
+### M16.2 · Transport and binding — `M`
+
+**Build.** `src/main/acp/`: spawn the agent subprocess on `--acp`; an ndjson
+stdio stream to it; serve the ACP client callbacks (`fs/*` and `terminal/*`
+gated by `isOpenProject()`, `session/request_permission` routed to a dialog,
+`session/update` forwarded to the renderer). Stand up the MCP control server on
+a loopback port with a per-session bearer token, and write the one
+`McpToolInvoker` switch that maps `OPERATIONS` onto the existing supervisors
+(`EmulatorSupervisor`, `BuildRunner`, `DeviceHost`, the board loader/editor,
+`ProjectFiles`). Add the non-dialog `project_open(dir)` and `board_get` paths
+the catalogue needs.
+
+**Done when.** With PinBench started `--acp` and an agent binary configured,
+a prompt — *"verify the pin map and tell me the findings"* — round-trips:
+agent calls `board_verify`, PinBench runs the rule engine, the findings come
+back in the agent's transcript. One `exec` operation (`build_start`) shows the
+permission prompt.
+
+**Watch for.** The MCP server must never bind a routable interface. The agent
+subprocess must die with PinBench (the `before-quit` pattern the emulator and
+build runner already follow).
+
+### M16.3 · The agent session panel — `M`
+
+**Build.** A dock panel: the running turn, each tool call and its result, the
+permission prompts inline with allow / allow-for-session / deny, and a stop
+button wired to `session/cancel`. The policy control (ask-everything /
+default / trusted).
+
+**Done when.** You can watch an agent wire the LR1110's BUSY line to a GPIO,
+verify, and flash — from the panel, approving the `exec` steps as they come.
+
+---
+
 ## Risk register
 
 | Risk | Impact | Where it bites | Mitigation |
@@ -1809,6 +1874,7 @@ the M9, and lands a new device model as a PR — working only from the docs.
 | No WiFi or BLE emulation | `companion_radio` and the weather-station fork cannot run fully | M13 | Named as a non-goal up front. Consider API-boundary stubs in M13 so display and UI code remains iterable. |
 | PlatformIO toolchain bootstrap on user machines | Bad first-run experience | M3 | Detect early, guide explicitly, manage a virtualenv rather than fighting system Python. Your MeshCore notes are the source material. |
 | The abstraction is wrong and M13 is a rewrite | Large rework | M13 | Sketch the Heltec board's needs against the M5 schema before committing to it, and treat M13's cost as the honest verdict on M4/M5. |
+| The agent control plane is a new remote-drive path into an app that spawns `pio` and QEMU | An agent (or a page that reaches the MCP port) runs builds / hardware ops unattended | M16 | Opt-in behind `--acp` only; MCP server on loopback / Unix socket with a per-session token, never a routable bind; every op risk-classed with `exec` prompting by default; all filesystem paths gated by `isOpenProject()`; scope frozen to the `PinBenchApi` + `BoardEdit` catalogue in `src/shared/acp/operations.ts`. |
 
 ## Sequencing notes
 

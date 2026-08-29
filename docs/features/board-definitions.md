@@ -22,7 +22,7 @@ four cross-reference checks:
 - net `partId:signal` endpoints resolve to a real signal
 - exactly one `mcu` part
 
-So loading a shipped board in a test *is* a consistency check. The definition
+So loading a shipped board in a test _is_ a consistency check. The definition
 carries: board identity + MCU target, the pin list (with `capabilities` and
 `strapping`), bus declarations, parts with pin bindings + `deviceModel` ids +
 `deviceOptions` (fixed board hardware) + `config` (user-facing Inspector fields),
@@ -41,26 +41,51 @@ launch.
 
 ## Board id resolution
 
-Open project's `boardId` → persisted last-used id → named default
-(`thinknode-m9-v1.0`) → the sole-`*.board.json` heuristic. Adding a second board
-file does not flip the default out from under the M9's tests.
+Persisted last-used profile id (`session.json` `lastBoardId`, via `board:remember`)
+→ named default (`thinknode-m9-v1.0`) → the sole-`*.board.json` heuristic. Adding
+a second board file does not flip the default out from under the M9's tests.
+`app:launch-state` hands `Root` the id to load before first paint.
 
 ## Shipped boards
 
-| File | Board | Notes |
-|---|---|---|
-| `boards/thinknode-m9-v1.0.board.json` | ThinkNode M9 V1.0 | 9 parts · 12 nets · 31 GPIO. ESP32-S3-R8 (octal PSRAM), 16 M flash. Every SPI peripheral on one shared bus. |
+| File                                           | Board                      | Notes                                                                                                                                                                                            |
+| ---------------------------------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `boards/thinknode-m9-v1.0.board.json`          | ThinkNode M9 V1.0          | 9 parts · 12 nets · 31 GPIO. ESP32-S3-R8 (octal PSRAM), 16 M flash. Every SPI peripheral on one shared bus.                                                                                      |
 | `boards/heltec-wireless-paper-v1.1.board.json` | Heltec Wireless Paper v1.1 | Plain ESP32-S3, 8 M flash, **no PSRAM**. Radio and display on **separate SPI buses** (first two-SPI-bus board). Pin map from the checkout's own `variants/heltec_wireless_paper/platformio.ini`. |
 
 ## Board picker
 
-A status-bar `<select>` switches boards without a restart (`board:list` IPC;
-`key={board.id}` on `<App>` forces a clean remount). Not yet: persisting the
-choice across launches, a native `View → Board` menu.
+A status-bar `<select>` switches profiles without a restart (`board:list` IPC;
+`key={board.id}` on `<App>` forces a clean remount). The choice persists across
+launches (`board:remember` → `session.json` `lastBoardId`). Not yet: a native
+`View → Board` menu.
 
-## Project file
+## Saving a hardware profile
 
-`.pinbench` (`src/shared/project.ts`) — board id, PlatformIO dir + env, per-part
-Inspector config, selected part. Save / Save as… (`⌘S` / `⇧⌘S`); the most recent
-file is reopened on launch, re-adopting its PlatformIO checkout. Recents in
-`session.json`. Tolerant on read (`normaliseProject`).
+Canvas hardware edits (drag, add/delete part, draw/delete net, rebind pin) are
+live session state, not a persisted delta. **File ▸ Save hardware profile as…**
+(`board:save-profile`) writes the current edited board to a new
+`boards/<id>.board.json` — validated through `parseBoard` first, `id` forced to
+match the filename, atomic write. Hardware changes rarely and is shared as new
+devices are supported, so a profile is its own file, never bundled into a
+project. If the save overwrites the loaded profile, the in-memory board and the
+device host are refreshed in place.
+
+## Session model
+
+There is no `.pinbench` document. A workbench session is **a source folder + a
+hardware profile**, and everything that used to live in the project file now
+lives in `session.json` (`src/main/store.ts`, `normaliseSession`, tolerant on
+read):
+
+- `recentFolders` — opened firmware source folders; the most recent is reopened
+  on launch via `app:launch-state`.
+- `lastBoardId` — the hardware profile to reopen with.
+- `folders` — keyed by `"<folder> <profileId>"` (`folderStateKey`); each entry
+  holds the build env and the `${partId}.${fieldId}` Inspector config last used
+  for that (folder, profile) pair. Keying under the profile id means switching
+  profiles never surfaces another board's part ids.
+
+> **Status:** the store + IPC spine landed in Phase 1a of the
+> `folder-is-project` branch; the renderer's Open-folder flow, env picker and
+> the removal of the `.pinbench` menu items land in Phase 2.

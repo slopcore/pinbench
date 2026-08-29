@@ -1,4 +1,4 @@
-import { watch, type FSWatcher } from 'node:fs'
+import { watch, globSync, type FSWatcher } from 'node:fs'
 import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import { basename, join, resolve } from 'node:path'
@@ -7,13 +7,16 @@ import { IpcChannel } from '../shared/ipc'
 import type {
   AppInfo,
   BoardLoadResult,
+  BoardSaveResult,
   BuildRequest,
+  LaunchState,
   OpenProjectResult,
   ProjectFileResult,
   ProjectSaveResult,
   UsbFlashRequest,
   WindowState
 } from '../shared/ipc'
+import type { PartConfigValue } from '../shared/partConfig'
 import { DEFAULT_LAUNCH_OPTIONS, type EmulatorLaunchOptions } from '../shared/emulator'
 import type { BoardDefinition } from '../shared/board'
 import type { CommandId } from '../shared/commands'
@@ -23,8 +26,8 @@ import { normaliseProject } from '../shared/project'
 import { buildApplicationMenu } from './menu'
 import { isBuildRunning } from '../shared/build'
 import { isUsbFlashRunning } from '../shared/usb-flash'
-import { parseEnvNamesFromIni } from '../shared/pio'
-import { availableBoardIds, loadBoard } from './board'
+import { collectEnvNames } from '../shared/pio'
+import { availableBoardIds, loadBoard, saveBoardProfile } from './board'
 import { generatePinHeader } from '../shared/codegen'
 import { applyEdit, type BoardEdit } from '../shared/boardEdit'
 import { readProjectFile, writeProjectFile } from './projectFile'
@@ -240,6 +243,31 @@ function registerIpc(): void {
     isDev
   }))
 
+  // What `Root` needs before first paint now that there is no `.pinbench` file:
+  // the last hardware profile, the last source folder (re-adopted here so the
+  // Source tree and Build & flash come back with it), and the env + Inspector
+  // config last used for that pair.
+  ipcMain.handle(IpcChannel.appLaunchState, (): LaunchState => {
+    const s = session()
+    const lastBoardId = s.get().lastBoardId
+    const dir = s.lastFolder()
+    let folder: OpenProjectResult | null = null
+    if (dir && existsSync(join(dir, 'platformio.ini'))) {
+      try {
+        folder = openProject(dir)
+      } catch {
+        folder = null
+      }
+    }
+    const remembered = folder && lastBoardId ? s.folderState(folder.dir, lastBoardId) : null
+    return {
+      lastBoardId,
+      folder,
+      env: remembered?.env ?? null,
+      partConfig: remembered?.partConfig ?? {}
+    }
+  })
+
   ipcMain.handle(IpcChannel.workspaceLoad, () => session().get().workspace)
 
   ipcMain.on(IpcChannel.workspaceSave, (_event, state: unknown) => {
@@ -311,6 +339,49 @@ function registerIpc(): void {
   })
 
   ipcMain.handle(IpcChannel.boardList, (): string[] => availableBoardIds())
+
+  // Turn the current (edited) board into a shareable hardware profile on disk.
+  // If it overwrites the loaded board, refresh the in-memory authority and the
+  // device host so the canvas and models do not drift from the file.
+  ipcMain.handle(
+    IpcChannel.boardSaveProfile,
+    (_event, id: string, definition: unknown): BoardSaveResult => {
+      try {
+        const saved = saveBoardProfile(id, definition)
+        if (currentBoard?.id === saved.id) {
+          currentBoard = saved
+          deviceHost().load(saved)
+        }
+        return { id: saved.id }
+      } catch (error) {
+        return { error: error instanceof Error ? error.message : String(error) }
+      }
+    }
+  )
+
+  ipcMain.on(IpcChannel.boardRemember, (_event, id: unknown) => {
+    if (typeof id === 'string' && id) session().setLastBoard(id)
+  })
+
+  ipcMain.on(
+    IpcChannel.projectSetFolderState,
+    (_event, dir: unknown, boardId: unknown, state: unknown) => {
+      if (typeof dir !== 'string' || typeof boardId !== 'string' || !dir || !boardId) return
+      const raw = (state ?? {}) as { env?: unknown; partConfig?: unknown }
+      const partConfig: Record<string, PartConfigValue> = {}
+      if (raw.partConfig && typeof raw.partConfig === 'object') {
+        for (const [k, v] of Object.entries(raw.partConfig as Record<string, unknown>)) {
+          if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') {
+            partConfig[k] = v
+          }
+        }
+      }
+      session().setFolderState(resolve(dir), boardId, {
+        env: typeof raw.env === 'string' ? raw.env : null,
+        partConfig
+      })
+    }
+  )
 
   ipcMain.handle(
     IpcChannel.exportPinHeader,
@@ -386,7 +457,9 @@ function registerIpc(): void {
       })
       return null
     }
-    return openProject(dir)
+    const opened = openProject(dir)
+    session().addRecentFolder(opened.dir)
+    return opened
   })
 
   ipcMain.handle(IpcChannel.projectReadTree, (_event, dir?: string) =>
@@ -546,10 +619,27 @@ function adoptProjectFile(rawPath: string): ProjectFileResult {
 }
 
 function readEnvNames(dir: string): string[] {
+  // Cheap and synchronous, and — unlike a bare read of the top-level file —
+  // follows `extra_configs`, so a repo that keeps each board's build envs in
+  // `variants/<name>/platformio.ini` (MeshCore) still populates the picker. The
+  // build itself re-reads via `pio project config` for the real merge.
   try {
-    // Cheap and synchronous: enough to populate the env picker before a build.
-    // The build itself re-reads via `pio project config` for the real merge.
-    return parseEnvNamesFromIni(readFileSync(join(dir, 'platformio.ini'), 'utf8'))
+    return collectEnvNames(
+      (relativePath) => {
+        try {
+          return readFileSync(join(dir, relativePath), 'utf8')
+        } catch {
+          return null
+        }
+      },
+      (pattern) => {
+        try {
+          return globSync(pattern, { cwd: dir }).map((p) => p.split('\\').join('/'))
+        } catch {
+          return []
+        }
+      }
+    )
   } catch {
     return []
   }

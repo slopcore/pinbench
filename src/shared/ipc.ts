@@ -2,6 +2,7 @@ import type { BuildOutputLine, BuildStatus } from './build'
 import type { CommandId } from './commands'
 import type { BoardDefinition } from './board'
 import type { BoardEdit } from './boardEdit'
+import type { PartConfigValue } from './partConfig'
 import type { ProjectFile } from './project'
 import type {
   DeviceCommandMessage,
@@ -24,6 +25,7 @@ export const IpcChannel = {
   workspaceLoad: 'workspace:load',
   workspaceSave: 'workspace:save',
   appInfo: 'app:info',
+  appLaunchState: 'app:launch-state',
   windowMinimise: 'window:minimise',
   windowToggleMaximise: 'window:toggle-maximise',
   windowClose: 'window:close',
@@ -42,8 +44,11 @@ export const IpcChannel = {
   projectFileChanged: 'project:file-changed',
   boardLoad: 'board:load',
   boardList: 'board:list',
+  boardSaveProfile: 'board:save-profile',
+  boardRemember: 'board:remember',
   exportPinHeader: 'board:export-pin-header',
   importPinHeader: 'board:import-pin-header',
+  projectSetFolderState: 'project:set-folder-state',
   projectFileOpen: 'projectfile:open',
   projectFileSave: 'projectfile:save',
   projectFileRecent: 'projectfile:recent',
@@ -88,6 +93,25 @@ export interface OpenProjectResult {
 
 export type BoardLoadResult = { board: BoardDefinition } | { error: string }
 
+export type BoardSaveResult = { id: string } | { error: string }
+
+/**
+ * Everything `Root` needs before first paint now that there is no `.pinbench`
+ * document: which hardware profile to load, which source folder to reopen (with
+ * its PlatformIO envs already resolved), and the env + Inspector config last
+ * used for that (folder, profile) pair.
+ */
+export interface LaunchState {
+  /** Hardware profile id to load, or null to take the workbench default. */
+  lastBoardId: string | null
+  /** The reopened source folder, or null when there is none / it is gone. */
+  folder: OpenProjectResult | null
+  /** Remembered build env for (folder, lastBoardId), or null. */
+  env: string | null
+  /** Remembered `${partId}.${fieldId}` → value for (folder, lastBoardId). */
+  partConfig: Record<string, PartConfigValue>
+}
+
 /** A `.pinbench` file the main process opened, with its PlatformIO project re-adopted. */
 export interface ProjectFileResult {
   /** Absolute path of the `.pinbench` file. */
@@ -125,6 +149,8 @@ export interface UsbFlashRequest {
 
 export interface PinBenchApi {
   appInfo(): Promise<AppInfo>
+  /** Resolved once by `Root` before the window paints. */
+  launchState(): Promise<LaunchState>
   workspace: {
     load(): Promise<WorkspaceState>
     save(state: WorkspaceState): void
@@ -134,6 +160,14 @@ export interface PinBenchApi {
     load(id?: string): Promise<BoardLoadResult>
     /** Board ids available on disk, sorted — for the board picker. */
     list(): Promise<string[]>
+    /**
+     * Write `def` as `boards/<id>.board.json` (validated first) — how a user
+     * turns canvas edits into a shareable hardware profile. Resolves to the
+     * saved id, or an error message.
+     */
+    saveProfile(id: string, def: BoardDefinition): Promise<BoardSaveResult>
+    /** Remember `id` as the hardware profile to reopen with next launch. */
+    remember(id: string): void
     /**
      * Write the pin-map C header for the loaded board to a path the user picks.
      * `edits` are the canvas edits to fold in first (empty for the pristine
@@ -173,11 +207,22 @@ export interface PinBenchApi {
     onData(listener: (lines: SerialLine[]) => void): () => void
   }
   project: {
+    /**
+     * Prompt for a firmware source folder (must hold `platformio.ini`), adopt
+     * it, and record it as the most-recently-opened folder. `envs` is resolved
+     * through `extra_configs`, so variant build envs are included.
+     */
     open(): Promise<OpenProjectResult | null>
     /** Immediate children of `dir`, or of the project root when omitted. */
     readTree(dir?: string): Promise<FileNode[]>
     readFile(path: string): Promise<string>
     onFileChanged(listener: (payload: { path: string }) => void): () => void
+    /** Remember the build env + Inspector config for this (folder, profile) pair. */
+    setFolderState(
+      dir: string,
+      boardId: string,
+      state: { env: string | null; partConfig: Record<string, PartConfigValue> }
+    ): void
   }
   build: {
     start(request: BuildRequest): void

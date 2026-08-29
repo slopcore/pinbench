@@ -14,11 +14,15 @@ the app: `pio run -e <env>` → merge image → boot in QEMU.
 - `pio` discovery: `PINBENCH_PIO` env → repo `.pio-venv/` → an app-managed venv
   under `userData` → `PATH`. If absent, a guided bootstrap into an app-managed
   virtualenv (avoids fighting an externally-managed system Python).
-- **Open project** points PinBench at a checkout, parses `platformio.ini`
-  (resolving `extra_configs = variants/*/platformio.ini`), and lists environments
-  for the user to pick.
+- **Open…** points PinBench at a firmware source folder (the checkout _is_ the
+  project — see [[board-definitions]] § Session model). `collectEnvNames`
+  (`src/shared/pio.ts`) resolves environments through `extra_configs` — following
+  globs like `variants/*/platformio.ini` and nested includes — so a repo that
+  keeps each board's build envs in a per-variant file (MeshCore) still populates
+  the picker. Pure and filesystem-injected, so it is unit-tested with no `pio`.
+  The env choice is remembered per (folder, profile) in `session.json`.
 - Streamed `pio run` with phase transitions (`preparing → compiling → linking →
-  merging → done`) and cancellation. A `LineStreamer` renders bare `\r` progress
+merging → done`) and cancellation. A `LineStreamer` renders bare `\r` progress
   as one updating line, so toolchain downloads don't look like a hang.
 - Process-group kill: the build spawns `detached`; cancel sends `SIGTERM` to
   `-pid` (`taskkill /T` on Windows). Disposed on `before-quit`.

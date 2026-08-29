@@ -15,12 +15,15 @@
  * `boards/` silently flipped the default out from under the M9.
  */
 
-import { readdirSync, readFileSync } from 'node:fs'
+import { readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { app } from 'electron'
 import { parseBoard, type BoardDefinition } from '../shared/board'
 
 const SUFFIX = '.board.json'
+
+/** A board id must be a safe single path segment — it becomes a filename. */
+const BOARD_ID_RE = /^[a-z0-9][a-z0-9._-]*$/i
 
 /**
  * The board loaded when nothing else names one — the first target board, and
@@ -56,7 +59,7 @@ export function loadBoard(id?: string): BoardDefinition {
     if (ids.length === 0) throw new Error(`no board definitions in ${boardsDir()}`)
     boardId = ids.includes(DEFAULT_BOARD_ID) ? DEFAULT_BOARD_ID : ids[0]!
   }
-  if (!/^[a-z0-9][a-z0-9._-]*$/i.test(boardId)) {
+  if (!BOARD_ID_RE.test(boardId)) {
     throw new Error(`invalid board id "${boardId}"`)
   }
   const file = join(boardsDir(), `${boardId}${SUFFIX}`)
@@ -73,4 +76,26 @@ export function loadBoard(id?: string): BoardDefinition {
     throw new Error(`${file} is not valid JSON`, { cause: error })
   }
   return parseBoard(json)
+}
+
+/**
+ * Write `definition` as `boards/<id>.board.json` — how the user turns canvas
+ * edits into a shareable hardware profile. The definition is validated (and
+ * normalised through {@link parseBoard}) before it touches disk, and its `id`
+ * is forced to match `id` so the file name and the definition never disagree.
+ * The write is atomic. Returns the parsed definition as written.
+ */
+export function saveBoardProfile(id: string, definition: unknown): BoardDefinition {
+  const boardId = id.trim()
+  if (!BOARD_ID_RE.test(boardId)) throw new Error(`invalid board id "${boardId}"`)
+  const parsed = parseBoard(
+    typeof definition === 'object' && definition !== null
+      ? { ...(definition as Record<string, unknown>), id: boardId }
+      : definition
+  )
+  const file = join(boardsDir(), `${boardId}${SUFFIX}`)
+  const temporary = `${file}.tmp`
+  writeFileSync(temporary, JSON.stringify(parsed, null, 2) + '\n', 'utf8')
+  renameSync(temporary, file)
+  return parsed
 }

@@ -3,8 +3,10 @@ import { IpcChannel } from '../shared/ipc'
 import type {
   AppInfo,
   BoardLoadResult,
+  BoardSaveResult,
   BuildRequest,
   EmulatorLaunchOptions,
+  LaunchState,
   OpenProjectResult,
   PinBenchApi,
   ProjectFileResult,
@@ -14,6 +16,8 @@ import type {
   UsbFlashStatus,
   WindowState
 } from '../shared/ipc'
+import type { BoardDefinition } from '../shared/board'
+import type { PartConfigValue } from '../shared/partConfig'
 import type { ProjectFile } from '../shared/project'
 import type { BuildOutputLine, BuildStatus } from '../shared/build'
 import type { CommandId } from '../shared/commands'
@@ -39,6 +43,7 @@ function subscribe<T>(channel: string, listener: (payload: T) => void): () => vo
 
 const api: PinBenchApi = {
   appInfo: () => ipcRenderer.invoke(IpcChannel.appInfo) as Promise<AppInfo>,
+  launchState: () => ipcRenderer.invoke(IpcChannel.appLaunchState) as Promise<LaunchState>,
   workspace: {
     load: () => ipcRenderer.invoke(IpcChannel.workspaceLoad) as Promise<WorkspaceState>,
     save: (state: WorkspaceState) => ipcRenderer.send(IpcChannel.workspaceSave, state)
@@ -46,6 +51,9 @@ const api: PinBenchApi = {
   board: {
     load: (id?: string) => ipcRenderer.invoke(IpcChannel.boardLoad, id) as Promise<BoardLoadResult>,
     list: () => ipcRenderer.invoke(IpcChannel.boardList) as Promise<string[]>,
+    saveProfile: (id: string, def: BoardDefinition) =>
+      ipcRenderer.invoke(IpcChannel.boardSaveProfile, id, def) as Promise<BoardSaveResult>,
+    remember: (id: string) => ipcRenderer.send(IpcChannel.boardRemember, id),
     exportPinHeader: (edits) =>
       ipcRenderer.invoke(IpcChannel.exportPinHeader, edits) as Promise<string | null>,
     importPinHeader: () => ipcRenderer.invoke(IpcChannel.importPinHeader) as Promise<string | null>
@@ -84,7 +92,12 @@ const api: PinBenchApi = {
     readFile: (path: string) =>
       ipcRenderer.invoke(IpcChannel.projectReadFile, path) as Promise<string>,
     onFileChanged: (listener) =>
-      subscribe<{ path: string }>(IpcChannel.projectFileChanged, listener)
+      subscribe<{ path: string }>(IpcChannel.projectFileChanged, listener),
+    setFolderState: (
+      dir: string,
+      boardId: string,
+      state: { env: string | null; partConfig: Record<string, PartConfigValue> }
+    ) => ipcRenderer.send(IpcChannel.projectSetFolderState, dir, boardId, state)
   },
   build: {
     start: (request: BuildRequest) => ipcRenderer.send(IpcChannel.buildStart, request),

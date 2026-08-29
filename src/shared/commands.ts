@@ -16,6 +16,7 @@ export const COMMANDS = [
   'file.openFirmware',
   'file.save',
   'file.saveAs',
+  'file.saveProfileAs',
   'file.exportHeader',
   'file.importPinout',
   'file.closeProject',
@@ -115,6 +116,10 @@ export const MENUS: MenuSpec[] = [
       separator,
       item('file.save', 'Save', { accelerator: 'CmdOrCtrl+S', enabled: true }),
       item('file.saveAs', 'Save as…', { accelerator: 'CmdOrCtrl+Shift+S', enabled: true }),
+      separator,
+      // Writes the current (edited) board as a new boards/<id>.board.json — the
+      // way canvas hardware edits become a shareable profile. Wired in Phase 2.
+      item('file.saveProfileAs', 'Save hardware profile as…', { enabled: false }),
       separator,
       // Writes the pin-map C header (shared/codegen.ts) — the same output
       // Build & flash produces, on demand and to a path the user picks.

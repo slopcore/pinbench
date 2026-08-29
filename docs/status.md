@@ -55,6 +55,17 @@ title: Status — done, blocked, next
 
 ## Next
 
+- **`folder-is-project`** — retire the `.pinbench` document. A session is a
+  firmware **source folder** (opened directly, remembered in `session.json`) plus
+  a **hardware profile** (its own `boards/*.board.json`, "Save hardware profile
+  as…", last choice persisted). Per-(folder, profile) build env + Inspector
+  config move into `session.json`. _Phase 1a landed:_ `SessionState` v2, the
+  `app:launch-state` / `board:save-profile` / `board:remember` /
+  `project:set-folder-state` IPC, and `collectEnvNames` (env detection that
+  follows `extra_configs`, so MeshCore's variant envs show up). _Phase 2:_ the
+  renderer Open-folder flow, an env picker, and removing the New / Save /
+  Save-As-project menu items plus `boardEdits` replay-on-open —
+  [[board-definitions]], [[firmware-build]]
 - Flash real hardware over USB — board-native rebuild + `esptool` _Flash_ /
   _Erase + flash_, `pio device list` port picker. Shared layer, `UsbFlashRunner`
   and the dialog are built and unit-tested; **not yet run against a physical

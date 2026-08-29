@@ -71,7 +71,7 @@ describe('SessionStore', () => {
   it('writes valid JSON', () => {
     const file = scratch()
     new SessionStore(file).setWorkspace(DEFAULT_WORKSPACE)
-    expect(JSON.parse(readFileSync(file, 'utf8'))).toMatchObject({ version: 1 })
+    expect(JSON.parse(readFileSync(file, 'utf8'))).toMatchObject({ version: 2 })
   })
 
   it('records recent projects most-recent-first, de-duplicated and capped', () => {
@@ -86,5 +86,61 @@ describe('SessionStore', () => {
     for (let i = 0; i < 12; i++) reloaded.addRecentProject(`/p${i}.pinbench`)
     expect(reloaded.get().recentProjects).toHaveLength(8)
     expect(reloaded.lastProject()).toBe('/p11.pinbench')
+  })
+
+  it('records recent source folders most-recent-first, de-duplicated and capped', () => {
+    const file = scratch()
+    const store = new SessionStore(file)
+    for (const d of ['/repo/MeshCore', '/repo/other', '/repo/MeshCore']) store.addRecentFolder(d)
+    expect(store.lastFolder()).toBe('/repo/MeshCore')
+
+    const reloaded = new SessionStore(file)
+    expect(reloaded.get().recentFolders).toEqual(['/repo/MeshCore', '/repo/other'])
+    for (let i = 0; i < 12; i++) reloaded.addRecentFolder(`/repo/p${i}`)
+    expect(reloaded.get().recentFolders).toHaveLength(8)
+  })
+
+  it('persists the last hardware profile and reloads it', () => {
+    const file = scratch()
+    new SessionStore(file).setLastBoard('heltec-wireless-paper-v1.1')
+    expect(new SessionStore(file).get().lastBoardId).toBe('heltec-wireless-paper-v1.1')
+  })
+
+  it('remembers env + Inspector config per (folder, profile) pair', () => {
+    const file = scratch()
+    const store = new SessionStore(file)
+    store.setFolderState('/repo/MeshCore', 'heltec-wireless-paper-v1.1', {
+      env: 'Heltec_Wireless_Paper_repeater',
+      partConfig: { 'u3.refresh': 'Full' }
+    })
+    // A different profile in the same folder is a separate slot.
+    expect(store.folderState('/repo/MeshCore', 'thinknode-m9-v1.0')).toBeNull()
+
+    const reloaded = new SessionStore(file)
+    expect(reloaded.folderState('/repo/MeshCore', 'heltec-wireless-paper-v1.1')).toEqual({
+      env: 'Heltec_Wireless_Paper_repeater',
+      partConfig: { 'u3.refresh': 'Full' }
+    })
+  })
+
+  it('normalises a v1 session.json without losing the window or workspace', () => {
+    const file = scratch()
+    writeFileSync(
+      file,
+      JSON.stringify({
+        version: 1,
+        window: { width: 1200, height: 800, maximised: false },
+        workspace: { ...DEFAULT_WORKSPACE, dockHeight: 250 },
+        recentProjects: ['/old.pinbench']
+      }),
+      'utf8'
+    )
+    const state = new SessionStore(file).get()
+    expect(state.version).toBe(2)
+    expect(state.window.width).toBe(1200)
+    expect(state.workspace.dockHeight).toBe(250)
+    expect(state.recentFolders).toEqual([])
+    expect(state.lastBoardId).toBeNull()
+    expect(state.folders).toEqual({})
   })
 })

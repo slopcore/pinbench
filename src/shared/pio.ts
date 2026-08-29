@@ -70,6 +70,74 @@ export function parseEnvNamesFromIni(ini: string): string[] {
   return names
 }
 
+/**
+ * The `extra_configs` patterns from a `[platformio]` section, in file order.
+ * PlatformIO takes a newline- or comma-separated list; a value may sit on the
+ * key's line or on indented continuation lines. Inline `;`/`#` comments and
+ * blank entries are dropped. Patterns are returned verbatim (still relative,
+ * globs unexpanded) — {@link collectEnvNames} resolves them.
+ */
+export function parseExtraConfigs(ini: string): string[] {
+  const lines = ini.split(/\r?\n/)
+  let value: string | null = null
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!
+    const m = /^\s*extra_configs\s*[=:]\s*(.*)$/.exec(line)
+    if (!m) continue
+    const parts = [m[1]!]
+    // Indented (or blank) lines that follow are continuations of the value.
+    for (let j = i + 1; j < lines.length; j++) {
+      const next = lines[j]!
+      if (/^\s*\[/.test(next)) break // next section
+      if (/^\S/.test(next) && next.trim() !== '') break // next key
+      parts.push(next)
+    }
+    value = parts.join('\n')
+    break
+  }
+  if (value === null) return []
+  return value
+    .split(/[\n,]/)
+    .map((entry) => entry.replace(/[;#].*$/, '').trim())
+    .filter((entry) => entry.length > 0)
+}
+
+/** Reads a project file by its path relative to the PlatformIO project root. */
+export type IniReader = (relativePath: string) => string | null
+/** Expands a `*` / `**` glob (rooted at the project) to matching relative paths. */
+export type IniGlob = (pattern: string) => string[]
+
+/**
+ * Every `[env:*]` name reachable from a PlatformIO project's `platformio.ini`,
+ * following `extra_configs` (PlatformIO globs these; MeshCore-style repos keep
+ * each board's build envs in `variants/<name>/platformio.ini`). Pure — the
+ * caller injects the reader and globber, so it is unit-testable with no `pio`
+ * and no real filesystem. Names are de-duplicated, in discovery order:
+ * `platformio.ini` first, then each included file.
+ */
+export function collectEnvNames(read: IniReader, glob: IniGlob): string[] {
+  const envs = new Set<string>()
+  const visited = new Set<string>()
+  const normalise = (p: string): string => p.replace(/^\.\//, '').replace(/\/{2,}/g, '/')
+
+  const visit = (relativePath: string): void => {
+    const key = normalise(relativePath)
+    if (visited.has(key)) return
+    visited.add(key)
+    const text = read(key)
+    if (text === null) return
+    for (const name of parseEnvNamesFromIni(text)) envs.add(name)
+    for (const pattern of parseExtraConfigs(text)) {
+      const isGlob = /[*?[\]]/.test(pattern)
+      const matches = isGlob ? [...glob(pattern)].sort() : [pattern]
+      for (const match of matches) visit(match)
+    }
+  }
+
+  visit('platformio.ini')
+  return [...envs]
+}
+
 export interface OverrideConfigInput {
   /** Absolute path to the user's real `platformio.ini`. */
   userConfigPath: string

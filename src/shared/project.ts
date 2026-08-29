@@ -15,8 +15,9 @@
  */
 
 import type { BoardEdit } from './boardEdit'
+import type { PartConfigValue } from './partConfig'
 
-export type PartConfigValue = string | number | boolean
+export type { PartConfigValue }
 
 const BOARD_EDIT_KINDS = new Set([
   'moveParty',

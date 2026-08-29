@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  collectEnvNames,
   overrideConfigIni,
   parseEnvNamesFromIni,
+  parseExtraConfigs,
   parseProjectConfig,
   usbBuildOverrideIni
 } from './pio'
@@ -38,6 +40,77 @@ describe('parseEnvNamesFromIni', () => {
   it('reads env section names without needing pio', () => {
     const ini = '[platformio]\ndefault_envs = a\n\n[env:a]\nboard = x\n[env:b-2]\nboard = y\n'
     expect(parseEnvNamesFromIni(ini)).toEqual(['a', 'b-2'])
+  })
+})
+
+describe('parseExtraConfigs', () => {
+  it('reads an indented continuation list', () => {
+    const ini = [
+      '[platformio]',
+      'default_envs = native',
+      'extra_configs =',
+      '  variants/*/platformio.ini',
+      '  platformio.local.ini   ; developer overrides',
+      '',
+      '[env:native]',
+      'platform = native'
+    ].join('\n')
+    expect(parseExtraConfigs(ini)).toEqual(['variants/*/platformio.ini', 'platformio.local.ini'])
+  })
+
+  it('reads a single inline value and a comma list', () => {
+    expect(parseExtraConfigs('[platformio]\nextra_configs = a.ini\n')).toEqual(['a.ini'])
+    expect(parseExtraConfigs('[platformio]\nextra_configs = a.ini, b.ini\n')).toEqual([
+      'a.ini',
+      'b.ini'
+    ])
+  })
+
+  it('is empty when there is no extra_configs', () => {
+    expect(parseExtraConfigs('[platformio]\ndefault_envs = a\n[env:a]\nboard = x\n')).toEqual([])
+  })
+})
+
+describe('collectEnvNames', () => {
+  it('follows extra_configs globs and unions every env, in discovery order', () => {
+    const files: Record<string, string> = {
+      'platformio.ini': [
+        '[platformio]',
+        'extra_configs =',
+        '  variants/*/platformio.ini',
+        '[env:native]',
+        'platform = native'
+      ].join('\n'),
+      'variants/heltec_wireless_paper/platformio.ini':
+        '[env:Heltec_Wireless_Paper_repeater]\nboard = esp32-s3-devkitc-1\n' +
+        '[env:Heltec_Wireless_Paper_room_server]\nboard = esp32-s3-devkitc-1\n',
+      'variants/rak4631/platformio.ini': '[env:RAK4631_repeater]\nboard = nrf52840\n'
+    }
+    const envs = collectEnvNames(
+      (rel) => files[rel] ?? null,
+      (pattern) => {
+        expect(pattern).toBe('variants/*/platformio.ini')
+        return ['variants/rak4631/platformio.ini', 'variants/heltec_wireless_paper/platformio.ini']
+      }
+    )
+    expect(envs).toEqual([
+      'native',
+      'Heltec_Wireless_Paper_repeater',
+      'Heltec_Wireless_Paper_room_server',
+      'RAK4631_repeater'
+    ])
+  })
+
+  it('tolerates a missing include and never loops on a self-reference', () => {
+    const files: Record<string, string> = {
+      'platformio.ini': '[platformio]\nextra_configs = platformio.ini\n gone.ini\n[env:a]\nx = 1\n'
+    }
+    expect(
+      collectEnvNames(
+        (rel) => files[rel] ?? null,
+        () => []
+      )
+    ).toEqual(['a'])
   })
 })
 

@@ -15,6 +15,9 @@ export function installBridge(initial: WorkspaceState = DEFAULT_WORKSPACE): Test
     saved,
     savedWorkspace: initial,
     appInfo: () => Promise.resolve({ version: '0.1.0', platform: 'darwin', isDev: true }),
+    launchState: vi.fn(() =>
+      Promise.resolve({ lastBoardId: null, folder: null, env: null, partConfig: {} })
+    ),
     workspace: {
       load: () => Promise.resolve(bridge.savedWorkspace),
       save: (state) => {
@@ -25,6 +28,8 @@ export function installBridge(initial: WorkspaceState = DEFAULT_WORKSPACE): Test
     board: {
       load: vi.fn(() => Promise.resolve({ error: 'no board in tests' as string })),
       list: vi.fn(() => Promise.resolve([] as string[])),
+      saveProfile: vi.fn(() => Promise.resolve({ id: 'test-profile' })),
+      remember: vi.fn(),
       exportPinHeader: vi.fn(() => Promise.resolve(null as string | null)),
       importPinHeader: vi.fn(() => Promise.resolve(null as string | null))
     },
@@ -55,7 +60,8 @@ export function installBridge(initial: WorkspaceState = DEFAULT_WORKSPACE): Test
       open: vi.fn(() => Promise.resolve(null)),
       readTree: vi.fn(() => Promise.resolve([])),
       readFile: vi.fn(() => Promise.resolve('')),
-      onFileChanged: () => () => undefined
+      onFileChanged: () => () => undefined,
+      setFolderState: vi.fn()
     },
     build: {
       start: vi.fn(),

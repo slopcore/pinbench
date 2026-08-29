@@ -101,11 +101,18 @@ describe('the menu bar', () => {
     expect(screen.getByRole('menuitemcheckbox', { name: /No grid/ })).not.toBeChecked()
   })
 
-  it('leaves unimplemented commands disabled rather than lying', async () => {
+  it('enables Verify pin map now the M11.1 rule engine has landed', async () => {
     const { user } = await renderApp()
     await user.click(screen.getByRole('menuitem', { name: 'Build' }))
-    // Verify pin map is the M11 rule engine — still inert.
-    expect(screen.getByRole('menuitem', { name: /Verify pin map/ })).toBeDisabled()
+    expect(screen.getByRole('menuitem', { name: /Verify pin map/ })).not.toBeDisabled()
+  })
+
+  it('Verify pin map runs the rule engine and shows a chip-select row in the dock', async () => {
+    const { user } = await renderApp()
+    await user.click(screen.getByRole('menuitem', { name: 'Build' }))
+    await user.click(screen.getByRole('menuitem', { name: /Verify pin map/ }))
+    // The shipped M9 is clean, so the SPI0 chip-select `ok` row appears.
+    expect(await screen.findByText(/SPI0: 3 chip-selects/)).toBeInTheDocument()
   })
 })
 

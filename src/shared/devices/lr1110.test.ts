@@ -52,7 +52,8 @@ const OP = {
   SET_MODULATION_PARAMS: 0x020f,
   SET_TX_PARAMS: 0x0211,
   WRITE_BUFFER: 0x0109,
-  SET_TX: 0x020a
+  SET_TX: 0x020a,
+  SET_RX: 0x0209
 }
 
 describe('Lr1110Model', () => {

@@ -40,8 +40,12 @@ describe('menu spec', () => {
 
   it('leaves commands whose milestone has not landed disabled', () => {
     const disabled = allMenuItems().filter((item) => !item.enabled)
-    expect(disabled.map((item) => item.command)).toContain('build.verifyPinMap')
     expect(disabled.map((item) => item.command)).toContain('file.newProject')
+  })
+
+  it('enables Verify pin map — the M11.1 rule engine', () => {
+    const enabled = allMenuItems().filter((item) => item.enabled)
+    expect(enabled.map((item) => item.command)).toContain('build.verifyPinMap')
   })
 
   it('enables the M2 emulator and M3 build commands', () => {

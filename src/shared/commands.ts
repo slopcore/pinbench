@@ -160,12 +160,12 @@ export const MENUS: MenuSpec[] = [
     label: 'Build',
     entries: [
       // Build & flash and PlatformIO land in M3; the pin-map rule engine
-      // behind ⌘B is still M11.
+      // behind ⌘B lands in M11.1.
       item('build.buildAndFlash', 'Build & flash', {
         accelerator: 'CmdOrCtrl+Shift+B',
         enabled: true
       }),
-      item('build.verifyPinMap', 'Verify pin map', { accelerator: 'CmdOrCtrl+B', enabled: false }),
+      item('build.verifyPinMap', 'Verify pin map', { accelerator: 'CmdOrCtrl+B', enabled: true }),
       item('build.clean', 'Clean build cache', { enabled: true }),
       separator,
       item('build.start', 'Start', { accelerator: 'CmdOrCtrl+R', enabled: true }),

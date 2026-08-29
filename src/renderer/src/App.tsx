@@ -16,6 +16,7 @@ import { StatusBar } from './components/StatusBar'
 import { TitleBar } from './components/TitleBar'
 import { Toolbar } from './components/Toolbar'
 import type { Diagnostic } from '@shared/diagnostics'
+import { findingsToDiagnostics, verifyBoard } from '@shared/verify'
 import { isBuildRunning } from '@shared/build'
 import { useMenuCommands } from './state/useCommands'
 import { useBuild } from './state/useBuild'
@@ -56,6 +57,8 @@ export function App({ appInfo, windowState, board, initialProject }: AppProps): 
   const [projectDirty, setProjectDirty] = useState(false)
   /** Set when an opened `.pinbench` names a board other than the loaded one (M13). */
   const [otherBoardId, setOtherBoardId] = useState<string | null>(null)
+  /** Rows from the last "Verify pin map" (⌘B) run; empty until first run. */
+  const [verifyRows, setVerifyRows] = useState<Diagnostic[]>([])
 
   const openInSource = useCallback(
     (file: string, line?: number) => {
@@ -95,6 +98,7 @@ export function App({ appInfo, windowState, board, initialProject }: AppProps): 
     }
     rows.push(...build.diagnostics)
     rows.push(...devices.diagnostics)
+    rows.push(...verifyRows)
     if (otherBoardId) {
       rows.push({
         id: 'other-board',
@@ -122,6 +126,7 @@ export function App({ appInfo, windowState, board, initialProject }: AppProps): 
     build.status,
     build.diagnostics,
     devices.diagnostics,
+    verifyRows,
     emulator.state,
     emulator.error,
     emulator.firmwarePath
@@ -285,6 +290,10 @@ export function App({ appInfo, windowState, board, initialProject }: AppProps): 
         case 'build.buildAndFlash':
           buildAndFlash()
           break
+        case 'build.verifyPinMap':
+          setVerifyRows(findingsToDiagnostics(verifyBoard(board)))
+          dispatch({ type: 'setDockTab', tab: 'diagnostics' })
+          break
         case 'build.clean':
           if (project.info) build.clean(project.info.dir)
           break
@@ -306,6 +315,7 @@ export function App({ appInfo, windowState, board, initialProject }: AppProps): 
       }
     },
     [
+      board,
       buildAndFlash,
       build,
       dispatch,

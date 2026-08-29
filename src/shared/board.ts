@@ -134,6 +134,12 @@ export interface BoardDefinition {
   parts: PartDefinition[]
   nets: NetDefinition[]
   emulator: EmulatorTarget
+  /**
+   * Pin ids where a double-bind is intentional and must not raise a `warn` from
+   * the M11 "Verify pin map" rule engine — only a `note`. The M9's `GPIO12`
+   * carries both `KEY_INT` and `ESP32_WAKEUP` on purpose (M8's watch-for).
+   */
+  pinExceptions?: string[]
   canvas: {
     /** Board outline in the same units as `PartDefinition.layout`. */
     width: number
@@ -427,6 +433,16 @@ export function parseBoard(input: unknown): BoardDefinition {
 
   const canvasRaw = obj(root['canvas'], 'board.canvas')
 
+  let pinExceptions: string[] | undefined
+  if (root['pinExceptions'] !== undefined) {
+    const pinIds = new Set(pins.map((p) => p.id))
+    pinExceptions = arr(root['pinExceptions'], 'board.pinExceptions').map((v, i) => {
+      const id = str(v, `board.pinExceptions[${i}]`)
+      if (!pinIds.has(id)) fail(`board.pinExceptions[${i}]`, `no pin "${id}"`)
+      return id
+    })
+  }
+
   return {
     schema: 1,
     id,
@@ -438,6 +454,7 @@ export function parseBoard(input: unknown): BoardDefinition {
     parts,
     nets,
     emulator,
+    ...(pinExceptions ? { pinExceptions } : {}),
     canvas: {
       width: num(canvasRaw['width'], 'board.canvas.width'),
       height: num(canvasRaw['height'], 'board.canvas.height')

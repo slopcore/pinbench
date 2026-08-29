@@ -84,6 +84,11 @@ export interface AcpBridgeWiring {
    * `ask`.
    */
   confirm(op: OperationDescriptor): Promise<boolean>
+  /**
+   * The host's "auto-approve agent actions" switch. When it returns `true`,
+   * `exec` ops run without calling {@link confirm}. Absent ⇒ always prompt.
+   */
+  autoApprove?(): boolean
   /** ACP `session/request_permission` from the agent — the tool-call approval prompt. */
   requestAgentPermission?(params: unknown): Promise<{
     outcome: { outcome: string; optionId?: string }
@@ -185,7 +190,9 @@ export async function startAcpBridge(wiring: AcpBridgeWiring): Promise<AcpBridge
   }
 
   const authorize = async (op: OperationDescriptor): Promise<boolean> =>
-    defaultPermissionPolicy(op) === 'allow' ? true : wiring.confirm(op)
+    defaultPermissionPolicy(op) === 'allow' || wiring.autoApprove?.() === true
+      ? true
+      : wiring.confirm(op)
 
   const server = await startAcpControlServer({
     serverName: 'pinbench',

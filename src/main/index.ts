@@ -47,6 +47,8 @@ let projectWatcher: FSWatcher | null = null
 /** Last board the renderer asked to load — the agent bridge's board authority (ADR 0002). */
 let currentBoard: BoardDefinition | null = null
 let acpBridge: AcpBridge | null = null
+/** "Auto-approve agent actions" — skips the ACP permission prompts. Toggled from the Agent menu. */
+let acpAutoApprove = process.env['PINBENCH_ACP_AUTO_APPROVE'] === '1'
 
 const cacheDir = (): string => join(app.getPath('userData'), 'build-cache')
 
@@ -605,6 +607,28 @@ function buildEnv(env: string): void {
 }
 
 /**
+ * Rebuild the native menu. When the app runs `--acp`, the menu carries an
+ * "Agent ▸ Auto-approve agent actions" checkbox bound to {@link acpAutoApprove};
+ * toggling it rebuilds so the checkmark tracks the state.
+ */
+function refreshMenu(): void {
+  Menu.setApplicationMenu(
+    buildApplicationMenu(
+      () => mainWindow,
+      acpRequested()
+        ? {
+            autoApprove: acpAutoApprove,
+            onToggle: (next) => {
+              acpAutoApprove = next
+              refreshMenu()
+            }
+          }
+        : undefined
+    )
+  )
+}
+
+/**
  * Stand up the agent control plane (roadmap M16.2–M16.3). Opt-in: only when the
  * app was started `--acp` / `PINBENCH_ACP=1`. Prints the loopback MCP URL and
  * the per-session token to stderr. When `PINBENCH_AGENT_CMD` is set, also
@@ -642,6 +666,7 @@ async function startAgentBridge(): Promise<void> {
       },
       menuCommand: (command: CommandId) =>
         mainWindow?.webContents.send(IpcChannel.menuCommand, command),
+      autoApprove: () => acpAutoApprove,
       confirm: async (op) => {
         if (!mainWindow) return false
         const { response } = await dialog.showMessageBox(mainWindow, {
@@ -656,11 +681,19 @@ async function startAgentBridge(): Promise<void> {
       },
       requestAgentPermission: async (params) => {
         const p = (params ?? {}) as {
-          options?: { optionId: string; name: string }[]
+          options?: { optionId: string; name: string; kind?: string }[]
           toolCall?: { title?: string }
         }
         if (!mainWindow || !p.options || p.options.length === 0) {
           return { outcome: { outcome: 'cancelled' } }
+        }
+        if (acpAutoApprove) {
+          const allow =
+            p.options.find((o) => o.kind === 'allow_always') ??
+            p.options.find((o) => o.kind === 'allow_once') ??
+            p.options.find((o) => /allow/i.test(o.optionId)) ??
+            p.options[0]!
+          return { outcome: { outcome: 'selected', optionId: allow.optionId } }
         }
         const { response } = await dialog.showMessageBox(mainWindow, {
           type: 'question',
@@ -700,7 +733,7 @@ if (!app.requestSingleInstanceLock()) {
   void app.whenReady().then(() => {
     app.setName('PinBench')
     registerIpc()
-    Menu.setApplicationMenu(buildApplicationMenu(() => mainWindow))
+    refreshMenu()
     mainWindow = createWindow()
     void startAgentBridge()
 

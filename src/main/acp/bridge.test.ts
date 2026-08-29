@@ -109,6 +109,16 @@ describe('startAcpBridge', () => {
     ).not.toHaveBeenCalled()
   })
 
+  it('skips confirm() for exec ops while autoApprove() is true', async () => {
+    const confirm = vi.fn(async () => false)
+    const w = wiring({ confirm, autoApprove: () => true })
+    bridge = await startAcpBridge(w)
+    const out = await callTool(bridge.server.url, bridge.server.token, 'emulator_reset')
+    expect(confirm).not.toHaveBeenCalled()
+    expect(out.result.isError).toBeUndefined()
+    expect((w.emulator as unknown as { reset: ReturnType<typeof vi.fn> }).reset).toHaveBeenCalled()
+  })
+
   it('runs an exec op after confirm() approves', async () => {
     const w = wiring()
     bridge = await startAcpBridge(w)

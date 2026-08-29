@@ -268,7 +268,7 @@
           "label": "Rotation",
           "kind": "segmented",
           "options": ["0°", "90°", "180°", "270°"],
-          "value": "270°"
+          "value": "0°"
         },
         {
           "id": "scale",

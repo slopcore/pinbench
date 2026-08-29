@@ -148,6 +148,15 @@
   padding: var(--space-3) 0;
 }
 
+/* Holds the rotated-canvas layout box: the canvas rotates via CSS transform
+   (no layout effect), so the frame reserves the swapped w/h for 90°/270°. */
+.st7789__frame,
+.eink__frame {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .st7789__canvas {
   image-rendering: pixelated;
   border-radius: 3px;

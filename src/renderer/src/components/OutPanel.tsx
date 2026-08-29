@@ -39,6 +39,7 @@ export function OutPanel({
   const lit = snapshot?.state['lit'] === true
   const pinHigh = snapshot?.state['pin'] === 1
   const zoom = panelZoom(part, configValues)
+  const rotate = panelRotate(part, configValues)
 
   return (
     <section className="inspector__section outpanel" aria-label="Output">
@@ -89,9 +90,13 @@ export function OutPanel({
             </div>
           )}
 
-          {isPanel && <St7789Screen framebuffer={view?.framebuffer} zoom={zoom} />}
+          {isPanel && (
+            <St7789Screen framebuffer={view?.framebuffer} zoom={zoom} rotate={rotate} />
+          )}
 
-          {isEInk && <EInkScreen framebuffer={view?.framebuffer} zoom={zoom} />}
+          {isEInk && (
+            <EInkScreen framebuffer={view?.framebuffer} zoom={zoom} rotate={rotate} />
+          )}
 
           {snapshot.meters.length > 0 && (
             <dl className="outpanel__meters">
@@ -138,6 +143,19 @@ function fieldValue(
   return part.config.find((f) => f.id === fieldId)?.value
 }
 
+/** The "Rotation" segmented control (`0°`…`270°`) → degrees for the screen. */
+function panelRotate(
+  part: PartDefinition,
+  configValues?: Record<string, string | number | boolean>
+): number {
+  const raw = fieldValue(part, configValues, 'rotation')
+  if (typeof raw === 'string') {
+    const n = parseInt(raw, 10)
+    if (n === 90 || n === 180 || n === 270) return n
+  }
+  return 0
+}
+
 /** The ST7789 "Panel zoom" segmented control → a pixel multiplier. */
 function panelZoom(
   part: PartDefinition,
@@ -152,10 +170,11 @@ function panelZoom(
 }
 
 /**
- * The design puts the panel-zoom picker and a `BL ON/OFF` toggle on the screen
- * OUT panel itself, not only in the Inspector's Configuration list. These are a
- * second surface onto the same `scale` / `backlight` config fields — every click
- * goes through the Inspector's `onConfigChange`, so the two stay in lock-step.
+ * The design puts the panel-zoom picker, a `Rotation` picker and a `BL ON/OFF`
+ * toggle on the screen OUT panel itself, not only in the Inspector's
+ * Configuration list. These are a second surface onto the same
+ * `scale` / `rotation` / `backlight` config fields — every click goes through
+ * the Inspector's `onConfigChange`, so the two stay in lock-step.
  */
 function ScreenControls({
   part,
@@ -169,11 +188,15 @@ function ScreenControls({
   showBacklight: boolean
 }): React.JSX.Element | null {
   const scale = part.config.find((f) => f.id === 'scale')
+  const rotation = part.config.find((f) => f.id === 'rotation')
   const backlight = part.config.find((f) => f.id === 'backlight')
   const scaleValue = fieldValue(part, configValues, 'scale')
+  const rotationValue = fieldValue(part, configValues, 'rotation')
   const blOn = fieldValue(part, configValues, 'backlight') === true
 
-  if ((!scale || scale.kind !== 'segmented') && !(showBacklight && backlight)) return null
+  const hasScale = scale?.kind === 'segmented'
+  const hasRotation = rotation?.kind === 'segmented'
+  if (!hasScale && !hasRotation && !(showBacklight && backlight)) return null
 
   return (
     <div className="outpanel__screen-controls">
@@ -187,6 +210,22 @@ function ScreenControls({
               aria-pressed={scaleValue === option}
               data-active={scaleValue === option || undefined}
               onClick={() => onConfigChange('scale', option)}
+            >
+              {option}
+            </button>
+          ))}
+        </div>
+      )}
+      {rotation && rotation.kind === 'segmented' && (
+        <div className="field__segmented" role="group" aria-label="Rotation">
+          {rotation.options.map((option) => (
+            <button
+              key={option}
+              type="button"
+              className="field__segment"
+              aria-pressed={rotationValue === option}
+              data-active={rotationValue === option || undefined}
+              onClick={() => onConfigChange('rotation', option)}
             >
               {option}
             </button>

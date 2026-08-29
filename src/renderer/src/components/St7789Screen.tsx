@@ -5,6 +5,9 @@ interface St7789ScreenProps {
   framebuffer: DeviceFramebufferMessage | undefined
   /** Panel-zoom from the Inspector: `1`, `2` or `3`. */
   zoom: number
+  /** Viewer rotation applied on top of the firmware's own MADCTL, in degrees:
+      `0`, `90`, `180` or `270`. Purely a CSS transform on scan-out. */
+  rotate?: number
 }
 
 const MADCTL_MV = 0x20
@@ -40,7 +43,11 @@ export function displayDirtyRect(
  * repaints only that region, not the whole canvas. A change of dimensions,
  * dim level or invert forces a full repaint.
  */
-export function St7789Screen({ framebuffer, zoom }: St7789ScreenProps): React.JSX.Element {
+export function St7789Screen({
+  framebuffer,
+  zoom,
+  rotate = 0
+}: St7789ScreenProps): React.JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const imageRef = useRef<ImageData | null>(null)
   const stateRef = useRef({ dispW: 0, dispH: 0, dim: -1, inv: -1 })
@@ -103,14 +110,27 @@ export function St7789Screen({ framebuffer, zoom }: St7789ScreenProps): React.JS
       : { w: framebuffer.width, h: framebuffer.height }
     : { w: 320, h: 240 }
 
+  const quarter = ((Math.round(rotate / 90) % 4) + 4) % 4
+  const swap = quarter === 1 || quarter === 3
+  const frame = {
+    width: (swap ? base.h : base.w) * zoom,
+    height: (swap ? base.w : base.h) * zoom
+  }
+
   return (
     <div className="st7789">
-      <canvas
-        ref={canvasRef}
-        className="st7789__canvas"
-        style={{ width: base.w * zoom, height: base.h * zoom }}
-        aria-label="ST7789 panel output"
-      />
+      <div className="st7789__frame" style={frame}>
+        <canvas
+          ref={canvasRef}
+          className="st7789__canvas"
+          style={{
+            width: base.w * zoom,
+            height: base.h * zoom,
+            transform: quarter ? `rotate(${quarter * 90}deg)` : undefined
+          }}
+          aria-label="ST7789 panel output"
+        />
+      </div>
       {!framebuffer && (
         <p className="st7789__idle">No frame yet — boot firmware that drives the panel.</p>
       )}

@@ -5,6 +5,9 @@ interface EInkScreenProps {
   framebuffer: DeviceFramebufferMessage | undefined
   /** Panel-zoom from the Inspector: `1`, `2` or `3`. */
   zoom: number
+  /** Viewer rotation, in degrees (`0`, `90`, `180`, `270`) — a CSS transform on
+      the finished picture, independent of the orientation the guest drew in. */
+  rotate?: number
 }
 
 // E-paper isn't pure black/white: unset "ink" sits on a warm grey substrate,
@@ -18,10 +21,16 @@ const INK: [number, number, number] = [0x24, 0x24, 0x28]
  * = white, `ceil(width / 8)` bytes per row. Unlike the ST7789 there is no
  * rotation to undo here: the guest drew straight into RAM in whatever
  * orientation its driver chose, and e-ink has no backlight or invert to model.
+ * The `rotate` prop is a viewer-only convenience, layered on the finished
+ * picture as a CSS transform — it does not change what the guest drew.
  * The whole panel repaints on every message (an e-ink refresh is a whole-panel
  * event) so there is no dirty-rect fast path.
  */
-export function EInkScreen({ framebuffer, zoom }: EInkScreenProps): React.JSX.Element {
+export function EInkScreen({
+  framebuffer,
+  zoom,
+  rotate = 0
+}: EInkScreenProps): React.JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
@@ -56,14 +65,27 @@ export function EInkScreen({ framebuffer, zoom }: EInkScreenProps): React.JSX.El
 
   const base = framebuffer ? { w: framebuffer.width, h: framebuffer.height } : { w: 250, h: 122 }
 
+  const quarter = ((Math.round(rotate / 90) % 4) + 4) % 4
+  const swap = quarter === 1 || quarter === 3
+  const frame = {
+    width: (swap ? base.h : base.w) * zoom,
+    height: (swap ? base.w : base.h) * zoom
+  }
+
   return (
     <div className="eink">
-      <canvas
-        ref={canvasRef}
-        className="eink__canvas"
-        style={{ width: base.w * zoom, height: base.h * zoom }}
-        aria-label="E-paper panel output"
-      />
+      <div className="eink__frame" style={frame}>
+        <canvas
+          ref={canvasRef}
+          className="eink__canvas"
+          style={{
+            width: base.w * zoom,
+            height: base.h * zoom,
+            transform: quarter ? `rotate(${quarter * 90}deg)` : undefined
+          }}
+          aria-label="E-paper panel output"
+        />
+      </div>
       {!framebuffer && (
         <p className="eink__idle">No frame yet — boot firmware that refreshes the panel.</p>
       )}

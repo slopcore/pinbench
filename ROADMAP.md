@@ -1309,6 +1309,17 @@ home screen — closing M6.4's carried clause.
   TCXO path. `pins_arduino.h` for `thinknode_m9` sets `SS = LORA_CS = 39`, so
   the default-SS theory needs checking against what Arduino-ESP32 actually does
   for `SPI` (FSPI/SPI2) on this SoC.
+- **Session note (M7.2b attempt 1).** A `-D RADIOLIB_DEBUG_BASIC=1` build
+  through the `-c` override produced **no** RadioLib debug output (the override
+  `build_flags` may not merge that way — verify with `pio project config`).
+  `-d guest_errors` showed a repeated `Invalid read at addr 0x10200C, size 4,
+  region 'er', reason: rejected` immediately before the pin-227 error — a
+  low-address (near-null + 0x10200C) read that is not any fork peripheral base.
+  That points at a garbage pointer / uninitialised struct field in the guest,
+  read *before* the `-707`. gdb on the guest (`-s -S`, break on
+  `__pinMode`) is the next tool. Debug images built:
+  `MeshCore-m9-dev` env `ThinkNode_M9_companion_radio_usb_` with the
+  `dio_opi` override.
 - Fix it where it belongs: most likely a range/validity check or a missing
   register in `qemu/hw/gpio/esp32_gpio.c` / `esp32s3_gpio.c` (the fork models a
   subset), or — if it is genuinely a MeshCore/RadioLib call with a bad pin — a
@@ -1703,6 +1714,18 @@ the M9, and lands a new device model as a PR — working only from the docs.
   has neither today. Every M7/M8 cross-reference in this file now names the
   milestone as well as the number, so the next reorder can't silently repoint
   them.
+- **M7 is in four slices (M7.1–M7.4) plus M7.2b.** M7.1 (LR1110 model),
+  M7.2 (host→guest line reads, live-verified) and M7.3 (injection / airtime /
+  IN+OUT panels) are **done** — the TypeScript half of the radio, on `main`,
+  246 unit tests. The GPIO *input* gap named above is now retired: `Op.GpioRead`
+  + the Hello input-pin mask + `esp32_gpio.c` overlay, no interrupt raise
+  needed (RadioLib level-polls). **Blocked at M7.2b:** MeshCore's `radio_init()`
+  still returns `-707` before any radio SPI, stopped by a pre-existing fork
+  GPIO fault — `__pinMode(): Invalid pin selected` / `gpio_set_level(227)` and
+  an `Invalid read at 0x10200C`, first seen in M6.2 and never chased. Until
+  M7.2b clears it, M7.4 (the end-to-end app demo), M6.4's carried home screen,
+  and M8 (main-loop-dependent) all wait. The fault is upstream of M7.1–M7.3
+  code, which is why they could still land.
 - **M9, M10 and M14 are parallelisable** once the device API is stable — they are
   independent devices against a fixed interface, which is exactly what the
   modular architecture was for.

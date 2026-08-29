@@ -1555,7 +1555,7 @@ bug and M11 depends only on M5 (it needs a build, not `radio_init()`). Split
 the way M6/M7 were, each slice its own commit + Outcome, testable without a
 live guest first.
 
-#### M11.1 · Verify pin map — the rule engine — `M`
+#### M11.1 · Verify pin map — the rule engine — `M` ✅ **done**
 
 **Goal.** `⌘B` "Verify pin map" is a real rule engine over the board
 definition, not a stub.
@@ -1587,6 +1587,30 @@ definition, not a stub.
 **Done when.** `verifyBoard` on the shipped M9 returns only `ok`/`note` rows
 plus the declared `GPIO12` note; a test board with `LCD_CS` on `GPIO21` yields
 a `warn` naming `GPIO21`, `u3:CS` and `u8:SCL`. Findings render in the dock.
+
+### Outcome
+
+`src/shared/verify.ts` — `verifyBoard(board) → VerifyFinding[]`, pure, no
+Electron/DOM. All four named rule families implemented; each finding carries a
+`ref` (`part`/`pin`/`net`/`bus`) for M11.3's click-through. `findingsToDiagnostics`
+maps them onto dock rows with stable ids so a re-run replaces rather than
+appends.
+
+- The shipped M9 verifies **clean**: only `[note] GPIO3 is a strapping pin
+  driving u6:TXD` (real — GNSS UART1 on a strap pin) and `[ok] SPI0: 3
+  chip-selects, each on its own pin`. No false warnings — the shared-bus wires
+  (`SCK`/`MOSI`/`MISO` on GPIO40/47/38) are recognised and not flagged as
+  double-binds.
+- `board.pinExceptions` added to the schema (tolerant parse, cross-checked
+  against the pin list) — the hook for M8's `GPIO12` double-bind, empty on the
+  M9 today.
+- `⌘B` is enabled and wired end to end: `App` runs `verifyBoard` on the
+  in-renderer board definition (no IPC needed — the board is already there) and
+  merges the rows into the Diagnostics dock, switching to that tab. Covered by
+  an `App.test` that clicks the menu item and finds the chip-select row.
+- **M11's Done-when, minus the rebuild:** a fixture moving `LCD_CS` to `GPIO21`
+  produces `warn … GPIO21 is bound to 2 signals: u3:CS + u8:SCL`. The
+  rebuild-and-drive-the-new-pin half is M11.2 (codegen).
 
 #### M11.2 · Pin-map codegen — `M`
 

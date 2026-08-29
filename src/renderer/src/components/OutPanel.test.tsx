@@ -122,6 +122,13 @@ describe('OutPanel', () => {
     config: [
       { id: 'backlight', label: 'Backlight', kind: 'toggle', value: true },
       {
+        id: 'rotation',
+        label: 'Rotation',
+        kind: 'segmented',
+        options: ['0°', '90°', '180°', '270°'],
+        value: '0°'
+      },
+      {
         id: 'scale',
         label: 'Panel zoom',
         kind: 'segmented',
@@ -152,6 +159,37 @@ describe('OutPanel', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /^BL ON$/ }))
     expect(onConfigChange).toHaveBeenLastCalledWith('backlight', false)
+  })
+
+  it('drives the rotation picker through onConfigChange', async () => {
+    const onConfigChange = vi.fn()
+    render(
+      <OutPanel
+        part={PANEL_PART}
+        view={panelView}
+        configValues={{ 'u3.scale': '2×', 'u3.rotation': '0°', 'u3.backlight': true }}
+        onConfigChange={onConfigChange}
+      />
+    )
+    await userEvent.click(screen.getByRole('button', { name: '90°' }))
+    expect(onConfigChange).toHaveBeenLastCalledWith('rotation', '90°')
+  })
+
+  it('rotates the panel canvas and swaps its layout box for a quarter turn', () => {
+    const { container } = render(
+      <OutPanel
+        part={PANEL_PART}
+        view={panelView}
+        configValues={{ 'u3.scale': '2×', 'u3.rotation': '90°' }}
+        onConfigChange={vi.fn()}
+      />
+    )
+    const canvas = container.querySelector('.st7789__canvas') as HTMLCanvasElement
+    expect(canvas.style.transform).toBe('rotate(90deg)')
+    // 320×240 landscape at zoom 2 → frame box swapped to 480×640.
+    const frame = container.querySelector('.st7789__frame') as HTMLElement
+    expect(frame.style.width).toBe(`${240 * 2}px`)
+    expect(frame.style.height).toBe(`${320 * 2}px`)
   })
 
   it('reflects the live scale value from configValues, not just the board default', () => {

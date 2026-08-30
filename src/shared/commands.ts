@@ -189,7 +189,7 @@ export const MENUS: MenuSpec[] = [
     entries: [
       // Build & flash and PlatformIO land in M3; the pin-map rule engine
       // behind ⌘B lands in M11.1.
-      item('build.buildAndFlash', 'Build & flash', {
+      item('build.buildAndFlash', 'Build & run', {
         accelerator: 'CmdOrCtrl+Shift+B',
         enabled: true
       }),

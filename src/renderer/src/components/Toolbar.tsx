@@ -39,12 +39,12 @@ interface ToolbarProps {
   canBuild: boolean
   emulatorState: EmulatorState
   hasFirmware: boolean
-  onBuildAndFlash: () => void
-  onCancelBuild: () => void
   onFlashUsb: () => void
   onVerify: () => void
-  onEmulatorStart: () => void
-  onEmulatorStop: () => void
+  /** Play: build the firmware (if a project is open) and boot it. */
+  onPlay: () => void
+  /** Stop: cancel a running build, otherwise stop the emulator. */
+  onStop: () => void
   onEmulatorReset: () => void
   onSelectTool: (tool: CanvasTool) => void
   onSelectGrid: (grid: GridStyle) => void
@@ -61,12 +61,10 @@ export function Toolbar({
   canBuild,
   emulatorState,
   hasFirmware,
-  onBuildAndFlash,
-  onCancelBuild,
   onFlashUsb,
   onVerify,
-  onEmulatorStart,
-  onEmulatorStop,
+  onPlay,
+  onStop,
   onEmulatorReset,
   onSelectTool,
   onSelectGrid,
@@ -85,16 +83,6 @@ export function Toolbar({
     <div className="toolbar" role="toolbar" aria-label="Workbench">
       <button
         type="button"
-        className="toolbar__primary"
-        data-building={building || undefined}
-        disabled={!canBuild && !building}
-        onClick={building ? onCancelBuild : onBuildAndFlash}
-        title={building ? 'Cancel build' : 'Build the firmware and boot it'}
-      >
-        {building ? `${buildButtonLabel(buildState)} — cancel` : buildButtonLabel(buildState)}
-      </button>
-      <button
-        type="button"
         className="toolbar__button toolbar__button--wide"
         disabled={building}
         onClick={onFlashUsb}
@@ -110,29 +98,32 @@ export function Toolbar({
       >
         Verify
       </button>
-      <div className="toolbar__group" role="group" aria-label="Emulator">
+      <div className="toolbar__group" role="group" aria-label="Run">
         <button
           type="button"
           className="toolbar__button"
-          disabled={!hasFirmware || emulatorState === 'running' || emulatorBusy}
-          title="Start"
-          onClick={onEmulatorStart}
+          data-building={building || undefined}
+          disabled={
+            building || emulatorState === 'running' || emulatorBusy || (!canBuild && !hasFirmware)
+          }
+          title={building ? buildButtonLabel(buildState) : 'Build the firmware and boot it'}
+          onClick={onPlay}
         >
           ▶
         </button>
         <button
           type="button"
           className="toolbar__button"
-          disabled={!canStop}
-          title="Stop"
-          onClick={onEmulatorStop}
+          disabled={!building && !canStop}
+          title={building ? 'Cancel build' : 'Stop'}
+          onClick={onStop}
         >
           ■
         </button>
         <button
           type="button"
           className="toolbar__button"
-          disabled={!hasFirmware || emulatorBusy}
+          disabled={!hasFirmware || emulatorBusy || building}
           title="Reset"
           onClick={onEmulatorReset}
         >

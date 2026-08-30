@@ -533,14 +533,16 @@ export function App({
         canBuild={canBuild}
         emulatorState={emulator.state}
         hasFirmware={emulator.firmwarePath !== null}
-        onBuildAndFlash={buildAndFlash}
-        onCancelBuild={build.cancel}
         onFlashUsb={() => setUsbFlashOpen(true)}
         onVerify={runVerify}
-        onEmulatorStart={() =>
-          emulator.firmwarePath ? emulator.start(emulator.firmwarePath) : emulator.openAndStart()
+        onPlay={() =>
+          canBuild
+            ? buildAndFlash()
+            : emulator.firmwarePath
+              ? emulator.start(emulator.firmwarePath)
+              : emulator.openAndStart()
         }
-        onEmulatorStop={emulator.stop}
+        onStop={() => (isBuildRunning(build.status.state) ? build.cancel() : emulator.stop())}
         onEmulatorReset={emulator.reset}
         onSelectTool={(tool: CanvasTool) => dispatch({ type: 'setTool', tool })}
         onSelectGrid={(grid: GridStyle) => dispatch({ type: 'setGrid', grid })}

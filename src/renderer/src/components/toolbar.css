@@ -24,30 +24,6 @@
   background: var(--border-strong);
 }
 
-.toolbar__primary {
-  height: 22px;
-  padding: 0 var(--space-5);
-  border-radius: var(--radius-sm);
-  background: var(--accent-600);
-  color: var(--neutral-100);
-  font-size: var(--font-size-sm);
-  font-weight: var(--weight-medium);
-}
-
-.toolbar__primary:hover:not(:disabled) {
-  background: var(--accent-500);
-}
-
-.toolbar__primary:disabled {
-  background: var(--surface-active);
-  color: var(--neutral-600);
-}
-
-.toolbar__primary[data-building] {
-  background: var(--accent-800);
-  color: var(--accent-200);
-}
-
 .toolbar__button {
   min-width: 22px;
   height: 22px;
@@ -74,6 +50,13 @@
 
 .toolbar__button:disabled {
   color: var(--neutral-700);
+}
+
+/* The play button while a build is running (disabled, but still highlighted). */
+.toolbar__button[data-building],
+.toolbar__button[data-building]:disabled {
+  background: var(--accent-800);
+  color: var(--accent-200);
 }
 
 .toolbar__segmented {

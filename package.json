@@ -2,7 +2,7 @@
   "name": "pinbench",
   "productName": "PinBench",
   "version": "0.1.0",
-  "description": "A cross-platform desktop workbench for embedded mesh-radio boards",
+  "description": "A cross-platform desktop testbed for embedded hardware",
   "license": "MIT",
   "private": true,
   "type": "module",

@@ -3,13 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PinBench — a hardware workbench for mesh-radio boards</title>
-  <meta name="description" content="PinBench emulates your ESP32 board, runs your real firmware binary on it, and gives every peripheral (LCD, e-paper, LoRa radio, keyboard) a panel you can configure, stimulate and watch. Free and open source for macOS.">
+  <title>PinBench — a testbed for embedded hardware</title>
+  <meta name="description" content="PinBench is a testbed for embedded hardware. It emulates your ESP32 board, runs your real firmware binary on it, and gives every peripheral (displays, radios, Ethernet, touch, buttons, readers) a panel you can configure, stimulate and watch. Free and open source for macOS.">
   <meta name="theme-color" content="#0c0a12">
   <link rel="icon" href="favicon.png" type="image/png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <meta property="og:title" content="PinBench">
-  <meta property="og:description" content="Run your real firmware on an emulated board and watch every peripheral.">
+  <meta property="og:description" content="A testbed for embedded hardware: run your real firmware on an emulated board and watch every peripheral.">
   <meta property="og:image" content="https://pinbench.slopcore.io/shots/m9-lcd.jpg">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://pinbench.slopcore.io/">
@@ -337,8 +337,8 @@
 
     <section class="hero wrap">
       <h1>PINBENCH</h1>
-      <p class="tagline">Your <span class="hl">real firmware</span>, on an emulated board, with every peripheral on the bench.</p>
-      <p class="sub">PinBench is a desktop workbench for embedded mesh-radio boards. It builds your PlatformIO project, boots the binary on an emulated ESP32, and gives every part on the board (LCD, e-paper, LoRa radio, keyboard, buttons) a panel you can configure, poke and watch. No hardware on the desk required.</p>
+      <p class="tagline">A testbed for <span class="hl">embedded hardware</span>. Your real firmware, on an emulated board, with every peripheral on the bench.</p>
+      <p class="sub">PinBench is a desktop testbed for embedded devices. Describe a board as parts and pins, open your PlatformIO project, and PinBench boots the binary on an emulated ESP32. Every part on the board (displays, radios, Ethernet, touch, keyboards, buttons, card readers) gets a panel you can configure, poke and watch. Develop and test before the hardware is on your desk, or without it at all.</p>
       <div class="actions">
         <a class="btn btn-primary" id="download" href="https://github.com/slopcore/pinbench/releases">DOWNLOAD FOR MAC</a>
         <a class="btn btn-ghost" href="https://github.com/slopcore/pinbench">SOURCE</a>
@@ -358,13 +358,13 @@
       <figure class="shot">
         <img src="shots/heltec-epaper.jpg" width="2400" height="1500" loading="lazy"
              alt="PinBench showing the Heltec Wireless Paper board: the emulated 2.13-inch e-paper display reads 'Heltec WP Repeater, FREQ 869.618 SF8, BW 62.50 CR 5', with its Inspector panel open on the right.">
-        <figcaption><b>Heltec Wireless Paper.</b> A stock MeshCore repeater build refreshing the UC8151 e-paper panel, with ghosting, rotation and refresh mode in the Inspector.</figcaption>
+        <figcaption><b>Heltec Wireless Paper.</b> An unmodified open-source firmware build (a MeshCore LoRa repeater) refreshing the UC8151 e-paper panel, with ghosting, rotation and refresh mode in the Inspector.</figcaption>
       </figure>
 
       <figure class="shot">
         <img src="shots/radio.jpg" width="2400" height="1500" loading="lazy"
              alt="PinBench with the SX1262 LoRa radio selected: the Inspector lists its nets, firmware hook and configuration for bandwidth, spreading factor, coding rate and TX power.">
-        <figcaption><b>The radio is a part too.</b> Select the SX1262 to see its pins, nets and the firmware call that brings it up, then inject a mesh message for the firmware to receive.</figcaption>
+        <figcaption><b>The radio is a part too.</b> Select the SX1262 to see its pins, nets and the firmware call that brings it up, then inject a packet for the firmware to receive.</figcaption>
       </figure>
     </section>
 
@@ -377,11 +377,11 @@
         </article>
         <article class="card">
           <h3>A PANEL FOR EVERY PART</h3>
-          <p>Displays show real framebuffer output. Radios take injected LoRa frames and decode what the firmware transmits. Keyboards, buttons and SD cards take input. Every panel shows its bus and pins.</p>
+          <p>Displays show the real framebuffer. Radios show what the firmware transmits. Ethernet gets a real network. Every panel shows the part's bus, pins and the firmware call that drives it. New parts plug in through a small device-model API.</p>
         </article>
         <article class="card">
-          <h3>MESH MESSAGES IN</h3>
-          <p>Inject a MeshCore channel or direct message from the radio's IN panel. PinBench builds a real encrypted packet, raises the interrupt, and the firmware decodes it and shows it on screen.</p>
+          <h3>DRIVE THE INPUTS</h3>
+          <p>Press buttons, type on keyboards, touch screens, insert SD cards, present RFID tags and inject radio packets. Each input raises the same pins and interrupts real hardware would, so the firmware's own handlers run.</p>
         </article>
         <article class="card">
           <h3>WIRING CANVAS</h3>
@@ -400,14 +400,14 @@
 
     <section class="wrap two-col" aria-label="Boards and requirements">
       <div>
-        <h2 class="section-label">BOARDS</h2>
+        <h2 class="section-label">BOARDS SO FAR</h2>
         <ul class="list">
           <li><b>Elecrow ThinkNode M9</b>: ESP32-S3, LR1110 radio, ST7789 LCD, keyboard</li>
           <li><b>Heltec Wireless Paper v1.1</b>: ESP32-S3, SX1262 radio, UC8151 e-paper</li>
           <li><b>Waveshare ESP32-S3-ETH</b> with a GC9A01 round LCD and a TWN4 RFID reader</li>
           <li><b>Waveshare ESP32-C6-Touch-LCD-1.28</b>: RISC-V, GC9A01 display, CST816S touch</li>
         </ul>
-        <p class="release-note">Boards are plain JSON. <a href="https://github.com/slopcore/pinbench/tree/main/boards">Add your own.</a></p>
+        <p class="release-note">A board is a JSON file of parts, buses and pins, so any ESP32-S3 or ESP32-C6 design can be described. <a href="https://github.com/slopcore/pinbench/tree/main/boards">Add your own.</a></p>
       </div>
       <div>
         <h2 class="section-label">REQUIREMENTS</h2>

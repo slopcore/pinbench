@@ -1,6 +1,6 @@
 # PinBench
 
-A cross-platform desktop workbench for embedded mesh-radio boards. PinBench
+A cross-platform desktop testbed for embedded hardware. PinBench
 configures and simulates the **hardware**: it emulates the board, runs your
 **real firmware binary** under emulation, and gives every peripheral on it a
 panel you can configure, stimulate and observe. It also has a wiring canvas
@@ -12,8 +12,11 @@ edits it. What the firmware must change to match the hardware is reported in the
 `.pinbench/actions.md`, so a coding agent in the IDE can act on it. See
 [`docs/features/firmware-actions.md`](docs/features/firmware-actions.md).
 
-First target board: **ThinkNode M9 V1.0** (ESP32-S3-R8) running MeshCore.
-Second: **Heltec Wireless Paper v1.1**.
+Boards are data (`boards/*.board.json`), so any ESP32-S3 or ESP32-C6 design can
+be described. Shipped so far: **ThinkNode M9 V1.0**, **Heltec Wireless Paper
+v1.1**, **Waveshare ESP32-S3-ETH** (+ GC9A01 LCD and TWN4 RFID reader) and
+**Waveshare ESP32-C6-Touch-LCD-1.28**. The first targets ran MeshCore, but
+nothing in PinBench is specific to it.
 
 The [`docs/`](docs/index.md) vault documents what PinBench does, feature by
 feature. [`docs/status.md`](docs/status.md) tracks what is done, blocked and
@@ -21,11 +24,11 @@ next.
 
 ## Where the project is
 
-PinBench boots real firmware under emulation today: it builds a MeshCore image
-from a PlatformIO checkout, runs it on an emulated ESP32-S3, and draws the M9's
-real LCD output in a peripheral panel. The device-model plugin API, board
-definitions as data, pin-map verify/codegen, and an agent control plane are all
-in. The live radio demo is blocked on a QEMU-fork GPIO fault — see
+PinBench boots real firmware under emulation today: it builds an image from a
+PlatformIO checkout, runs it on an emulated ESP32-S3 or ESP32-C6, and drives
+the board's displays, radios, Ethernet, touch and input parts from TypeScript
+device models. The device-model plugin API, board definitions as data, pin-map
+verify/codegen, and an agent control plane are all in — see
 [`docs/status.md`](docs/status.md).
 
 ## Running it

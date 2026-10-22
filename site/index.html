@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PinBench — a hardware workbench for mesh-radio boards</title>
+  <meta name="description" content="PinBench emulates your ESP32 board, runs your real firmware binary on it, and gives every peripheral (LCD, e-paper, LoRa radio, keyboard) a panel you can configure, stimulate and watch. Free and open source for macOS.">
+  <meta name="theme-color" content="#0c0a12">
+  <link rel="icon" href="favicon.png" type="image/png">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <meta property="og:title" content="PinBench">
+  <meta property="og:description" content="Run your real firmware on an emulated board and watch every peripheral.">
+  <meta property="og:image" content="https://pinbench.slopcore.io/shots/m9-lcd.jpg">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://pinbench.slopcore.io/">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0c0a12;
+      --panel: #171327;
+      --panel-2: #1f1936;
+      --magenta: #ff4df0;
+      --cyan: #35e8ff;
+      --violet: #a06bff;
+      --text: #efe6ff;
+      --muted: #b0a0d0;
+      --dim: #7a6b9c;
+      --pixel: "Press Start 2P", "Courier New", monospace;
+      --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--mono);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.75;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+      background-image:
+        radial-gradient(ellipse 70% 45% at 50% 0%, rgba(160, 107, 255, 0.16), transparent),
+        radial-gradient(ellipse 60% 40% at 50% 100%, rgba(255, 77, 240, 0.08), transparent);
+      background-attachment: fixed;
+    }
+
+    /* Scanlines. Decorative only, and it never eats a click. */
+    body::after {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 100;
+      background: repeating-linear-gradient(
+        to bottom,
+        rgba(0, 0, 0, 0.16) 0px,
+        rgba(0, 0, 0, 0.16) 1px,
+        transparent 1px,
+        transparent 4px
+      );
+    }
+
+    /* App screenshots are photographs of a real UI, not pixel art. */
+    img { max-width: 100%; height: auto; display: block; }
+
+    a { color: var(--cyan); }
+    a:hover { color: var(--magenta); }
+
+    .wrap {
+      width: 100%;
+      max-width: 1040px;
+      margin: 0 auto;
+      padding-inline: 20px;
+    }
+
+    /* ---------- Top bar ---------- */
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-block: 18px;
+      font-family: var(--pixel);
+      font-size: 0.55rem;
+    }
+
+    .topbar a { color: var(--violet); text-decoration: none; }
+    .topbar a:hover { color: var(--cyan); }
+
+    /* ---------- Hero ---------- */
+
+    .hero {
+      padding-block: 48px 40px;
+      text-align: center;
+    }
+
+    h1 {
+      font-family: var(--pixel);
+      font-size: clamp(1.7rem, 7vw, 3rem);
+      line-height: 1.25;
+      letter-spacing: 0.02em;
+      color: #fff;
+      margin-bottom: 26px;
+      text-shadow:
+         3px 3px 0 var(--magenta),
+        -3px -3px 0 var(--cyan),
+         0 0 26px rgba(255, 77, 240, 0.5);
+    }
+
+    .tagline {
+      font-family: var(--pixel);
+      font-size: clamp(0.62rem, 2.5vw, 0.82rem);
+      line-height: 2.1;
+      color: var(--muted);
+      max-width: 44ch;
+      margin: 0 auto 22px;
+    }
+
+    .tagline .hl { color: var(--cyan); }
+
+    .sub {
+      font-size: 0.95rem;
+      color: var(--muted);
+      max-width: 62ch;
+      margin: 0 auto 34px;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 16px;
+    }
+
+    .btn {
+      font-family: var(--pixel);
+      font-size: 0.68rem;
+      line-height: 1.4;
+      text-decoration: none;
+      padding: 14px 18px;
+      border: 3px solid;
+      transition: transform 0.1s steps(2), box-shadow 0.1s steps(2), background 0.1s;
+    }
+
+    .btn-primary {
+      color: var(--bg);
+      background: var(--magenta);
+      border-color: var(--magenta);
+      box-shadow: 4px 4px 0 #6d1a67;
+    }
+
+    .btn-primary:hover { background: #ff7df5; color: var(--bg); }
+
+    .btn-ghost {
+      color: var(--cyan);
+      background: transparent;
+      border-color: var(--cyan);
+      box-shadow: 4px 4px 0 rgba(53, 232, 255, 0.3);
+    }
+
+    .btn-ghost:hover { background: rgba(53, 232, 255, 0.12); color: var(--cyan); }
+
+    .btn:active {
+      transform: translate(4px, 4px);
+      box-shadow: 0 0 0 transparent;
+    }
+
+    .btn:focus-visible {
+      outline: 3px solid #fff;
+      outline-offset: 3px;
+    }
+
+    .release-note {
+      margin-top: 18px;
+      font-size: 0.8rem;
+      color: var(--dim);
+    }
+
+    /* ---------- Sections ---------- */
+
+    section { padding-bottom: 64px; }
+
+    .section-label {
+      font-family: var(--pixel);
+      font-size: 0.72rem;
+      color: var(--magenta);
+      letter-spacing: 0.08em;
+      margin-bottom: 26px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .section-label::after {
+      content: "";
+      flex: 1;
+      height: 3px;
+      background: repeating-linear-gradient(
+        to right,
+        var(--violet) 0 6px,
+        transparent 6px 12px
+      );
+    }
+
+    /* ---------- Screenshots ---------- */
+
+    .shot {
+      background: var(--panel);
+      border: 3px solid var(--violet);
+      box-shadow: 7px 7px 0 rgba(160, 107, 255, 0.32);
+      margin-bottom: 36px;
+    }
+
+    .shot:nth-of-type(even) {
+      border-color: var(--cyan);
+      box-shadow: 7px 7px 0 rgba(53, 232, 255, 0.25);
+    }
+
+    .shot img { width: 100%; }
+
+    .shot figcaption {
+      padding: 14px 18px;
+      font-size: 0.88rem;
+      color: var(--muted);
+      border-top: 3px solid var(--panel-2);
+    }
+
+    .shot figcaption b { color: #fff; }
+
+    /* ---------- Feature cards ---------- */
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 26px;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 3px solid var(--violet);
+      padding: 24px 22px;
+      box-shadow: 7px 7px 0 rgba(160, 107, 255, 0.32);
+    }
+
+    .card h3 {
+      font-family: var(--pixel);
+      font-size: 0.78rem;
+      line-height: 1.6;
+      color: #fff;
+      margin-bottom: 14px;
+      text-shadow: 2px 2px 0 var(--magenta);
+    }
+
+    .card p { color: var(--muted); font-size: 0.9rem; }
+
+    code {
+      font-family: var(--mono);
+      color: var(--cyan);
+      background: rgba(53, 232, 255, 0.07);
+      padding: 1px 5px;
+    }
+
+    /* ---------- Boards + requirements ---------- */
+
+    .list {
+      list-style: none;
+      display: grid;
+      gap: 12px;
+    }
+
+    .list li {
+      background: var(--panel);
+      border-left: 4px solid var(--cyan);
+      padding: 12px 16px;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .list li b { color: #fff; }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 40px;
+    }
+
+    /* ---------- Footer ---------- */
+
+    footer {
+      margin-top: auto;
+      border-top: 3px solid var(--panel-2);
+      padding-block: 26px;
+    }
+
+    .footer-inner {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 20px;
+      align-items: center;
+      justify-content: space-between;
+      font-family: var(--pixel);
+      font-size: 0.55rem;
+      line-height: 2;
+      color: var(--dim);
+    }
+
+    .footer-links { display: flex; flex-wrap: wrap; gap: 10px 20px; }
+
+    footer a { color: var(--violet); text-decoration: none; }
+    footer a:hover { color: var(--cyan); }
+
+    @media (prefers-reduced-motion: reduce) {
+      * { transition-duration: 0.01ms !important; }
+      html { scroll-behavior: auto; }
+    }
+
+    @media (max-width: 560px) {
+      .hero { padding-block: 32px 28px; }
+      .actions { flex-direction: column; align-items: stretch; }
+      .btn { text-align: center; }
+      .card { padding: 20px 18px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <nav class="wrap topbar" aria-label="Site">
+      <a href="https://slopcore.io/">← SLOPCORE.IO</a>
+      <a href="https://github.com/slopcore/pinbench">GITHUB</a>
+    </nav>
+
+    <section class="hero wrap">
+      <h1>PINBENCH</h1>
+      <p class="tagline">Your <span class="hl">real firmware</span>, on an emulated board, with every peripheral on the bench.</p>
+      <p class="sub">PinBench is a desktop workbench for embedded mesh-radio boards. It builds your PlatformIO project, boots the binary on an emulated ESP32, and gives every part on the board (LCD, e-paper, LoRa radio, keyboard, buttons) a panel you can configure, poke and watch. No hardware on the desk required.</p>
+      <div class="actions">
+        <a class="btn btn-primary" id="download" href="https://github.com/slopcore/pinbench/releases">DOWNLOAD FOR MAC</a>
+        <a class="btn btn-ghost" href="https://github.com/slopcore/pinbench">SOURCE</a>
+      </div>
+      <p class="release-note" id="release-note">macOS on Apple Silicon · free and open source (MIT)</p>
+    </section>
+
+    <section class="wrap" aria-labelledby="shots-h">
+      <h2 class="section-label" id="shots-h">SCREENSHOTS</h2>
+
+      <figure class="shot">
+        <img src="shots/m9-lcd.jpg" width="2400" height="1500" loading="eager"
+             alt="PinBench showing the ThinkNode M9 board: a wiring canvas of its parts, the emulated 2.4-inch LCD drawing the firmware's Inbox, Channels and Settings home screen, and the serial monitor with the firmware's boot log.">
+        <figcaption><b>ThinkNode M9.</b> The firmware's own LVGL home screen, drawn pixel for pixel on the emulated ST7789 LCD, next to its live serial log.</figcaption>
+      </figure>
+
+      <figure class="shot">
+        <img src="shots/heltec-epaper.jpg" width="2400" height="1500" loading="lazy"
+             alt="PinBench showing the Heltec Wireless Paper board: the emulated 2.13-inch e-paper display reads 'Heltec WP Repeater, FREQ 869.618 SF8, BW 62.50 CR 5', with its Inspector panel open on the right.">
+        <figcaption><b>Heltec Wireless Paper.</b> A stock MeshCore repeater build refreshing the UC8151 e-paper panel, with ghosting, rotation and refresh mode in the Inspector.</figcaption>
+      </figure>
+
+      <figure class="shot">
+        <img src="shots/radio.jpg" width="2400" height="1500" loading="lazy"
+             alt="PinBench with the SX1262 LoRa radio selected: the Inspector lists its nets, firmware hook and configuration for bandwidth, spreading factor, coding rate and TX power.">
+        <figcaption><b>The radio is a part too.</b> Select the SX1262 to see its pins, nets and the firmware call that brings it up, then inject a mesh message for the firmware to receive.</figcaption>
+      </figure>
+    </section>
+
+    <section class="wrap" aria-labelledby="what-h">
+      <h2 class="section-label" id="what-h">WHAT IT DOES</h2>
+      <div class="grid">
+        <article class="card">
+          <h3>RUNS THE REAL BINARY</h3>
+          <p>Open a PlatformIO folder and press ▶. PinBench builds it, flashes the image into a patched QEMU, and boots it. The binary is the same one you'd flash to a board, with no mocks and no special build.</p>
+        </article>
+        <article class="card">
+          <h3>A PANEL FOR EVERY PART</h3>
+          <p>Displays show real framebuffer output. Radios take injected LoRa frames and decode what the firmware transmits. Keyboards, buttons and SD cards take input. Every panel shows its bus and pins.</p>
+        </article>
+        <article class="card">
+          <h3>MESH MESSAGES IN</h3>
+          <p>Inject a MeshCore channel or direct message from the radio's IN panel. PinBench builds a real encrypted packet, raises the interrupt, and the firmware decodes it and shows it on screen.</p>
+        </article>
+        <article class="card">
+          <h3>WIRING CANVAS</h3>
+          <p>The board is a canvas of parts and nets. Move, add and rewire them, verify the pin map against the board's rules, and generate a C pin header from it.</p>
+        </article>
+        <article class="card">
+          <h3>CODE STAYS IN YOUR IDE</h3>
+          <p>PinBench never edits your source. When the hardware and the firmware disagree, it says what has to change, in a dock tab and in <code>.pinbench/actions.md</code>, so you or your coding agent can fix it.</p>
+        </article>
+        <article class="card">
+          <h3>AGENT CONTROL PLANE</h3>
+          <p>A built-in MCP server lets a coding agent build and boot the firmware, read and write the serial port, inject radio traffic and read back device state. It's the same loop you use, driven by the agent.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="wrap two-col" aria-label="Boards and requirements">
+      <div>
+        <h2 class="section-label">BOARDS</h2>
+        <ul class="list">
+          <li><b>Elecrow ThinkNode M9</b>: ESP32-S3, LR1110 radio, ST7789 LCD, keyboard</li>
+          <li><b>Heltec Wireless Paper v1.1</b>: ESP32-S3, SX1262 radio, UC8151 e-paper</li>
+          <li><b>Waveshare ESP32-S3-ETH</b> with a GC9A01 round LCD and a TWN4 RFID reader</li>
+          <li><b>Waveshare ESP32-C6-Touch-LCD-1.28</b>: RISC-V, GC9A01 display, CST816S touch</li>
+        </ul>
+        <p class="release-note">Boards are plain JSON. <a href="https://github.com/slopcore/pinbench/tree/main/boards">Add your own.</a></p>
+      </div>
+      <div>
+        <h2 class="section-label">REQUIREMENTS</h2>
+        <ul class="list">
+          <li><b>macOS on Apple Silicon</b> for the signed, notarized download</li>
+          <li><b>PlatformIO</b> on your shell's <code>PATH</code> (it isn't bundled)</li>
+          <li><b>Other platforms:</b> build from source with Node 22+. See the <a href="https://github.com/slopcore/pinbench#readme">README</a>.</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap footer-inner">
+      <span>© 2026 SLOPCORE</span>
+      <span class="footer-links">
+        <a href="https://github.com/slopcore/pinbench/releases">RELEASES</a>
+        <a href="https://github.com/slopcore/pinbench/issues">ISSUES</a>
+        <a href="https://slopcore.io/">SLOPCORE.IO</a>
+      </span>
+    </div>
+  </footer>
+
+  <script>
+    // Point the download button straight at the newest release's .dmg. Without
+    // JS, or before the first release exists, it stays on the Releases page.
+    fetch('https://api.github.com/repos/slopcore/pinbench/releases/latest')
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then((release) => {
+        const dmg = (release.assets || []).find((a) => a.name.endsWith('.dmg'))
+        const button = document.getElementById('download')
+        button.href = dmg ? dmg.browser_download_url : release.html_url
+        button.textContent = 'DOWNLOAD ' + release.tag_name.toUpperCase()
+        document.getElementById('release-note').innerHTML =
+          'macOS on Apple Silicon · free and open source (MIT) · <a href="' +
+          release.html_url + '">release notes</a>'
+      })
+      .catch(() => {})
+  </script>
+</body>
+</html>

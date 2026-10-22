@@ -108,7 +108,23 @@ jobs:
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-        run: npm run dist:mac -- --publish never
+        # Stapling fetches the notarization ticket from api.apple-cloudkit.com,
+        # which intermittently drops the connection ("Failed to staple … code:
+        # 68"). Retry only that failure; anything else fails the step at once.
+        run: |
+          set -o pipefail
+          log="$RUNNER_TEMP/package.log"
+          for attempt in 1 2 3; do
+            if npm run dist:mac -- --publish never 2>&1 | tee "$log"; then
+              exit 0
+            fi
+            if ! grep -q 'Failed to staple' "$log"; then
+              exit 1
+            fi
+            echo "::warning::Stapling failed (attempt $attempt) — retrying in 60s"
+            sleep 60
+          done
+          exit 1
 
       # Tags the commit this run built and publishes the release in one step.
       - name: Publish GitHub Release

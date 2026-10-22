@@ -1,0 +1,94 @@
+name: macOS build
+
+# Package PinBench for macOS (Apple Silicon) on every push to main, and on demand.
+# The .dmg is uploaded as a workflow artifact.
+#
+# Signing and notarization switch on when these repository secrets exist;
+# without them the build is ad-hoc signed and not notarized:
+#   MAC_CERT_P12_BASE64     Developer ID Application certificate + key, .p12, base64
+#   MAC_CERT_PASSWORD       the .p12 export password
+#   APPLE_API_KEY_P8        App Store Connect API key — the AuthKey_XXXX.p8 contents
+#   APPLE_API_KEY_ID        its Key ID
+#   APPLE_API_ISSUER        the Issuer ID
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: release-mac-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dmg:
+    name: Build .dmg
+    runs-on: macos-15 # Apple Silicon — the bundled QEMU is arm64
+    timeout-minutes: 120
+    env:
+      # electron-builder fetches its own Electron for packaging; skip npm's copy.
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck, lint, test
+        run: |
+          npm run typecheck
+          npm run lint
+          npm test
+
+      # QEMU's runtime libraries. Needed on a cache hit too: bundle-qemu.mjs
+      # copies them out of /opt/homebrew into the app.
+      - name: Install QEMU dependencies
+        run: brew install ninja meson pkg-config glib pixman libgcrypt libgpg-error gnutls nettle libslirp
+
+      - name: Runner image
+        id: image
+        run: echo "version=${ImageOS}-${ImageVersion}" >> "$GITHUB_OUTPUT"
+
+      # Only the outputs bundle-qemu.mjs reads. The key covers the pinned fork
+      # commit (setup-emulator.sh), PinBench's patch set (qemu/) and the runner
+      # image, whose Homebrew versions the binaries link against.
+      - name: Cache patched QEMU
+        id: qemu-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            .qemu/build/qemu-system-xtensa
+            .qemu/build/qemu-system-riscv32
+            .qemu/pc-bios/esp*.bin
+          key: qemu-${{ runner.arch }}-${{ steps.image.outputs.version }}-${{ hashFiles('scripts/setup-emulator.sh', 'qemu/**') }}
+
+      - name: Build patched QEMU
+        if: steps.qemu-cache.outputs.cache-hit != 'true'
+        run: bash scripts/setup-emulator.sh
+
+      - name: Signing credentials
+        env:
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+        run: |
+          if [ -n "$APPLE_API_KEY_P8" ]; then
+            printf '%s' "$APPLE_API_KEY_P8" > "$RUNNER_TEMP/AuthKey.p8"
+            echo "APPLE_API_KEY=$RUNNER_TEMP/AuthKey.p8" >> "$GITHUB_ENV"
+          fi
+
+      - name: Package
+        env:
+          CSC_LINK: ${{ secrets.MAC_CERT_P12_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: npm run dist:mac -- --publish never
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PinBench-macos-arm64-${{ github.sha }}
+          path: release/dist/*.dmg
+          if-no-files-found: error
+          retention-days: 30

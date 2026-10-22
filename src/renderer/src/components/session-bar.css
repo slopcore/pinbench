@@ -1,0 +1,73 @@
+.sessionbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  height: var(--sessionbar-height);
+  padding: 0 var(--space-4);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.sessionbar__field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.sessionbar__label {
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.sessionbar__select {
+  appearance: none;
+  margin: 0;
+  padding: 2px 22px 2px 8px;
+  max-width: 28ch;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-2, 4px);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  text-overflow: ellipsis;
+  /* chevron */
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--text-muted) 50%),
+    linear-gradient(135deg, var(--text-muted) 50%, transparent 50%);
+  background-position:
+    right 10px center,
+    right 6px center;
+  background-size:
+    4px 4px,
+    4px 4px;
+  background-repeat: no-repeat;
+}
+
+.sessionbar__select:hover:not(:disabled) {
+  border-color: var(--accent, var(--border-strong));
+}
+
+.sessionbar__select:disabled {
+  color: var(--neutral-700);
+  cursor: default;
+}
+
+.sessionbar__select--wide {
+  max-width: 32ch;
+}
+
+.sessionbar__select--mono {
+  font-family: var(--font-mono);
+  font-weight: var(--weight-regular, 400);
+}
+
+.sessionbar__filter {
+  max-width: 18ch;
+  font-size: var(--font-size-xs);
+}

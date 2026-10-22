@@ -1,0 +1,113 @@
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: var(--toolbar-height);
+  padding: 0 var(--space-4);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.toolbar__group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.toolbar__spacer {
+  flex: 1;
+}
+
+.toolbar__divider {
+  width: 1px;
+  height: 18px;
+  background: var(--border-strong);
+}
+
+.toolbar__button {
+  min-width: 22px;
+  height: 22px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: 1;
+}
+
+.toolbar__button--wide {
+  padding: 0 var(--space-4);
+}
+
+.toolbar__button:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.toolbar__button[data-active] {
+  background: var(--accent-800);
+  color: var(--accent-200);
+}
+
+.toolbar__button:disabled {
+  color: var(--neutral-700);
+}
+
+/* The play button while a build is running (disabled, but still highlighted). */
+.toolbar__button[data-building],
+.toolbar__button[data-building]:disabled {
+  background: var(--accent-800);
+  color: var(--accent-200);
+}
+
+.toolbar__segmented {
+  display: flex;
+  padding: 1px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+}
+
+.toolbar__segment {
+  height: 18px;
+  padding: 0 var(--space-4);
+  border-radius: 2px;
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.toolbar__segment:hover {
+  color: var(--text-primary);
+}
+
+.toolbar__segment[data-active] {
+  background: var(--accent-700);
+  color: var(--neutral-100);
+}
+
+.toolbar__chip {
+  height: 18px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+  letter-spacing: var(--tracking-wide);
+}
+
+.toolbar__chip:hover {
+  color: var(--text-primary);
+}
+
+.toolbar__chip[data-active] {
+  background: var(--accent-800);
+  color: var(--accent-200);
+  border-color: var(--accent-700);
+}
+
+.toolbar__zoom {
+  min-width: 44px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+}

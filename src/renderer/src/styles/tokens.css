@@ -1,0 +1,139 @@
+/*
+ * Nocturne — PinBench's design system, transcribed from the design.
+ *
+ * Every colour, size and duration in the app comes from this file. A component
+ * that hardcodes a hex value is a bug: the ramps below are what makes the
+ * second board, the device panels and the eventual light theme cheap.
+ *
+ * Ramps run 100 (lightest) → 900 (darkest), Tailwind-style. On a dark shell the
+ * surfaces come off the high end and the type off the low end.
+ */
+
+:root {
+  /* --- Neutral ------------------------------------------------------- */
+  --neutral-100: #f2f3f7;
+  --neutral-200: #dcdee8;
+  --neutral-300: #bcc0d1;
+  --neutral-400: #969bb2;
+  --neutral-500: #737992;
+  --neutral-600: #565b73;
+  --neutral-700: #3c4157;
+  --neutral-800: #2b2e3f;
+  --neutral-900: #161826;
+
+  /* --- Accent (Nocturne violet) --------------------------------------- */
+  --accent-100: #ece9fa;
+  --accent-200: #d8d3f4;
+  --accent-300: #c0b8ec;
+  --accent-400: #a89ce3;
+  --accent-500: #9184d9;
+  --accent-600: #7a6bc6;
+  --accent-700: #6153a5;
+  --accent-800: #473c7a;
+  --accent-900: #2e2750;
+
+  /* --- Accent 2 (bus cyan) -------------------------------------------- */
+  --accent-2-100: #e2f6f9;
+  --accent-2-200: #c3ecf2;
+  --accent-2-300: #96dde8;
+  --accent-2-400: #64ccdc;
+  --accent-2-500: #3fb8cc;
+  --accent-2-600: #2f95a8;
+  --accent-2-700: #26737f;
+  --accent-2-800: #1f545c;
+  --accent-2-900: #17363b;
+
+  /* --- Semantic surfaces ---------------------------------------------- */
+  --ground: #161826;
+  --surface: #232532;
+  --surface-raised: #2a2c3b;
+  --surface-sunken: #1b1d2b;
+  --surface-hover: #303343;
+  --surface-active: #383b4d;
+
+  --border: #2f3244;
+  --border-strong: #3d4157;
+  --border-subtle: #262939;
+
+  /* --- Semantic text --------------------------------------------------- */
+  --text-primary: var(--neutral-200);
+  --text-secondary: var(--neutral-400);
+  --text-muted: var(--neutral-500);
+  --text-inverse: var(--neutral-900);
+  --text-accent: var(--accent-400);
+
+  /* --- Status ---------------------------------------------------------- */
+  --status-ok: #57b98a;
+  --status-warn: #d9b26a;
+  --status-danger: #d9776a;
+  --status-info: var(--accent-2-400);
+  --status-idle: var(--neutral-500);
+
+  /* --- Typography ------------------------------------------------------ */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  --font-size-base: 12.5px;
+  --font-size-xs: 10.5px;
+  --font-size-sm: 11.5px;
+  --font-size-md: 13.5px;
+  --font-size-lg: 15px;
+  --font-size-xl: 18px;
+
+  --line-tight: 1.2;
+  --line-normal: 1.45;
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+
+  --tracking-wide: 0.06em;
+
+  /* --- Spacing (4px scale) --------------------------------------------- */
+  --space-1: 2px;
+  --space-2: 4px;
+  --space-3: 6px;
+  --space-4: 8px;
+  --space-5: 12px;
+  --space-6: 16px;
+  --space-7: 24px;
+  --space-8: 32px;
+
+  /* --- Radii ------------------------------------------------------------ */
+  --radius-sm: 3px;
+  --radius-md: 5px;
+  --radius-lg: 8px;
+  --radius-pill: 999px;
+
+  /* --- Elevation --------------------------------------------------------- */
+  --shadow-menu: 0 12px 28px rgb(0 0 0 / 45%);
+  --shadow-panel: 0 2px 8px rgb(0 0 0 / 25%);
+
+  /* --- Layout metrics (from the design) ---------------------------------- */
+  --titlebar-height: 40px;
+  --sessionbar-height: 32px;
+  --toolbar-height: 34px;
+  --statusbar-height: 22px;
+  --library-width: 226px;
+  --inspector-width: 286px;
+  --dock-tabbar-height: 28px;
+  --resizer-thickness: 5px;
+
+  /* --- Motion ------------------------------------------------------------ */
+  --motion-fast: 90ms;
+  --motion-base: 150ms;
+  --easing: cubic-bezier(0.2, 0, 0, 1);
+
+  /* --- Z layers ----------------------------------------------------------- */
+  --z-canvas: 0;
+  --z-panel: 10;
+  --z-menu: 100;
+  --z-modal: 1000;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-fast: 0ms;
+    --motion-base: 0ms;
+  }
+}

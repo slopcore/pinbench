@@ -1,0 +1,8 @@
+{
+  "name": "pinbench-wifi-shim",
+  "version": "1.0.0",
+  "description": "Transparent Wi-Fi to OpenETH emulation shim for PinBench QEMU emulator",
+  "keywords": ["pinbench", "emulator", "wifi", "openeth"],
+  "frameworks": ["arduino", "espidf"],
+  "platforms": ["espressif32"]
+}

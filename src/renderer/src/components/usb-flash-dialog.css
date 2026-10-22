@@ -1,0 +1,215 @@
+.usbflash__overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-7);
+  background: rgb(0 0 0 / 45%);
+}
+
+.usbflash {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  width: min(560px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  padding: var(--space-6);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-menu);
+}
+
+.usbflash__head {
+  display: flex;
+  align-items: center;
+}
+
+.usbflash__title {
+  margin: 0;
+  font-size: var(--font-size-lg);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+}
+
+.usbflash__close {
+  margin-left: auto;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: var(--font-size-md);
+}
+
+.usbflash__close:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.usbflash__sub {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  line-height: var(--line-normal);
+  color: var(--text-secondary);
+}
+
+.usbflash__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.usbflash__label {
+  padding: 0;
+  font-size: var(--font-size-xs);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.usbflash__row {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.usbflash__select {
+  flex: 1;
+  height: 26px;
+  padding: 0 var(--space-3);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+}
+
+.usbflash__mode {
+  display: flex;
+  gap: var(--space-3);
+  align-items: baseline;
+  font-size: var(--font-size-sm);
+  line-height: var(--line-normal);
+  color: var(--text-secondary);
+}
+
+.usbflash__mode strong {
+  color: var(--text-primary);
+}
+
+.usbflash__warn {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  background: color-mix(in srgb, var(--status-danger) 14%, transparent);
+  border-left: 2px solid var(--status-danger);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-normal);
+  color: var(--text-primary);
+}
+
+.usbflash__log {
+  max-height: 200px;
+  overflow-y: auto;
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-normal);
+}
+
+.usbflash__logline {
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-secondary);
+}
+
+.usbflash__logline[data-stream='stderr'] {
+  color: var(--status-warn);
+}
+
+.usbflash__progress {
+  height: 6px;
+  overflow: hidden;
+  background: var(--surface-sunken);
+  border-radius: var(--radius-pill);
+}
+
+.usbflash__bar {
+  height: 100%;
+  background: var(--accent-500);
+  transition: width var(--motion-base) var(--easing);
+}
+
+.usbflash__foot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.usbflash__spacer {
+  flex: 1;
+}
+
+.usbflash__status {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+}
+
+.usbflash__status[data-state='failed'] {
+  color: var(--status-danger);
+}
+
+.usbflash__status[data-state='done'] {
+  color: var(--status-ok);
+}
+
+.usbflash__ghost {
+  height: 24px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+}
+
+.usbflash__ghost:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+
+.usbflash__primary {
+  height: 24px;
+  padding: 0 var(--space-5);
+  border-radius: var(--radius-sm);
+  background: var(--accent-600);
+  color: var(--neutral-100);
+  font-size: var(--font-size-sm);
+  font-weight: var(--weight-medium);
+}
+
+.usbflash__primary:hover:not(:disabled) {
+  background: var(--accent-500);
+}
+
+.usbflash__primary[data-danger] {
+  background: var(--status-danger);
+}
+
+.usbflash__primary[data-danger]:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--status-danger) 85%, var(--neutral-100));
+}
+
+.usbflash__primary:disabled,
+.usbflash__ghost:disabled,
+.usbflash__close:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

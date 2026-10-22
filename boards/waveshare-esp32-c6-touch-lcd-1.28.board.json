@@ -1,0 +1,575 @@
+{
+  "schema": 1,
+  "id": "waveshare-esp32-c6-touch-lcd-1.28",
+  "name": "Waveshare ESP32-C6-Touch-LCD-1.28",
+  "mcu": "ESP32-C6",
+  "vendor": "Waveshare",
+  "pins": [
+    {
+      "id": "GPIO0",
+      "label": "IO0",
+      "capabilities": ["gpio", "spi", "i2c", "uart", "adc"]
+    },
+    {
+      "id": "GPIO1",
+      "label": "IO1",
+      "capabilities": ["gpio", "spi", "i2c", "uart", "adc"]
+    },
+    {
+      "id": "GPIO2",
+      "label": "IO2",
+      "capabilities": ["gpio", "spi", "i2c", "uart", "adc"]
+    },
+    {
+      "id": "GPIO3",
+      "label": "IO3",
+      "capabilities": ["gpio", "spi", "i2c", "uart", "adc"]
+    },
+    {
+      "id": "GPIO4",
+      "label": "IO4",
+      "capabilities": ["gpio", "spi", "i2c", "uart", "adc", "strapping"]
+    },
+    {
+      "id": "GPIO5",
+      "label": "IO5",
+      "capabilities": ["gpio", "spi", "i2c", "uart", "adc", "strapping"]
+    },
+    {
+      "id": "GPIO6",
+      "label": "IO6",
+      "capabilities": ["gpio", "spi", "i2c", "uart", "adc"]
+    },
+    {
+      "id": "GPIO7",
+      "label": "IO7",
+      "capabilities": ["gpio", "spi", "i2c", "uart"]
+    },
+    {
+      "id": "GPIO8",
+      "label": "IO8",
+      "capabilities": ["gpio", "spi", "i2c", "uart", "strapping"]
+    },
+    {
+      "id": "GPIO9",
+      "label": "IO9",
+      "capabilities": ["gpio", "spi", "i2c", "uart", "strapping"]
+    },
+    {
+      "id": "GPIO10",
+      "label": "IO10",
+      "capabilities": ["gpio", "spi", "i2c", "uart"]
+    },
+    {
+      "id": "GPIO11",
+      "label": "IO11",
+      "capabilities": ["gpio", "spi", "i2c", "uart"]
+    },
+    {
+      "id": "GPIO12",
+      "label": "IO12",
+      "capabilities": ["gpio", "spi", "i2c", "uart", "usb"]
+    },
+    {
+      "id": "GPIO13",
+      "label": "IO13",
+      "capabilities": ["gpio", "spi", "i2c", "uart", "usb"]
+    },
+    {
+      "id": "GPIO15",
+      "label": "IO15",
+      "capabilities": ["gpio", "spi", "i2c", "uart", "strapping"]
+    },
+    {
+      "id": "GPIO16",
+      "label": "IO16",
+      "capabilities": ["gpio", "spi", "i2c", "uart"]
+    },
+    {
+      "id": "GPIO17",
+      "label": "IO17",
+      "capabilities": ["gpio", "spi", "i2c", "uart"]
+    },
+    {
+      "id": "GPIO18",
+      "label": "IO18",
+      "capabilities": ["gpio", "spi", "i2c", "uart"]
+    },
+    {
+      "id": "GPIO19",
+      "label": "IO19",
+      "capabilities": ["gpio", "spi", "i2c", "uart"]
+    },
+    {
+      "id": "GPIO20",
+      "label": "IO20",
+      "capabilities": ["gpio", "spi", "i2c", "uart"]
+    },
+    {
+      "id": "GPIO21",
+      "label": "IO21",
+      "capabilities": ["gpio", "spi", "i2c", "uart"]
+    },
+    {
+      "id": "GPIO22",
+      "label": "IO22",
+      "capabilities": ["gpio", "spi", "i2c", "uart"]
+    },
+    {
+      "id": "GPIO23",
+      "label": "IO23",
+      "capabilities": ["gpio", "spi", "i2c", "uart"]
+    }
+  ],
+  "buses": [
+    {
+      "id": "spi2",
+      "kind": "spi",
+      "label": "SPI2 · LCD + TF",
+      "signals": {
+        "sck": "GPIO11",
+        "mosi": "GPIO21",
+        "miso": "GPIO22"
+      },
+      "clockHz": 80000000
+    },
+    {
+      "id": "i2c0",
+      "kind": "i2c",
+      "label": "I2C0 · touch / IMU / RTC",
+      "signals": {
+        "sda": "GPIO18",
+        "scl": "GPIO8"
+      },
+      "clockHz": 400000
+    },
+    {
+      "id": "uart0",
+      "kind": "uart",
+      "label": "UART0 · expansion",
+      "signals": {
+        "tx": "GPIO16",
+        "rx": "GPIO17"
+      },
+      "clockHz": 115200
+    }
+  ],
+  "parts": [
+    {
+      "id": "u1",
+      "designator": "U1",
+      "name": "ESP32-C6",
+      "mpn": "ESP32-C6",
+      "category": "mcu",
+      "deviceModel": "esp32c6.soc",
+      "summary": "Single-core 32-bit RISC-V at up to 160 MHz, Wi-Fi 6 / BLE 5 / 802.15.4, 512 KB HP SRAM, 16 MB external flash (XM25QH128), no PSRAM. Native USB on GPIO12/13 for download and logs.",
+      "buses": ["spi2", "i2c0", "uart0"],
+      "pins": [],
+      "config": [
+        {
+          "id": "flashMode",
+          "label": "Flash mode",
+          "kind": "segmented",
+          "options": ["DIO", "QIO"],
+          "value": "QIO"
+        },
+        {
+          "id": "cpuFreq",
+          "label": "CPU clock",
+          "kind": "segmented",
+          "options": ["80", "160"],
+          "value": "160"
+        }
+      ],
+      "layout": {
+        "x": 320,
+        "y": 210,
+        "width": 200,
+        "height": 150
+      }
+    },
+    {
+      "id": "u2",
+      "designator": "U2",
+      "name": "1.28\" round LCD",
+      "mpn": "GC9A01",
+      "category": "display",
+      "firmwareHook": {
+        "symbol": "lcd_init()",
+        "note": "Waveshare's esp_lcd SPI panel IO on SPI2_HOST, then the GC9A01 vendor init sequence."
+      },
+      "deviceModel": "galaxycore.gc9a01",
+      "summary": "240×240 round IPS panel on SPI2 (shared with the TF card): CS GPIO10, D/C GPIO19, RST GPIO20, backlight GPIO7 (active-high, PWM-able). The glass is normally-black — the driver always sends INVON.",
+      "buses": ["spi2"],
+      "pins": [
+        {
+          "signal": "SCK",
+          "pin": "GPIO11"
+        },
+        {
+          "signal": "MOSI",
+          "pin": "GPIO21"
+        },
+        {
+          "signal": "CS",
+          "pin": "GPIO10"
+        },
+        {
+          "signal": "DC",
+          "pin": "GPIO19"
+        },
+        {
+          "signal": "RST",
+          "pin": "GPIO20"
+        },
+        {
+          "signal": "BL",
+          "pin": "GPIO7"
+        }
+      ],
+      "config": [
+        {
+          "id": "backlight",
+          "label": "Backlight",
+          "kind": "toggle",
+          "value": true
+        },
+        {
+          "id": "rotation",
+          "label": "Rotation",
+          "kind": "segmented",
+          "options": ["0°", "90°", "180°", "270°"],
+          "value": "0°"
+        },
+        {
+          "id": "scale",
+          "label": "Panel zoom",
+          "kind": "segmented",
+          "options": ["1×", "2×", "3×"],
+          "value": "2×"
+        }
+      ],
+      "layout": {
+        "x": 580,
+        "y": 40,
+        "width": 220,
+        "height": 220
+      }
+    },
+    {
+      "id": "u3",
+      "designator": "U3",
+      "name": "Capacitive touch",
+      "mpn": "CST816S",
+      "category": "input",
+      "firmwareHook": {
+        "symbol": "CST816S::begin()",
+        "note": "Touch controller at I2C 0x15."
+      },
+      "summary": "Single-point capacitive touch at I2C 0x15 on the shared bus. INT GPIO4 (active-low, shared with the IMU's INT2), RST GPIO23. Tap the round panel on the canvas, or use the IN panel, to touch.",
+      "buses": ["i2c0"],
+      "pins": [
+        {
+          "signal": "SDA",
+          "pin": "GPIO18"
+        },
+        {
+          "signal": "SCL",
+          "pin": "GPIO8"
+        },
+        {
+          "signal": "INT",
+          "pin": "GPIO4"
+        },
+        {
+          "signal": "RST",
+          "pin": "GPIO23"
+        }
+      ],
+      "config": [],
+      "layout": {
+        "x": 580,
+        "y": 300,
+        "width": 200,
+        "height": 100
+      },
+      "deviceModel": "hynitron.cst816s"
+    },
+    {
+      "id": "u4",
+      "designator": "U4",
+      "name": "6-axis IMU",
+      "mpn": "QMI8658",
+      "category": "sensor",
+      "summary": "Accelerometer + gyroscope at I2C 0x6B. INT1 GPIO5, INT2 GPIO4 (shared with touch INT). Not emulated yet.",
+      "buses": ["i2c0"],
+      "pins": [
+        {
+          "signal": "SDA",
+          "pin": "GPIO18"
+        },
+        {
+          "signal": "SCL",
+          "pin": "GPIO8"
+        },
+        {
+          "signal": "INT1",
+          "pin": "GPIO5"
+        },
+        {
+          "signal": "INT2",
+          "pin": "GPIO4"
+        }
+      ],
+      "config": [],
+      "layout": {
+        "x": 580,
+        "y": 430,
+        "width": 200,
+        "height": 100
+      }
+    },
+    {
+      "id": "u5",
+      "designator": "U5",
+      "name": "RTC",
+      "mpn": "PCF85063ATL",
+      "category": "sensor",
+      "summary": "Real-time clock at I2C 0x51 with a 32.768 kHz crystal and an SH1.0 backup-cell header. INT GPIO6. Not emulated yet.",
+      "buses": ["i2c0"],
+      "pins": [
+        {
+          "signal": "SDA",
+          "pin": "GPIO18"
+        },
+        {
+          "signal": "SCL",
+          "pin": "GPIO8"
+        },
+        {
+          "signal": "INT",
+          "pin": "GPIO6"
+        }
+      ],
+      "config": [],
+      "layout": {
+        "x": 320,
+        "y": 430,
+        "width": 200,
+        "height": 100
+      }
+    },
+    {
+      "id": "u6",
+      "designator": "J1",
+      "name": "TF card socket",
+      "category": "storage",
+      "deviceModel": "generic.sdcard",
+      "summary": "microSD on SPI2, sharing SCK/MOSI with the LCD; MISO GPIO22, CS GPIO15 (a strapping pin).",
+      "buses": ["spi2"],
+      "pins": [
+        {
+          "signal": "SCK",
+          "pin": "GPIO11"
+        },
+        {
+          "signal": "MOSI",
+          "pin": "GPIO21"
+        },
+        {
+          "signal": "MISO",
+          "pin": "GPIO22"
+        },
+        {
+          "signal": "CS",
+          "pin": "GPIO15"
+        }
+      ],
+      "config": [
+        {
+          "id": "inserted",
+          "label": "Card inserted",
+          "kind": "toggle",
+          "value": false
+        }
+      ],
+      "layout": {
+        "x": 320,
+        "y": 40,
+        "width": 200,
+        "height": 120
+      }
+    },
+    {
+      "id": "u7",
+      "designator": "U7",
+      "name": "Battery & charger",
+      "mpn": "ETA6098",
+      "category": "power",
+      "deviceModel": "pinbench.power",
+      "summary": "Single-cell Li-ion charge/discharge (MX1.25). Battery sense on GPIO0 through a 200K/100K divider (×3); charge status shares GPIO23 with the touch reset.",
+      "buses": [],
+      "pins": [
+        {
+          "signal": "BAT_ADC",
+          "pin": "GPIO0"
+        },
+        {
+          "signal": "BC_STATE",
+          "pin": "GPIO23"
+        }
+      ],
+      "config": [
+        {
+          "id": "battery",
+          "label": "Battery",
+          "kind": "number",
+          "value": 80,
+          "min": 0,
+          "max": 100,
+          "step": 1,
+          "unit": "%"
+        },
+        {
+          "id": "usb",
+          "label": "USB-C connected",
+          "kind": "toggle",
+          "value": true
+        }
+      ],
+      "layout": {
+        "x": 60,
+        "y": 40,
+        "width": 200,
+        "height": 120
+      }
+    },
+    {
+      "id": "u8",
+      "designator": "SW1",
+      "name": "BOOT button",
+      "category": "input",
+      "deviceModel": "pinbench.button",
+      "summary": "Momentary button on GPIO9, active-low. Also the boot strap: held at reset it enters download mode.",
+      "buses": [],
+      "pins": [
+        {
+          "signal": "BTN",
+          "pin": "GPIO9"
+        }
+      ],
+      "config": [
+        {
+          "id": "pressed",
+          "label": "Pressed",
+          "kind": "toggle",
+          "value": false
+        }
+      ],
+      "layout": {
+        "x": 60,
+        "y": 430,
+        "width": 200,
+        "height": 100
+      }
+    }
+  ],
+  "nets": [
+    {
+      "id": "net-spi-sck",
+      "label": "SPI_CLK",
+      "bus": "spi2",
+      "nodes": ["GPIO11", "u2:SCK", "u6:SCK"]
+    },
+    {
+      "id": "net-spi-mosi",
+      "label": "SPI_MOSI",
+      "bus": "spi2",
+      "nodes": ["GPIO21", "u2:MOSI", "u6:MOSI"]
+    },
+    {
+      "id": "net-spi-miso",
+      "label": "SPI_MISO",
+      "bus": "spi2",
+      "nodes": ["GPIO22", "u6:MISO"]
+    },
+    {
+      "id": "net-lcd-cs",
+      "label": "LCD_CS",
+      "bus": "spi2",
+      "nodes": ["GPIO10", "u2:CS"]
+    },
+    {
+      "id": "net-sd-cs",
+      "label": "SD_CS",
+      "bus": "spi2",
+      "nodes": ["GPIO15", "u6:CS"]
+    },
+    {
+      "id": "net-lcd-dc",
+      "label": "LCD_DC",
+      "nodes": ["GPIO19", "u2:DC"]
+    },
+    {
+      "id": "net-lcd-rst",
+      "label": "LCD_RST",
+      "nodes": ["GPIO20", "u2:RST"]
+    },
+    {
+      "id": "net-lcd-bl",
+      "label": "LCD_BL",
+      "nodes": ["GPIO7", "u2:BL"]
+    },
+    {
+      "id": "net-i2c-sda",
+      "label": "I2C_SDA",
+      "bus": "i2c0",
+      "nodes": ["GPIO18", "u3:SDA", "u4:SDA", "u5:SDA"]
+    },
+    {
+      "id": "net-i2c-scl",
+      "label": "I2C_SCL",
+      "bus": "i2c0",
+      "nodes": ["GPIO8", "u3:SCL", "u4:SCL", "u5:SCL"]
+    },
+    {
+      "id": "net-tp-int",
+      "label": "TP_INT / IMU_INT2",
+      "nodes": ["GPIO4", "u3:INT", "u4:INT2"]
+    },
+    {
+      "id": "net-imu-int1",
+      "label": "IMU_INT1",
+      "nodes": ["GPIO5", "u4:INT1"]
+    },
+    {
+      "id": "net-rtc-int",
+      "label": "RTC_INT",
+      "nodes": ["GPIO6", "u5:INT"]
+    },
+    {
+      "id": "net-tp-rst",
+      "label": "TP_RST / BC_STATE",
+      "nodes": ["GPIO23", "u3:RST", "u7:BC_STATE"]
+    },
+    {
+      "id": "net-bat-adc",
+      "label": "BAT_ADC",
+      "nodes": ["GPIO0", "u7:BAT_ADC"]
+    },
+    {
+      "id": "net-boot",
+      "label": "BOOT",
+      "nodes": ["GPIO9", "u8:BTN"]
+    }
+  ],
+  "emulator": {
+    "machine": "esp32c6",
+    "flashSize": "16M"
+  },
+  "pinExceptions": ["GPIO4", "GPIO23"],
+  "canvas": {
+    "width": 850,
+    "height": 560
+  }
+}

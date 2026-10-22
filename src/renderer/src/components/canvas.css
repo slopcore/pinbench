@@ -1,0 +1,309 @@
+.canvas {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--ground);
+}
+
+.canvas[data-tool='pan'] {
+  cursor: grab;
+}
+
+.canvas[data-tool='pan']:active {
+  cursor: grabbing;
+}
+
+.canvas__surface {
+  display: block;
+}
+
+.canvas__net {
+  fill: none;
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  opacity: 0.55;
+}
+
+.canvas__net-group[data-dimmed] {
+  opacity: 0.12;
+}
+
+.canvas__net-label-box {
+  fill: var(--surface-raised);
+  stroke: var(--border-strong);
+  stroke-width: 1;
+}
+
+.canvas__net-label-text {
+  fill: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 9px;
+}
+
+.canvas__stats {
+  position: absolute;
+  z-index: 2;
+  left: var(--space-3);
+  bottom: var(--space-3);
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--font-size-xs);
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-panel);
+  pointer-events: none;
+}
+
+.canvas__part {
+  cursor: pointer;
+}
+
+.canvas__card {
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--surface-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  font-family: var(--font-sans);
+}
+
+.canvas__part:hover .canvas__card {
+  border-color: var(--accent-600);
+}
+
+.canvas__card[data-draggable] {
+  cursor: grab;
+}
+
+.canvas__card[data-draggable]:active {
+  cursor: grabbing;
+}
+
+.canvas__part[data-net-from] .canvas__card {
+  border-color: var(--accent-400);
+  box-shadow: 0 0 0 2px var(--accent-700);
+}
+
+.canvas__card[data-selected] {
+  border-color: var(--accent-400);
+  border-width: 2px;
+  background: var(--surface-active);
+}
+
+.canvas__card-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.canvas__card-glyph {
+  color: var(--text-muted);
+  font-size: 10px;
+  flex: none;
+}
+
+.canvas__card-title {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+
+.canvas__card-designator {
+  color: var(--accent-300);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: var(--weight-medium);
+  flex: none;
+}
+
+.canvas__card-name {
+  color: var(--text-primary);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.canvas__card-badge {
+  flex: none;
+  padding: 1px 5px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  font-size: 8px;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+}
+
+.canvas__card-strip {
+  display: flex;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.canvas__card-tab {
+  flex: 1;
+  padding: 3px 0;
+  border: 0;
+  border-right: 1px solid var(--border-subtle);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 8px;
+  letter-spacing: var(--tracking-wide);
+  cursor: pointer;
+}
+
+.canvas__card-tab:last-child {
+  border-right: 0;
+}
+
+.canvas__card-tab[data-active] {
+  background: var(--accent-800);
+  color: var(--accent-200);
+}
+
+.canvas__card-body {
+  flex: 1;
+  /* hidden, not auto: a scrollable body would swallow wheel-pan over a card
+     and the cards cover most of the board. The CFG list truncates instead. */
+  overflow: hidden;
+  padding: 6px 8px;
+}
+
+.canvas__card-pins {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--font-mono);
+  font-size: 9px;
+}
+
+.canvas__card-pins li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--text-secondary);
+}
+
+.canvas__card-pin {
+  color: var(--text-muted);
+}
+
+.canvas__card-dim {
+  color: var(--text-muted);
+  justify-content: flex-start !important;
+}
+
+.canvas__card-note {
+  margin: 0;
+  font-size: 9px;
+  color: var(--text-muted);
+}
+
+/* IN / OUT tabs — live stimulus and output panels, packed into the card. */
+.canvas__card-in,
+.canvas__card-out {
+  height: 100%;
+  overflow: auto;
+  font-size: 10px;
+}
+
+.canvas__card-in .inspector__section,
+.canvas__card-out .inspector__section {
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.canvas__card-in .inspector__section-title,
+.canvas__card-out .inspector__section-title {
+  font-size: 9px;
+  margin: 0 0 4px;
+}
+
+.canvas__card-in button {
+  font-size: 9px;
+  padding: 2px 5px;
+}
+
+.canvas__card-in input {
+  font-size: 9px;
+  padding: 1px 3px;
+}
+
+.canvas__card-in .kbd__key {
+  min-width: 0;
+  padding: 2px 3px;
+}
+
+/* OUT tab — the live screen picture, scaled to fill the (resizable) card. */
+.canvas__card-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.canvas__card-rotate {
+  flex: none;
+  transform: scale(0.85);
+  transform-origin: top center;
+}
+
+.canvas__card-screen-view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.canvas__card-screen-view .st7789,
+.canvas__card-screen-view .eink {
+  padding: 0;
+}
+
+/* Bottom-right resize handle (Select tool). Scales the screen as it drags. */
+.canvas__card-resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 14px;
+  height: 14px;
+  cursor: nwse-resize;
+  background: linear-gradient(
+    135deg,
+    transparent 0 45%,
+    var(--border-strong) 45% 55%,
+    transparent 55% 70%,
+    var(--border-strong) 70% 80%,
+    transparent 80%
+  );
+  touch-action: none;
+}
+
+.canvas__card:hover .canvas__card-resize {
+  background: linear-gradient(
+    135deg,
+    transparent 0 45%,
+    var(--accent-400) 45% 55%,
+    transparent 55% 70%,
+    var(--accent-400) 70% 80%,
+    transparent 80%
+  );
+}

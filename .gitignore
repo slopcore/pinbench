@@ -1,0 +1,25 @@
+# PlatformIO build output
+.pio/
+
+# QEMU. The cloned fork is not tracked; PinBench's own patch set (qemu/) and the
+# spike sources (spike/qemu/) are.
+/.qemu/
+/.pio-venv/
+
+# Merged flash images
+*.bin
+
+node_modules/
+
+# Build output
+out/
+dist/
+
+# TypeScript project-reference build info
+*.tsbuildinfo
+
+# Local debug/screenshot scratch
+.scratch/
+
+# Packaged app + staged QEMU
+release/

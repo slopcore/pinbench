@@ -1,0 +1,259 @@
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent } from '@testing-library/dom'
+import { describe, expect, it, vi } from 'vitest'
+import { DEFAULT_WORKSPACE } from '@shared/workspace'
+import type { ViewportState, WorkspaceState } from '@shared/workspace'
+import { Canvas } from './Canvas'
+import { M9_BOARD } from '../../../../test/board'
+import '../../../../test/setup'
+
+function renderCanvas(overrides: Partial<WorkspaceState['canvas']> = {}): {
+  onViewport: ReturnType<typeof vi.fn>
+  onZoomAt: ReturnType<typeof vi.fn>
+  onSelectPart: ReturnType<typeof vi.fn>
+  onMovePart: ReturnType<typeof vi.fn>
+  onAddNet: ReturnType<typeof vi.fn>
+  onResizePart: ReturnType<typeof vi.fn>
+  onConfigChange: ReturnType<typeof vi.fn>
+  onCommand: ReturnType<typeof vi.fn>
+  surface: HTMLElement
+} {
+  const onViewport = vi.fn()
+  const onZoomAt = vi.fn()
+  const onSelectPart = vi.fn()
+  const onMovePart = vi.fn()
+  const onAddNet = vi.fn()
+  const onResizePart = vi.fn()
+  const onConfigChange = vi.fn()
+  const onCommand = vi.fn()
+  const workspace: WorkspaceState = {
+    ...DEFAULT_WORKSPACE,
+    canvas: { ...DEFAULT_WORKSPACE.canvas, ...overrides }
+  }
+  render(
+    <Canvas
+      board={M9_BOARD}
+      workspace={workspace}
+      onViewport={onViewport}
+      onZoomAt={onZoomAt}
+      onSelectPart={onSelectPart}
+      onMovePart={onMovePart}
+      onAddNet={onAddNet}
+      onResizePart={onResizePart}
+      onConfigChange={onConfigChange}
+      onCommand={onCommand}
+      onMeasure={() => undefined}
+      ready
+    />
+  )
+  return {
+    onViewport,
+    onZoomAt,
+    onSelectPart,
+    onMovePart,
+    onAddNet,
+    onResizePart,
+    onConfigChange,
+    onCommand,
+    surface: screen.getByRole('application', { name: /hardware/i })
+  }
+}
+
+describe('Canvas', () => {
+  it('pans on a plain wheel', () => {
+    const { onViewport, surface } = renderCanvas({ viewport: { x: 100, y: 100, zoom: 1 } })
+    fireEvent.wheel(surface, { deltaX: 20, deltaY: 40 })
+    expect(onViewport).toHaveBeenCalledWith<[ViewportState]>({ x: 80, y: 60, zoom: 1 })
+  })
+
+  it('zooms at the cursor on a pinch or ctrl-wheel', () => {
+    const { onZoomAt, surface } = renderCanvas()
+    fireEvent.wheel(surface, { deltaY: -100, ctrlKey: true, clientX: 120, clientY: 80 })
+    expect(onZoomAt).toHaveBeenCalledTimes(1)
+    const [zoom, origin] = onZoomAt.mock.calls[0] as [number, { x: number; y: number }]
+    expect(zoom).toBeGreaterThan(1)
+    expect(origin).toEqual({ x: 120, y: 80 })
+  })
+
+  it('drags the view with the Pan tool', () => {
+    const { onViewport, surface } = renderCanvas({
+      tool: 'pan',
+      viewport: { x: 0, y: 0, zoom: 1 }
+    })
+    fireEvent.pointerDown(surface, { pointerId: 1, clientX: 100, clientY: 100, button: 0 })
+    fireEvent.pointerMove(surface, { pointerId: 1, clientX: 130, clientY: 90 })
+    expect(onViewport).toHaveBeenCalledWith<[ViewportState]>({ x: 30, y: -10, zoom: 1 })
+    fireEvent.pointerUp(surface, { pointerId: 1 })
+  })
+
+  it('does not drag the view with the Select tool', () => {
+    const { onViewport, surface } = renderCanvas({ tool: 'select' })
+    fireEvent.pointerDown(surface, { pointerId: 1, clientX: 100, clientY: 100, button: 0 })
+    fireEvent.pointerMove(surface, { pointerId: 1, clientX: 130, clientY: 90 })
+    expect(onViewport).not.toHaveBeenCalled()
+  })
+
+  it('pans with the middle button whatever the tool', () => {
+    const { onViewport, surface } = renderCanvas({ tool: 'select' })
+    fireEvent.pointerDown(surface, { pointerId: 2, clientX: 10, clientY: 10, button: 1 })
+    fireEvent.pointerMove(surface, { pointerId: 2, clientX: 15, clientY: 12 })
+    expect(onViewport).toHaveBeenCalled()
+  })
+
+  it('selects a part and clears the selection on empty space', async () => {
+    const { onSelectPart, surface } = renderCanvas()
+    fireEvent.click(screen.getByText('LR1110 mesh radio'))
+    await waitFor(() => expect(onSelectPart).toHaveBeenCalledWith('u2'))
+    fireEvent.click(surface)
+    expect(onSelectPart).toHaveBeenLastCalledWith(null)
+  })
+
+  it('draws the grid the workspace asks for', () => {
+    const { surface } = renderCanvas({ grid: 'line' })
+    expect(surface.querySelector('rect[fill="url(#grid-line)"]')).not.toBeNull()
+    expect(surface.querySelector('rect[fill="url(#grid-dot)"]')).toBeNull()
+  })
+
+  it('draws no grid at all when the grid is off', () => {
+    const { surface } = renderCanvas({ grid: 'none' })
+    expect(surface.querySelector('rect[fill^="url(#grid"]')).toBeNull()
+  })
+
+  it('gives each node card a CFG/IN/OUT strip, with the live stimulus panel on IN', async () => {
+    const { onSelectPart, onCommand } = renderCanvas()
+    const radioCard = screen.getByText('LR1110 mesh radio').closest('.canvas__card') as HTMLElement
+    // CFG is the default body — a pin row is visible.
+    expect(radioCard.querySelector('.canvas__card-pins')).not.toBeNull()
+    fireEvent.click(within(radioCard).getByRole('tab', { name: 'IN' }))
+    await waitFor(() => expect(onSelectPart).toHaveBeenCalledWith('u2'))
+    expect(radioCard.querySelector('.canvas__card-pins')).toBeNull()
+    // The same InPanel as the Inspector, on the card. A button routes onCommand
+    // with the part id bound.
+    const inject = within(radioCard).getByRole('button', { name: 'Send channel' })
+    fireEvent.click(inject)
+    expect(onCommand).toHaveBeenCalledWith(
+      'u2',
+      'inject',
+      expect.objectContaining({ kind: 'channel' })
+    )
+  })
+
+  it('labels nets on the canvas and hides the labels when bus labels are off', () => {
+    const { surface } = renderCanvas({ busLabels: true })
+    expect(surface.querySelector('.canvas__net-label')).not.toBeNull()
+    cleanup()
+    const off = renderCanvas({ busLabels: false })
+    expect(off.surface.querySelector('.canvas__net-label')).toBeNull()
+  })
+
+  it('dims the nets of a filtered-out bus', () => {
+    const { surface } = renderCanvas({ hiddenBuses: ['spi'] })
+    expect(surface.querySelector('.canvas__net-group[data-dimmed]')).not.toBeNull()
+  })
+
+  it('commits a part drag with the Select tool, snapped to the grid', () => {
+    const { onMovePart } = renderCanvas({ tool: 'select', snapToGrid: true })
+    const card = screen.getByText('LR1110 mesh radio').closest('.canvas__card') as HTMLElement
+    fireEvent.pointerDown(card, { button: 0, pointerId: 1, clientX: 0, clientY: 0 })
+    fireEvent.pointerMove(card, { pointerId: 1, clientX: 47, clientY: 33 })
+    fireEvent.pointerUp(card, { pointerId: 1, clientX: 47, clientY: 33 })
+    // u2 sits at x:60 y:200 in the M9 definition; +47,+33 snapped to /10.
+    expect(onMovePart).toHaveBeenCalledWith('u2', 110, 230)
+  })
+
+  it('does not move a part on a plain click (no drag)', () => {
+    const { onMovePart, onSelectPart } = renderCanvas({ tool: 'select' })
+    const card = screen.getByText('LR1110 mesh radio').closest('.canvas__card') as HTMLElement
+    fireEvent.pointerDown(card, { button: 0, pointerId: 1, clientX: 10, clientY: 10 })
+    fireEvent.pointerUp(card, { pointerId: 1, clientX: 10, clientY: 10 })
+    fireEvent.click(card)
+    expect(onMovePart).not.toHaveBeenCalled()
+    expect(onSelectPart).toHaveBeenCalledWith('u2')
+  })
+
+  it("shows the screen part's OUT tab: the panel picture and a working Rotation control", async () => {
+    const { onConfigChange } = renderCanvas()
+    const lcdCard = screen.getByText('2.4" LCD').closest('.canvas__card') as HTMLElement
+    fireEvent.click(within(lcdCard).getByRole('tab', { name: 'OUT' }))
+    await waitFor(() => expect(lcdCard.querySelector('.canvas__card-screen')).not.toBeNull())
+    expect(within(lcdCard).getByLabelText('ST7789 panel output')).toBeInTheDocument()
+    const rotate = within(lcdCard).getByRole('group', { name: 'Rotation' })
+    fireEvent.click(within(rotate).getByRole('button', { name: '90°' }))
+    expect(onConfigChange).toHaveBeenCalledWith('u3', 'rotation', '90°')
+  })
+
+  it('scales the OUT-tab screen picture as the card is dragged larger', () => {
+    renderCanvas({ tool: 'select' })
+    const lcdCard = screen.getByText('2.4" LCD').closest('.canvas__card') as HTMLElement
+    fireEvent.click(within(lcdCard).getByRole('tab', { name: 'OUT' }))
+    const frame = () => lcdCard.querySelector('.st7789__frame') as HTMLElement
+    const before = parseFloat(frame().style.width)
+    const handle = lcdCard.querySelector('.canvas__card-resize') as HTMLElement
+    fireEvent.pointerDown(handle, { button: 0, pointerId: 1, clientX: 0, clientY: 0 })
+    fireEvent.pointerMove(handle, { pointerId: 1, clientX: 220, clientY: 220 })
+    // Still mid-drag (not yet committed) — the picture already tracks the box.
+    expect(parseFloat(frame().style.width)).toBeGreaterThan(before)
+    fireEvent.pointerUp(handle, { pointerId: 1, clientX: 220, clientY: 220 })
+  })
+
+  it('resizes a card from its corner handle, snapped to the grid', () => {
+    const { onResizePart } = renderCanvas({ tool: 'select', snapToGrid: true })
+    const lcdCard = screen.getByText('2.4" LCD').closest('.canvas__card') as HTMLElement
+    const handle = lcdCard.querySelector('.canvas__card-resize') as HTMLElement
+    fireEvent.pointerDown(handle, { button: 0, pointerId: 1, clientX: 0, clientY: 0 })
+    fireEvent.pointerMove(handle, { pointerId: 1, clientX: 47, clientY: 33 })
+    fireEvent.pointerUp(handle, { pointerId: 1, clientX: 47, clientY: 33 })
+    // u3 is 210×160 in the M9 definition; +47,+33 snapped to /10.
+    expect(onResizePart).toHaveBeenCalledWith('u3', 260, 190)
+  })
+
+  it('commits a resize once when the pointer is released away from the handle', () => {
+    // Reproduces the "stuck handle": pointer capture inside the SVG foreignObject
+    // drops mid-drag, so the `pointerup` never lands on the handle. The gesture
+    // must still commit exactly once and then stop tracking.
+    const { onResizePart } = renderCanvas({ tool: 'select', snapToGrid: true })
+    const lcdCard = screen.getByText('2.4" LCD').closest('.canvas__card') as HTMLElement
+    const handle = lcdCard.querySelector('.canvas__card-resize') as HTMLElement
+    fireEvent.pointerDown(handle, { button: 0, pointerId: 1, clientX: 0, clientY: 0 })
+    fireEvent.pointerMove(document.body, { pointerId: 1, clientX: 47, clientY: 33 })
+    fireEvent.pointerUp(document.body, { pointerId: 1, clientX: 47, clientY: 33 })
+    expect(onResizePart).toHaveBeenCalledTimes(1)
+    expect(onResizePart).toHaveBeenCalledWith('u3', 260, 190)
+    // A stray move after release must not resume the resize.
+    fireEvent.pointerMove(document.body, { pointerId: 1, clientX: 400, clientY: 400 })
+    expect(onResizePart).toHaveBeenCalledTimes(1)
+  })
+
+  it('commits a part drag once when the pointer is released away from the card', () => {
+    const { onMovePart } = renderCanvas({ tool: 'select', snapToGrid: true })
+    const card = screen.getByText('LR1110 mesh radio').closest('.canvas__card') as HTMLElement
+    fireEvent.pointerDown(card, { button: 0, pointerId: 1, clientX: 0, clientY: 0 })
+    fireEvent.pointerMove(document.body, { pointerId: 1, clientX: 47, clientY: 33 })
+    fireEvent.pointerUp(document.body, { pointerId: 1, clientX: 47, clientY: 33 })
+    expect(onMovePart).toHaveBeenCalledTimes(1)
+    expect(onMovePart).toHaveBeenCalledWith('u2', 110, 230)
+    fireEvent.pointerMove(document.body, { pointerId: 1, clientX: 300, clientY: 300 })
+    expect(onMovePart).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not move the card when the resize handle is dragged', () => {
+    const { onMovePart } = renderCanvas({ tool: 'select' })
+    const lcdCard = screen.getByText('2.4" LCD').closest('.canvas__card') as HTMLElement
+    const handle = lcdCard.querySelector('.canvas__card-resize') as HTMLElement
+    fireEvent.pointerDown(handle, { button: 0, pointerId: 1, clientX: 0, clientY: 0 })
+    fireEvent.pointerMove(handle, { pointerId: 1, clientX: 40, clientY: 40 })
+    fireEvent.pointerUp(handle, { pointerId: 1, clientX: 40, clientY: 40 })
+    expect(onMovePart).not.toHaveBeenCalled()
+  })
+
+  it('wires a net between the two parts clicked with the Draw-net tool', () => {
+    const { onAddNet } = renderCanvas({ tool: 'net' })
+    fireEvent.click(screen.getByText('LR1110 mesh radio').closest('.canvas__card') as HTMLElement)
+    expect(onAddNet).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByText('2.4" LCD').closest('.canvas__card') as HTMLElement)
+    expect(onAddNet).toHaveBeenCalledTimes(1)
+    const net = onAddNet.mock.calls[0]![0]
+    expect(net.nodes[0]).toMatch(/^u2:/)
+    expect(net.nodes[1]).toMatch(/^u3:/)
+  })
+})

@@ -1,0 +1,145 @@
+import { contextBridge, ipcRenderer } from 'electron'
+import { IpcChannel } from '../shared/ipc'
+import type {
+  AgentBridgeState,
+  AgentPermissionDecision,
+  AgentPermissionRequest,
+  AppInfo,
+  BoardLoadResult,
+  BoardSaveResult,
+  BuildRequest,
+  EmulatorLaunchOptions,
+  LaunchState,
+  OpenProjectAtResult,
+  OpenProjectResult,
+  PinBenchApi,
+  SerialPortInfo,
+  UsbFlashRequest,
+  UsbFlashStatus,
+  WindowState
+} from '../shared/ipc'
+import type { BoardDefinition } from '../shared/board'
+import type { BoardEdit } from '../shared/boardEdit'
+import type { PartConfigValue } from '../shared/partConfig'
+import type { BuildOutputLine, BuildStatus } from '../shared/build'
+import type { CommandId } from '../shared/commands'
+import type {
+  DeviceCommandMessage,
+  DeviceEventMessage,
+  DeviceFramebufferMessage,
+  DeviceSnapshotMessage
+} from '../shared/devices/messages'
+import type { Diagnostic } from '../shared/diagnostics'
+import type { EmulatorStatus } from '../shared/emulator'
+import type { FirmwareAction } from '../shared/actions'
+import type { SerialLine } from '../shared/serial'
+import type { WorkspaceState } from '../shared/workspace'
+
+function subscribe<T>(channel: string, listener: (payload: T) => void): () => void {
+  const handler = (_event: unknown, payload: T): void => listener(payload)
+  ipcRenderer.on(channel, handler)
+  return () => {
+    ipcRenderer.removeListener(channel, handler)
+  }
+}
+
+const api: PinBenchApi = {
+  appInfo: () => ipcRenderer.invoke(IpcChannel.appInfo) as Promise<AppInfo>,
+  launchState: () => ipcRenderer.invoke(IpcChannel.appLaunchState) as Promise<LaunchState>,
+  workspace: {
+    load: () => ipcRenderer.invoke(IpcChannel.workspaceLoad) as Promise<WorkspaceState>,
+    save: (state: WorkspaceState) => ipcRenderer.send(IpcChannel.workspaceSave, state)
+  },
+  board: {
+    load: (id?: string) => ipcRenderer.invoke(IpcChannel.boardLoad, id) as Promise<BoardLoadResult>,
+    list: () => ipcRenderer.invoke(IpcChannel.boardList) as Promise<string[]>,
+    saveProfile: (id: string, def: BoardDefinition) =>
+      ipcRenderer.invoke(IpcChannel.boardSaveProfile, id, def) as Promise<BoardSaveResult>,
+    remember: (id: string) => ipcRenderer.send(IpcChannel.boardRemember, id),
+    exportPinHeader: (edits) =>
+      ipcRenderer.invoke(IpcChannel.exportPinHeader, edits) as Promise<string | null>,
+    importPinHeader: () => ipcRenderer.invoke(IpcChannel.importPinHeader) as Promise<string | null>
+  },
+  window: {
+    minimise: () => ipcRenderer.send(IpcChannel.windowMinimise),
+    toggleMaximise: () => ipcRenderer.send(IpcChannel.windowToggleMaximise),
+    close: () => ipcRenderer.send(IpcChannel.windowClose),
+    onStateChange: (listener) => subscribe<WindowState>(IpcChannel.windowState, listener)
+  },
+  onMenuCommand: (listener) => subscribe<CommandId>(IpcChannel.menuCommand, listener),
+  emulator: {
+    openFirmware: () =>
+      ipcRenderer.invoke(IpcChannel.emulatorOpenFirmware) as Promise<string | null>,
+    start: (firmwarePath: string, options?: EmulatorLaunchOptions) =>
+      ipcRenderer.send(IpcChannel.emulatorStart, firmwarePath, options),
+    stop: () => ipcRenderer.send(IpcChannel.emulatorStop),
+    reset: () => ipcRenderer.send(IpcChannel.emulatorReset),
+    onStatus: (listener) => subscribe<EmulatorStatus>(IpcChannel.emulatorStatus, listener)
+  },
+  serial: {
+    write: (text: string) => ipcRenderer.send(IpcChannel.serialWrite, text),
+    onData: (listener) => subscribe<SerialLine[]>(IpcChannel.serialData, listener)
+  },
+  project: {
+    open: () => ipcRenderer.invoke(IpcChannel.projectOpen) as Promise<OpenProjectResult | null>,
+    openAt: (dir: string) =>
+      ipcRenderer.invoke(IpcChannel.projectOpenAt, dir) as Promise<OpenProjectAtResult>,
+    openInEditor: (file: string, line?: number, column?: number) =>
+      ipcRenderer.invoke(IpcChannel.projectOpenInEditor, file, line, column) as Promise<void>,
+    actions: () => ipcRenderer.invoke(IpcChannel.projectActions) as Promise<FirmwareAction[]>,
+    onActions: (listener) =>
+      subscribe<FirmwareAction[]>(IpcChannel.projectActionsChanged, listener),
+    setFolderState: (
+      dir: string,
+      boardId: string,
+      state: {
+        env?: string | null
+        partConfig?: Record<string, PartConfigValue>
+        boardEdits?: BoardEdit[]
+      }
+    ) => ipcRenderer.send(IpcChannel.projectSetFolderState, dir, boardId, state)
+  },
+  build: {
+    start: (request: BuildRequest) => ipcRenderer.send(IpcChannel.buildStart, request),
+    cancel: () => ipcRenderer.send(IpcChannel.buildCancel),
+    clean: (projectDir: string) => ipcRenderer.send(IpcChannel.buildClean, projectDir),
+    onState: (listener) => subscribe<BuildStatus>(IpcChannel.buildState, listener),
+    onOutput: (listener) => subscribe<BuildOutputLine>(IpcChannel.buildOutput, listener),
+    onDiagnostics: (listener) => subscribe<Diagnostic[]>(IpcChannel.buildDiagnostics, listener)
+  },
+  usbFlash: {
+    listPorts: () => ipcRenderer.invoke(IpcChannel.usbFlashListPorts) as Promise<SerialPortInfo[]>,
+    start: (request: UsbFlashRequest) => ipcRenderer.send(IpcChannel.usbFlashStart, request),
+    cancel: () => ipcRenderer.send(IpcChannel.usbFlashCancel),
+    onState: (listener) => subscribe<UsbFlashStatus>(IpcChannel.usbFlashState, listener),
+    onOutput: (listener) => subscribe<BuildOutputLine>(IpcChannel.usbFlashOutput, listener)
+  },
+  agent: {
+    state: () => ipcRenderer.invoke(IpcChannel.agentState) as Promise<AgentBridgeState>,
+    onState: (listener) => subscribe<AgentBridgeState>(IpcChannel.agentState, listener),
+    backlog: () => ipcRenderer.invoke(IpcChannel.agentBacklog) as Promise<unknown[]>,
+    onUpdate: (listener) => subscribe<unknown>(IpcChannel.agentUpdate, listener),
+    prompt: (text: string) =>
+      ipcRenderer.invoke(IpcChannel.agentPrompt, text) as Promise<
+        { stopReason: string } | { error: string }
+      >,
+    cancel: () => ipcRenderer.send(IpcChannel.agentCancel),
+    setAutoApprove: (on: boolean) => ipcRenderer.send(IpcChannel.agentSetAutoApprove, on),
+    setPanelPresent: (present: boolean) => ipcRenderer.send(IpcChannel.agentPanelPresent, present),
+    onPermissionRequest: (listener) =>
+      subscribe<AgentPermissionRequest>(IpcChannel.agentPermissionRequest, listener),
+    resolvePermission: (id: string, decision: AgentPermissionDecision, optionId?: string) =>
+      ipcRenderer.send(IpcChannel.agentPermissionResolve, id, decision, optionId)
+  },
+  devices: {
+    onSnapshot: (listener) => subscribe<DeviceSnapshotMessage>(IpcChannel.deviceSnapshot, listener),
+    onEvent: (listener) => subscribe<DeviceEventMessage>(IpcChannel.deviceEvent, listener),
+    onDiagnostic: (listener) => subscribe<Diagnostic>(IpcChannel.deviceDiagnostic, listener),
+    onFramebuffer: (listener) =>
+      subscribe<DeviceFramebufferMessage>(IpcChannel.deviceFramebuffer, listener),
+    onMeshIdentity: (listener) => subscribe<string>(IpcChannel.meshIdentity, listener),
+    command: (message: DeviceCommandMessage) => ipcRenderer.send(IpcChannel.deviceCommand, message)
+  }
+}
+
+contextBridge.exposeInMainWorld('pinbench', api)

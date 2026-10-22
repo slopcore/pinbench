@@ -1,0 +1,96 @@
+.titlebar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  height: var(--titlebar-height);
+  padding-right: var(--space-2);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  /* The whole bar drags the window; interactive children opt back out. */
+  -webkit-app-region: drag;
+}
+
+.titlebar__traffic-lights {
+  width: 78px;
+  flex: none;
+}
+
+.titlebar__title {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  flex: 1;
+  justify-content: center;
+  min-width: 0;
+  opacity: 0.7;
+}
+
+.titlebar[data-focused] .titlebar__title {
+  opacity: 1;
+}
+
+.titlebar__brand {
+  color: var(--text-secondary);
+  font-weight: var(--weight-semibold);
+  white-space: nowrap;
+}
+
+/* A thin separator between the product wordmark and the active document. */
+.titlebar__brand::after {
+  content: '·';
+  margin-left: var(--space-3);
+  color: var(--text-muted);
+  font-weight: var(--weight-regular);
+}
+
+.titlebar__document {
+  color: var(--text-primary);
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.titlebar__subtitle {
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+  white-space: nowrap;
+}
+
+.titlebar__spacer {
+  width: 78px;
+  flex: none;
+}
+
+.titlebar__window-controls {
+  display: flex;
+  -webkit-app-region: no-drag;
+}
+
+.window-control {
+  width: 40px;
+  height: var(--titlebar-height);
+  display: grid;
+  place-items: center;
+  color: var(--text-secondary);
+}
+
+/* Drawn rather than set in a platform icon font, so the controls look the same
+   on every platform that shows them. */
+.window-control svg {
+  width: 10px;
+  height: 10px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1;
+}
+
+.window-control:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.window-control--close:hover {
+  background: var(--status-danger);
+  color: var(--neutral-100);
+}

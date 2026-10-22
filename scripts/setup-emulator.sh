@@ -51,7 +51,7 @@ reapply_and_rebuild() {
 
 if [[ "$(uname)" != "Darwin" ]]; then
   echo "This script targets macOS. On Linux, install the dependencies and run"
-  echo "the build steps from spike/README.md manually."
+  echo "this script's apply.sh, configure and ninja steps manually."
   exit 1
 fi
 
@@ -121,7 +121,4 @@ echo "Quick test:"
 echo "  $QEMU_BIN -machine help | grep esp32s3"
 echo "  $QEMU_RV_BIN -machine help | grep esp32c6"
 echo ""
-echo "To build and boot the spike firmware:"
-echo "  pio run -d spike/firmware/bench"
-echo "  spike/bin/mkflash.sh spike/firmware/bench/.pio/build/esp32s3 .qemu/bench-flash.bin"
-echo "  Open PinBench → File ▸ Open firmware image → .qemu/bench-flash.bin → Start"
+echo "To boot firmware: open PinBench, File ▸ Open… a PlatformIO project, then ▶."

@@ -8,7 +8,7 @@
  * ST7789 model tracks MeshCore's display bring-up.
  *
  * It needs the built emulator and a firmware artifact, so it never runs in the
- * normal suite — the same reason `spike/` is not unit-tested.
+ * normal suite.
  */
 import { spawn } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'

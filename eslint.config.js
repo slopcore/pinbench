@@ -6,7 +6,7 @@ import prettier from 'eslint-config-prettier'
 
 export default tseslint.config(
   {
-    ignores: ['out', 'dist', 'node_modules', 'spike', 'coverage', '.qemu', '.pio-venv', 'release']
+    ignores: ['out', 'dist', 'node_modules', 'coverage', '.qemu', '.pio-venv', 'release']
   },
   js.configs.recommended,
   tseslint.configs.recommended,

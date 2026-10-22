@@ -260,6 +260,10 @@ Each is owned by a milestone rather than left floating.
 
 ## Reproducing
 
+The spike was removed from the tree once M6 shipped and the real bridge
+(`qemu/hw/misc/pinbench_host.c`, `qemu/hw/ssi/pinbench_gpspi.c`) replaced it.
+Check out `6d8e64d`, the last commit that has `spike/`, to re-run it:
+
 ```sh
 git clone --depth 1 --branch esp-develop-9.2.2-20260417 \
   https://github.com/espressif/qemu.git
@@ -327,3 +331,14 @@ byte-level entry point. The bulk hook in QEMU's `ssi_transfer()` path remains
 M6's to build — nothing in M4 needed it, because the LED is on a GPIO, not a
 bus, and the fork's GPIO peripheral turned out to be a stub (see the M4 roadmap
 outcome).
+
+---
+
+## Amendment — 2026-10-22: spike removed, open question 1 closed
+
+M6 shipped on the real bridge, which has carried every board's SPI, I2C, GPIO
+and UART traffic on macOS since; no per-transaction latency problem surfaced
+in practice, and the standalone Darwin round trip above (~5 µs) already showed
+the Linux budget was conservative. The in-guest re-run of `spike/run-bench.sh`
+is therefore no longer owed, and `spike/` has been deleted. It remains in git
+history at `6d8e64d`.

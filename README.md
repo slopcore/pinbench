@@ -93,14 +93,13 @@ src/renderer/   React + Vite renderer: the shell, the panels, the canvas
 test/           Vitest setup and the fake preload bridge
 docs/           Feature docs (Obsidian vault), ADRs, device-authoring guide
 qemu/           PinBench's patches to the espressif/qemu fork
-spike/          The M0 emulation spike (QEMU devices, bench firmware, results)
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the conventions these follow and why.
 
 ## Licence
 
-MIT — see [`LICENSE`](LICENSE). The QEMU patches in `qemu/` and `spike/qemu/` are
+MIT — see [`LICENSE`](LICENSE). The QEMU patches in `qemu/` are
 GPL-2.0-or-later, like QEMU ([`qemu/README.md`](qemu/README.md#licence)). The
 packaged app bundles QEMU and its libraries; their notices ship inside it at
 `Contents/Resources/qemu/NOTICES.md`.

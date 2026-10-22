@@ -1,8 +1,7 @@
 # PlatformIO build output
 .pio/
 
-# QEMU. The cloned fork is not tracked; PinBench's own patch set (qemu/) and the
-# spike sources (spike/qemu/) are.
+# QEMU. The cloned fork is not tracked; PinBench's own patch set (qemu/) is.
 /.qemu/
 /.pio-venv/
 

@@ -24,7 +24,6 @@ SOFTWARE.
 
 Exceptions:
 
-- `qemu/` and `spike/qemu/` are patches to QEMU (the espressif/qemu fork) and
-  are licensed GPL-2.0-or-later, like QEMU itself. See `qemu/COPYING`.
+- `qemu/` holds patches to QEMU (the espressif/qemu fork), licensed GPL-2.0-or-later, like QEMU itself. See `qemu/COPYING`.
 - Vendored files that carry their own licence header keep that licence (e.g.
   the CST816S driver under `test/firmware/`, MIT, Felix Biego).

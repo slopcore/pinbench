@@ -72,7 +72,7 @@ model claims NACKs. Writes accumulate across END so a split write stays one.
 These files are patches to QEMU, and several (`hw/gpio/esp32_gpio.c`,
 `include/hw/gpio/esp32_gpio.h`) are modified copies of Espressif's fork. Like
 QEMU, they are licensed **GPL-2.0-or-later**; the full text is in
-[`COPYING`](COPYING). The same applies to `spike/qemu/`. The rest of PinBench is
+[`COPYING`](COPYING). The rest of PinBench is
 MIT (see the repository `LICENSE`).
 
 The packaged app ships a QEMU binary built from espressif/qemu at the pinned

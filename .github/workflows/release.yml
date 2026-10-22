@@ -1,7 +1,11 @@
-name: macOS build
+name: Release
 
-# Package PinBench for macOS (Apple Silicon) on every push to main, and on demand.
-# The .dmg is uploaded as a workflow artifact.
+# Manual only: Actions ▸ Release ▸ Run workflow (or `gh workflow run release.yml`).
+#
+# Collects every commit on main since the previous release tag (`v<semver>`),
+# bumps the version, builds the macOS (Apple Silicon) .dmg, and publishes a
+# GitHub Release tagged `v<version>` with grouped release notes and the .dmg
+# attached. Fails early if nothing has been committed since the last release.
 #
 # Signing and notarization switch on when these repository secrets exist;
 # without them the build is ad-hoc signed and not notarized:
@@ -11,31 +15,51 @@ name: macOS build
 #   APPLE_API_KEY_ID        its Key ID
 #   APPLE_API_ISSUER        the Issuer ID
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
+    inputs:
+      bump:
+        description: Version bump from the last release (ignored for the first release)
+        type: choice
+        options: [patch, minor, major]
+        default: patch
 
 concurrency:
-  group: release-mac-${{ github.ref }}
-  cancel-in-progress: true
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write # create the tag and the GitHub Release
 
 jobs:
-  dmg:
-    name: Build .dmg
+  release:
+    name: Build and release
     runs-on: macos-15 # Apple Silicon — the bundled QEMU is arm64
-    timeout-minutes: 120
+    timeout-minutes: 180
+    if: github.ref == 'refs/heads/main'
     env:
       # electron-builder fetches its own Electron for packaging; skip npm's copy.
       ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history + tags, to find the previous release
 
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
 
+      # Version, tag and notes, from the commits since the last release tag.
+      - name: Plan release
+        id: plan
+        run: node --experimental-strip-types build/release.ts --bump "${{ inputs.bump }}" --notes "$RUNNER_TEMP/notes.md"
+
       - run: npm ci
+
+      # Stamp the version into this checkout only (the app reads it at runtime,
+      # electron-builder names the .dmg from it). The tag is the source of truth.
+      - name: Set version
+        run: npm version "${{ steps.plan.outputs.version }}" --no-git-tag-version --allow-same-version
 
       - name: Typecheck, lint, test
         run: |
@@ -86,9 +110,12 @@ jobs:
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
         run: npm run dist:mac -- --publish never
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: PinBench-macos-arm64-${{ github.sha }}
-          path: release/dist/*.dmg
-          if-no-files-found: error
-          retention-days: 30
+      # Tags the commit this run built and publishes the release in one step.
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ steps.plan.outputs.tag }}" release/dist/*.dmg \
+            --target "$GITHUB_SHA" \
+            --title "PinBench ${{ steps.plan.outputs.version }}" \
+            --notes-file "$RUNNER_TEMP/notes.md"

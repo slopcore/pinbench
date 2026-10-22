@@ -46,6 +46,12 @@ npm run dist:mac                 # → release/dist/PinBench-<version>-arm64.dmg
 npm run release:mac              # same, notarized (needs the setup below)
 ```
 
+**Releases are cut manually**: Actions ▸ **Release** ▸ Run workflow (choose a
+patch / minor / major bump), or `gh workflow run release.yml -f bump=minor`. It
+collects every commit on `main` since the last `v*` tag, builds the signed and
+notarized `.dmg`, and publishes a GitHub Release with grouped notes
+(`build/release.ts`; Conventional Commit prefixes pick the section).
+
 `scripts/bundle-qemu.mjs` copies the patched QEMU binaries into the app, along
 with the Homebrew dylibs they link against and the ESP ROMs. It rewrites the
 library paths so the app runs on a Mac without Homebrew. PlatformIO is not

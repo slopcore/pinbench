@@ -123,7 +123,10 @@ const copyLicenses = (fromDir, name) => {
     if (LICENSE_FILE.test(file)) copyFileSync(join(fromDir, file), join(dst, file))
   }
 }
+// The GPL text ships in the repo (qemu/COPYING); the fork's LICENSE / COPYING.LIB
+// are added when the full checkout is present (a CI cache hit has only binaries).
 copyLicenses(join(root, '.qemu'), 'qemu')
+copyFileSync(join(root, 'qemu', 'COPYING'), join(out, 'licenses', 'qemu', 'COPYING'))
 
 const formulae = new Map() // formula → version
 for (const real of dylibs.values()) {

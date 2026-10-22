@@ -6,7 +6,7 @@
  *   npm run release:mac   same, then notarized via the `pinbench-notary`
  *                         keychain profile (`xcrun notarytool store-credentials`)
  *
- * In CI (.github/workflows/release-mac.yml) the certificate arrives as
+ * In CI (.github/workflows/release.yml) the certificate arrives as
  * `CSC_LINK` / `CSC_KEY_PASSWORD` (electron-builder imports it into a temporary
  * keychain) and notarization uses `APPLE_API_KEY` / `APPLE_API_KEY_ID` /
  * `APPLE_API_ISSUER`.

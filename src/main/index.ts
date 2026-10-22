@@ -55,6 +55,10 @@ if (process.platform === 'win32') app.setAppUserModelId('com.pinbench.app')
 // Launched from Finder/Dock, the app inherits launchd's bare PATH — no `pio`.
 if (app.isPackaged) adoptLoginShellPath()
 
+/** The logo as a PNG. A packaged macOS app takes its icon from the bundle's .icns;
+ *  this covers the dev Dock icon and the window icon on Linux/Windows. */
+const APP_ICON = join(app.getAppPath(), 'resources', 'icon.png')
+
 let mainWindow: BrowserWindow | null = null
 let store: SessionStore | null = null
 let emulator: EmulatorSupervisor | null = null
@@ -330,7 +334,8 @@ function createWindow(splash?: Splash): BrowserWindow {
     minWidth: 960,
     minHeight: 600,
     show: false,
-    backgroundColor: '#161826',
+    backgroundColor: '#0f1315',
+    ...(process.platform === 'darwin' ? {} : { icon: APP_ICON }),
     frame: false,
     ...(process.platform === 'darwin'
       ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 14, y: 13 } }
@@ -1181,6 +1186,7 @@ if (!app.requestSingleInstanceLock()) {
       version: '',
       credits: 'A cross-platform desktop workbench for embedded mesh-radio boards.'
     })
+    if (isDev && process.platform === 'darwin') app.dock?.setIcon(APP_ICON)
     registerIpc()
     refreshMenu()
     const splash =

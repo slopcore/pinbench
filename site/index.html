@@ -5,30 +5,35 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PinBench — a testbed for embedded hardware</title>
   <meta name="description" content="PinBench is a testbed for embedded hardware. It emulates your ESP32 board, runs your real firmware binary on it, and gives every peripheral (displays, radios, Ethernet, touch, buttons, readers) a panel you can configure, stimulate and watch. Free and open source for macOS.">
-  <meta name="theme-color" content="#0c0a12">
+  <meta name="theme-color" content="#0f1315">
   <link rel="icon" href="favicon.png" type="image/png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <meta property="og:title" content="PinBench">
   <meta property="og:description" content="A testbed for embedded hardware: run your real firmware on an emulated board and watch every peripheral.">
-  <meta property="og:image" content="https://pinbench.slopcore.io/shots/m9-lcd.jpg">
+  <meta property="og:image" content="https://pinbench.slopcore.io/shots/m9-overview.jpg">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://pinbench.slopcore.io/">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
+    /* Keyed to the logo: amber and cyan circuit traces on a cool charcoal
+       ground. Thin rounded strokes, round pads at the ends of lines. */
     :root {
-      --bg: #0c0a12;
-      --panel: #171327;
-      --panel-2: #1f1936;
-      --magenta: #ff4df0;
-      --cyan: #35e8ff;
-      --violet: #a06bff;
-      --text: #efe6ff;
-      --muted: #b0a0d0;
-      --dim: #7a6b9c;
-      --pixel: "Press Start 2P", "Courier New", monospace;
-      --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+      --bg: #0f1315;
+      --panel: #161b1e;
+      --panel-2: #1f2629;
+      --line: #2a3236;
+      --amber: #e2a132;
+      --amber-soft: rgba(226, 161, 50, 0.14);
+      --cyan: #1ae1e5;
+      --cyan-soft: rgba(26, 225, 229, 0.12);
+      --text: #e6eaec;
+      --muted: #a3acb0;
+      --dim: #6f787c;
+      --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+      --radius: 14px;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -36,41 +41,24 @@
     html { scroll-behavior: smooth; }
 
     body {
-      font-family: var(--mono);
+      font-family: var(--sans);
       background: var(--bg);
       color: var(--text);
-      line-height: 1.75;
+      line-height: 1.7;
       min-height: 100vh;
       display: flex;
       flex-direction: column;
       overflow-x: hidden;
       background-image:
-        radial-gradient(ellipse 70% 45% at 50% 0%, rgba(160, 107, 255, 0.16), transparent),
-        radial-gradient(ellipse 60% 40% at 50% 100%, rgba(255, 77, 240, 0.08), transparent);
+        radial-gradient(ellipse 55% 40% at 30% 0%, rgba(226, 161, 50, 0.07), transparent),
+        radial-gradient(ellipse 55% 40% at 70% 0%, rgba(26, 225, 229, 0.06), transparent);
       background-attachment: fixed;
     }
 
-    /* Scanlines. Decorative only, and it never eats a click. */
-    body::after {
-      content: "";
-      position: fixed;
-      inset: 0;
-      pointer-events: none;
-      z-index: 100;
-      background: repeating-linear-gradient(
-        to bottom,
-        rgba(0, 0, 0, 0.16) 0px,
-        rgba(0, 0, 0, 0.16) 1px,
-        transparent 1px,
-        transparent 4px
-      );
-    }
-
-    /* App screenshots are photographs of a real UI, not pixel art. */
     img { max-width: 100%; height: auto; display: block; }
 
-    a { color: var(--cyan); }
-    a:hover { color: var(--magenta); }
+    a { color: var(--cyan); text-underline-offset: 3px; }
+    a:hover { color: var(--amber); }
 
     .wrap {
       width: 100%;
@@ -86,48 +74,64 @@
       justify-content: space-between;
       align-items: center;
       padding-block: 18px;
-      font-family: var(--pixel);
-      font-size: 0.55rem;
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      letter-spacing: 0.08em;
     }
 
-    .topbar a { color: var(--violet); text-decoration: none; }
+    .topbar a { color: var(--muted); text-decoration: none; }
     .topbar a:hover { color: var(--cyan); }
 
     /* ---------- Hero ---------- */
 
     .hero {
-      padding-block: 48px 40px;
+      padding-block: 40px 40px;
       text-align: center;
     }
 
-    h1 {
-      font-family: var(--pixel);
-      font-size: clamp(1.7rem, 7vw, 3rem);
-      line-height: 1.25;
-      letter-spacing: 0.02em;
-      color: #fff;
-      margin-bottom: 26px;
-      text-shadow:
-         3px 3px 0 var(--magenta),
-        -3px -3px 0 var(--cyan),
-         0 0 26px rgba(255, 77, 240, 0.5);
+    .hero-logo {
+      width: 168px;
+      height: 168px;
+      margin: 0 auto 22px;
+      /* Side padding in the logo's own background colour widens the tile
+         without adding to the top/bottom margin baked into the image. */
+      box-sizing: content-box;
+      padding: 0 22px;
+      background: #101415;
+      border-radius: 36px;
+      border: 1px solid var(--line);
+      box-shadow:
+        0 0 60px rgba(226, 161, 50, 0.10),
+        0 0 60px rgba(26, 225, 229, 0.08);
     }
 
+    h1 {
+      font-family: var(--sans);
+      font-weight: 700;
+      font-size: clamp(2.4rem, 8vw, 3.6rem);
+      line-height: 1.1;
+      letter-spacing: -0.03em;
+      margin-bottom: 20px;
+    }
+
+    h1 .p { color: var(--amber); }
+    h1 .b { color: var(--cyan); }
+
     .tagline {
-      font-family: var(--pixel);
-      font-size: clamp(0.62rem, 2.5vw, 0.82rem);
-      line-height: 2.1;
-      color: var(--muted);
-      max-width: 44ch;
-      margin: 0 auto 22px;
+      font-size: clamp(1.05rem, 2.6vw, 1.3rem);
+      font-weight: 500;
+      line-height: 1.55;
+      color: var(--text);
+      max-width: 40ch;
+      margin: 0 auto 20px;
     }
 
     .tagline .hl { color: var(--cyan); }
 
     .sub {
-      font-size: 0.95rem;
+      font-size: 0.98rem;
       color: var(--muted);
-      max-width: 62ch;
+      max-width: 64ch;
       margin: 0 auto 34px;
     }
 
@@ -135,50 +139,54 @@
       display: flex;
       flex-wrap: wrap;
       justify-content: center;
-      gap: 16px;
+      gap: 14px;
     }
 
     .btn {
-      font-family: var(--pixel);
-      font-size: 0.68rem;
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
       line-height: 1.4;
       text-decoration: none;
-      padding: 14px 18px;
-      border: 3px solid;
-      transition: transform 0.1s steps(2), box-shadow 0.1s steps(2), background 0.1s;
+      padding: 13px 22px;
+      border: 2px solid;
+      border-radius: 999px;
+      transition: background 0.15s, color 0.15s, box-shadow 0.15s;
     }
 
     .btn-primary {
       color: var(--bg);
-      background: var(--magenta);
-      border-color: var(--magenta);
-      box-shadow: 4px 4px 0 #6d1a67;
+      background: var(--amber);
+      border-color: var(--amber);
     }
 
-    .btn-primary:hover { background: #ff7df5; color: var(--bg); }
+    .btn-primary:hover {
+      color: var(--bg);
+      background: #ebb558;
+      box-shadow: 0 0 24px rgba(226, 161, 50, 0.35);
+    }
 
     .btn-ghost {
       color: var(--cyan);
       background: transparent;
       border-color: var(--cyan);
-      box-shadow: 4px 4px 0 rgba(53, 232, 255, 0.3);
     }
 
-    .btn-ghost:hover { background: rgba(53, 232, 255, 0.12); color: var(--cyan); }
-
-    .btn:active {
-      transform: translate(4px, 4px);
-      box-shadow: 0 0 0 transparent;
+    .btn-ghost:hover {
+      color: var(--cyan);
+      background: var(--cyan-soft);
+      box-shadow: 0 0 24px rgba(26, 225, 229, 0.25);
     }
 
     .btn:focus-visible {
-      outline: 3px solid #fff;
+      outline: 2px solid var(--text);
       outline-offset: 3px;
     }
 
     .release-note {
       margin-top: 18px;
-      font-size: 0.8rem;
+      font-size: 0.85rem;
       color: var(--dim);
     }
 
@@ -186,84 +194,113 @@
 
     section { padding-bottom: 64px; }
 
+    /* A label on a trace: a round pad, the text, then the line running off. */
     .section-label {
-      font-family: var(--pixel);
-      font-size: 0.72rem;
-      color: var(--magenta);
-      letter-spacing: 0.08em;
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--amber);
+      letter-spacing: 0.12em;
       margin-bottom: 26px;
       display: flex;
       align-items: center;
-      gap: 14px;
+      gap: 12px;
+    }
+
+    .section-label::before {
+      content: "";
+      flex: none;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--amber);
     }
 
     .section-label::after {
       content: "";
       flex: 1;
-      height: 3px;
-      background: repeating-linear-gradient(
-        to right,
-        var(--violet) 0 6px,
-        transparent 6px 12px
-      );
+      height: 2px;
+      border-radius: 2px;
+      background: linear-gradient(to right, var(--amber), var(--line) 40%);
     }
 
     /* ---------- Screenshots ---------- */
 
     .shot {
       background: var(--panel);
-      border: 3px solid var(--violet);
-      box-shadow: 7px 7px 0 rgba(160, 107, 255, 0.32);
+      border: 1px solid var(--line);
+      border-top: 3px solid var(--amber);
+      border-radius: var(--radius);
+      overflow: hidden;
       margin-bottom: 36px;
-    }
-
-    .shot:nth-of-type(even) {
-      border-color: var(--cyan);
-      box-shadow: 7px 7px 0 rgba(53, 232, 255, 0.25);
     }
 
     .shot img { width: 100%; }
 
-    .shot figcaption {
-      padding: 14px 18px;
-      font-size: 0.88rem;
-      color: var(--muted);
-      border-top: 3px solid var(--panel-2);
+    /* Close-ups: two stacked on the left, the tall radio panel on the right. */
+    .shot-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      grid-template-areas: "lcd radio" "epaper radio";
+      gap: 24px;
+      align-items: start;
+      margin-bottom: 36px;
     }
 
-    .shot figcaption b { color: #fff; }
+    .shot-grid .shot { margin-bottom: 0; }
+    .shot-lcd { grid-area: lcd; border-top-color: var(--cyan); }
+    .shot-epaper { grid-area: epaper; }
+    .shot-radio { grid-area: radio; border-top-color: var(--cyan); }
+
+    .shot figcaption {
+      padding: 14px 18px;
+      font-size: 0.92rem;
+      color: var(--muted);
+      border-top: 1px solid var(--line);
+    }
+
+    .shot figcaption b { color: var(--text); }
 
     /* ---------- Feature cards ---------- */
 
     .grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 26px;
+      gap: 20px;
     }
 
     .card {
       background: var(--panel);
-      border: 3px solid var(--violet);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
       padding: 24px 22px;
-      box-shadow: 7px 7px 0 rgba(160, 107, 255, 0.32);
+      transition: border-color 0.15s;
     }
+
+    .card:hover { border-color: var(--amber); }
+    .card:nth-child(even):hover { border-color: var(--cyan); }
 
     .card h3 {
-      font-family: var(--pixel);
-      font-size: 0.78rem;
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
       line-height: 1.6;
-      color: #fff;
-      margin-bottom: 14px;
-      text-shadow: 2px 2px 0 var(--magenta);
+      color: var(--amber);
+      margin-bottom: 12px;
     }
 
-    .card p { color: var(--muted); font-size: 0.9rem; }
+    .card:nth-child(even) h3 { color: var(--cyan); }
+
+    .card p { color: var(--muted); font-size: 0.93rem; }
 
     code {
       font-family: var(--mono);
+      font-size: 0.88em;
       color: var(--cyan);
-      background: rgba(53, 232, 255, 0.07);
-      padding: 1px 5px;
+      background: var(--cyan-soft);
+      padding: 1px 6px;
+      border-radius: 4px;
     }
 
     /* ---------- Boards + requirements ---------- */
@@ -271,18 +308,20 @@
     .list {
       list-style: none;
       display: grid;
-      gap: 12px;
+      gap: 10px;
     }
 
     .list li {
       background: var(--panel);
-      border-left: 4px solid var(--cyan);
+      border: 1px solid var(--line);
+      border-left: 3px solid var(--cyan);
+      border-radius: 10px;
       padding: 12px 16px;
       color: var(--muted);
-      font-size: 0.9rem;
+      font-size: 0.93rem;
     }
 
-    .list li b { color: #fff; }
+    .list li b { color: var(--text); }
 
     .two-col {
       display: grid;
@@ -294,7 +333,7 @@
 
     footer {
       margin-top: auto;
-      border-top: 3px solid var(--panel-2);
+      border-top: 1px solid var(--line);
       padding-block: 26px;
     }
 
@@ -304,15 +343,15 @@
       gap: 10px 20px;
       align-items: center;
       justify-content: space-between;
-      font-family: var(--pixel);
-      font-size: 0.55rem;
-      line-height: 2;
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      letter-spacing: 0.08em;
       color: var(--dim);
     }
 
     .footer-links { display: flex; flex-wrap: wrap; gap: 10px 20px; }
 
-    footer a { color: var(--violet); text-decoration: none; }
+    footer a { color: var(--muted); text-decoration: none; }
     footer a:hover { color: var(--cyan); }
 
     @media (prefers-reduced-motion: reduce) {
@@ -321,10 +360,13 @@
     }
 
     @media (max-width: 560px) {
-      .hero { padding-block: 32px 28px; }
+      .hero { padding-block: 28px 28px; }
+      .hero-logo { width: 132px; height: 132px; padding: 0 17px; border-radius: 28px; }
       .actions { flex-direction: column; align-items: stretch; }
       .btn { text-align: center; }
       .card { padding: 20px 18px; }
+      .shot-grid { grid-template-columns: 1fr; grid-template-areas: "lcd" "epaper" "radio"; }
+      .shot-radio img { max-width: 300px; margin: 0 auto; }
     }
   </style>
 </head>
@@ -336,7 +378,8 @@
     </nav>
 
     <section class="hero wrap">
-      <h1>PINBENCH</h1>
+      <img class="hero-logo" src="logo.jpg" width="440" height="440" alt="">
+      <h1><span class="p">Pin</span><span class="b">Bench</span></h1>
       <p class="tagline">A testbed for <span class="hl">embedded hardware</span>. Your real firmware, on an emulated board, with every peripheral on the bench.</p>
       <p class="sub">PinBench is a desktop testbed for embedded devices. Describe a board as parts and pins, open your PlatformIO project, and PinBench boots the binary on an emulated ESP32. Every part on the board (displays, radios, Ethernet, touch, keyboards, buttons, card readers) gets a panel you can configure, poke and watch. Develop and test before the hardware is on your desk, or without it at all.</p>
       <div class="actions">
@@ -350,22 +393,30 @@
       <h2 class="section-label" id="shots-h">SCREENSHOTS</h2>
 
       <figure class="shot">
-        <img src="shots/m9-lcd.jpg" width="2400" height="1500" loading="eager"
-             alt="PinBench showing the ThinkNode M9 board: a wiring canvas of its parts, the emulated 2.4-inch LCD drawing the firmware's Inbox, Channels and Settings home screen, and the serial monitor with the firmware's boot log.">
-        <figcaption><b>ThinkNode M9.</b> The firmware's own LVGL home screen, drawn pixel for pixel on the emulated ST7789 LCD, next to its live serial log.</figcaption>
+        <img src="shots/m9-overview.jpg" width="2400" height="1500" loading="eager"
+             alt="PinBench running the ThinkNode M9 board: the Library of parts on the left, a wiring canvas of the board's parts and nets in the middle with the LCD showing the firmware's home screen, the Inspector on the right and the serial monitor below with the firmware's boot log.">
+        <figcaption><b>The whole bench.</b> A ThinkNode M9 described as parts and nets, its firmware booted in the emulator, the serial log streaming underneath.</figcaption>
       </figure>
 
-      <figure class="shot">
-        <img src="shots/heltec-epaper.jpg" width="2400" height="1500" loading="lazy"
-             alt="PinBench showing the Heltec Wireless Paper board: the emulated 2.13-inch e-paper display reads 'Heltec WP Repeater, FREQ 869.618 SF8, BW 62.50 CR 5', with its Inspector panel open on the right.">
-        <figcaption><b>Heltec Wireless Paper.</b> An unmodified open-source firmware build (a MeshCore LoRa repeater) refreshing the UC8151 e-paper panel, with ghosting, rotation and refresh mode in the Inspector.</figcaption>
-      </figure>
+      <div class="shot-grid">
+        <figure class="shot shot-lcd">
+          <img src="shots/m9-lcd.jpg" width="1300" height="1108" loading="lazy"
+               alt="Close-up of the emulated 2.4-inch ST7789 LCD part on the canvas, drawing the M9 firmware's home screen: a status bar with battery and GPS fix, and Inbox, Channels and Settings tiles.">
+          <figcaption><b>Pixel for pixel.</b> The M9 firmware's own LVGL home screen on the emulated ST7789.</figcaption>
+        </figure>
 
-      <figure class="shot">
-        <img src="shots/radio.jpg" width="2400" height="1500" loading="lazy"
-             alt="PinBench with the SX1262 LoRa radio selected: the Inspector lists its nets, firmware hook and configuration for bandwidth, spreading factor, coding rate and TX power.">
-        <figcaption><b>The radio is a part too.</b> Select the SX1262 to see its pins, nets and the firmware call that brings it up, then inject a packet for the firmware to receive.</figcaption>
-      </figure>
+        <figure class="shot shot-epaper">
+          <img src="shots/heltec-epaper.jpg" width="1260" height="980" loading="lazy"
+               alt="Close-up of the Heltec Wireless Paper's 2.13-inch e-paper part reading 'Heltec WP Repeater, FREQ 869.618 SF8, BW 62.50 CR 5', beside its Inspector entry for the UC8151 controller and its six display nets.">
+          <figcaption><b>E-paper, rotated.</b> An unmodified MeshCore repeater refreshing the UC8151 panel on a Heltec Wireless Paper.</figcaption>
+        </figure>
+
+        <figure class="shot shot-radio">
+          <img src="shots/sx1262-inject.jpg" width="564" height="1466" loading="lazy"
+               alt="The Inspector for the SX1262 LoRa radio: its pin map and SPI bus, an Input section with message, RSSI and SNR fields and buttons to send a channel or direct message, pair a sender, send an advert or an ack, and an Output section showing frequency, last RSSI of -80 dBm and airtime.">
+          <figcaption><b>Talk to the radio.</b> Inject a channel message into the SX1262 and watch the firmware receive it.</figcaption>
+        </figure>
+      </div>
     </section>
 
     <section class="wrap" aria-labelledby="what-h">

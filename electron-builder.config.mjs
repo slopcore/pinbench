@@ -44,7 +44,7 @@ export default {
   productName: 'PinBench',
   copyright: 'Copyright © 2026 slopcore',
   directories: { output: 'release/dist', buildResources: 'packaging' },
-  files: ['out/**', 'resources/splash/**', 'package.json'],
+  files: ['out/**', 'resources/splash/**', 'resources/icon.png', 'package.json'],
   extraResources: [
     { from: 'release/qemu', to: 'qemu' },
     { from: 'boards', to: 'boards', filter: ['*.board.json'] },
@@ -66,6 +66,6 @@ export default {
   },
   dmg: {
     title: '${productName} ${version}',
-    backgroundColor: '#07030f'
+    backgroundColor: '#0f1315'
   }
 }

@@ -1,5 +1,6 @@
 /*
- * Nocturne — PinBench's design system, transcribed from the design.
+ * Trace — PinBench's design system, keyed to the logo: amber and cyan circuit
+ * traces on a cool charcoal ground.
  *
  * Every colour, size and duration in the app comes from this file. A component
  * that hardcodes a hex value is a bug: the ramps below are what makes the
@@ -11,49 +12,49 @@
 
 :root {
   /* --- Neutral ------------------------------------------------------- */
-  --neutral-100: #f2f3f7;
-  --neutral-200: #dcdee8;
-  --neutral-300: #bcc0d1;
-  --neutral-400: #969bb2;
-  --neutral-500: #737992;
-  --neutral-600: #565b73;
-  --neutral-700: #3c4157;
-  --neutral-800: #2b2e3f;
-  --neutral-900: #161826;
+  --neutral-100: #f1f3f4;
+  --neutral-200: #dadfe1;
+  --neutral-300: #b9c0c3;
+  --neutral-400: #929b9f;
+  --neutral-500: #6f787c;
+  --neutral-600: #525a5e;
+  --neutral-700: #394044;
+  --neutral-800: #272c2f;
+  --neutral-900: #121618;
 
-  /* --- Accent (Nocturne violet) --------------------------------------- */
-  --accent-100: #ece9fa;
-  --accent-200: #d8d3f4;
-  --accent-300: #c0b8ec;
-  --accent-400: #a89ce3;
-  --accent-500: #9184d9;
-  --accent-600: #7a6bc6;
-  --accent-700: #6153a5;
-  --accent-800: #473c7a;
-  --accent-900: #2e2750;
+  /* --- Accent (trace amber) ------------------------------------------- */
+  --accent-100: #fcf3e2;
+  --accent-200: #f8e2bb;
+  --accent-300: #f2cb86;
+  --accent-400: #ebb558;
+  --accent-500: #e2a132;
+  --accent-600: #c08424;
+  --accent-700: #94651d;
+  --accent-800: #664617;
+  --accent-900: #3d2a10;
 
-  /* --- Accent 2 (bus cyan) -------------------------------------------- */
-  --accent-2-100: #e2f6f9;
-  --accent-2-200: #c3ecf2;
-  --accent-2-300: #96dde8;
-  --accent-2-400: #64ccdc;
-  --accent-2-500: #3fb8cc;
-  --accent-2-600: #2f95a8;
-  --accent-2-700: #26737f;
-  --accent-2-800: #1f545c;
-  --accent-2-900: #17363b;
+  /* --- Accent 2 (trace cyan) -------------------------------------------- */
+  --accent-2-100: #defbfc;
+  --accent-2-200: #b5f5f7;
+  --accent-2-300: #7deef0;
+  --accent-2-400: #1ae1e5;
+  --accent-2-500: #14c2c6;
+  --accent-2-600: #109da1;
+  --accent-2-700: #0e777a;
+  --accent-2-800: #0c5153;
+  --accent-2-900: #0a3133;
 
   /* --- Semantic surfaces ---------------------------------------------- */
-  --ground: #161826;
-  --surface: #232532;
-  --surface-raised: #2a2c3b;
-  --surface-sunken: #1b1d2b;
-  --surface-hover: #303343;
-  --surface-active: #383b4d;
+  --ground: #0f1315;
+  --surface: #171c1f;
+  --surface-raised: #1d2326;
+  --surface-sunken: #121618;
+  --surface-hover: #232a2e;
+  --surface-active: #2b3337;
 
-  --border: #2f3244;
-  --border-strong: #3d4157;
-  --border-subtle: #262939;
+  --border: #252c30;
+  --border-strong: #333c41;
+  --border-subtle: #1c2225;
 
   /* --- Semantic text --------------------------------------------------- */
   --text-primary: var(--neutral-200);
@@ -64,7 +65,7 @@
 
   /* --- Status ---------------------------------------------------------- */
   --status-ok: #57b98a;
-  --status-warn: #d9b26a;
+  --status-warn: #e6cf4a;
   --status-danger: #d9776a;
   --status-info: var(--accent-2-400);
   --status-idle: var(--neutral-500);

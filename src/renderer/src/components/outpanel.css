@@ -239,15 +239,15 @@
   font: inherit;
   padding: 4px 10px;
   border-radius: 3px;
-  border: 1px solid var(--accent, #9184d9);
+  border: 1px solid var(--accent-500);
   background: transparent;
-  color: var(--accent, #9184d9);
+  color: var(--accent-500);
   cursor: pointer;
 }
 
 .inpanel__buttons button:hover {
-  background: var(--accent, #9184d9);
-  color: var(--ground, #161826);
+  background: var(--accent-500);
+  color: var(--text-inverse);
 }
 
 .inpanel__group {

@@ -190,7 +190,7 @@
   padding: 0 var(--space-5);
   border-radius: var(--radius-sm);
   background: var(--accent-600);
-  color: var(--neutral-100);
+  color: var(--text-inverse);
   font-size: var(--font-size-sm);
   font-weight: var(--weight-medium);
 }
